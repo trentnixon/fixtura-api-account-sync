@@ -6,7 +6,7 @@ const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 puppeteer.use(StealthPlugin());
 
-// TEST
+// Class Stack
 const getClubDetails = require("./api/Puppeteer/ClubDetails/index");
 const getAssociationDetails = require("./api/Puppeteer/AssociationDetails/index");
 
