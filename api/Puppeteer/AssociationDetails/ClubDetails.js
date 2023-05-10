@@ -3,7 +3,7 @@ const fetcher = require("../../Utils/fetcher");
 const getCompetitions = require("../ClubDetails/getCompetitions");
 const getClubTeams = require("../ClubDetails/getClubTeams");
 const getTeamsGameData = require("../ClubDetails/getTeamsGameData");
-const getFixutreResults = require("../ClubDetails/getFixutreResults");
+const getFixutreResults = require("../ClubDetails/OLD_getFixutreResults");
 // isAssign
 const assignClubToCompetition = require("../AssociationCompetitions/assignClubToCompetition");
 const assignTeamToClub = require("../ClubDetails/assignTeamtoClub");

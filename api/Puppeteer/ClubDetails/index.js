@@ -3,8 +3,7 @@ const fetcher = require("../../Utils/fetcher");
 const getCompetitions = require("./getCompetitions");
 const getClubTeams = require("./getClubTeams");
 const getTeamsGameData = require("./getTeamsGameData");
-const getFixtureResults = require("./getFixutreResults");
-const getGradeLadders = require("./getGradeLadder");
+
 // isAssign
 const assignClubToCompetition = require("../AssociationCompetitions/assignClubToCompetition");
 const assignTeamToClub = require("./assignTeamtoClub");
@@ -104,24 +103,6 @@ class getClubDetails {
       );
       TeamsGameData.setBrowser(this.browser);
       await TeamsGameData.Setup();
-
-      /* **************************************************************************** */
-      // Step 6.5 // Get the Grade Ladders
-      /* **************************************************************************** */
-
-      const GetTheGradeLadder = new getGradeLadders(
-        ActiveClubTeams.attributes.teams,
-        extractGrades(ActiveClubTeams)
-      );
-      GetTheGradeLadder.setBrowser(this.browser);
-      await GetTheGradeLadder.Setup();
-
-      /* **************************************************************************** */
-      // Step 7 // Fixture to Team and Grade
-      /* **************************************************************************** */
-      const FixutreResults = new getFixtureResults();
-      FixutreResults.setBrowser(this.browser);
-      await FixutreResults.Setup(ActiveClubTeams.attributes.teams);
 
       /* **************************************************************************** */
       // Step 8 // let the DB know that a data collection happened

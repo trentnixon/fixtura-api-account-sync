@@ -6,7 +6,7 @@
   "scripts": {
     "test": "jest",
     "start": "node index.js",
-    "dev": "set NODE_ENV=development && set PORT=8000 && nodemon index.js",
+    "dev": "set NODE_ENV=development && set PORT=7000 && nodemon index.js",
     "LOGS": "heroku logs --tail"
   },
   "author": "",
