@@ -1,8 +1,9 @@
 const fetcher = require("../../Utils/fetcher");
-const qs = require("qs");
 const logger = require("../../Utils/logger");
+const qs = require("qs");
 
-class assignTeamToClub {
+
+class AssignTeamToClub {
   async convertGradeLinkIDToGrade(gradeLinkIDs) {
     const strapiIDs = [];
     for (const gradeLinkID of gradeLinkIDs) {
@@ -142,28 +143,7 @@ class assignTeamToClub {
   }
 }
 
-module.exports = assignTeamToClub;
-
-const extractGrades = (activeClubTeams) => {
-  const club_to_competitions =
-    activeClubTeams.attributes.club_to_competitions.data;
-
-  const gradesArray = club_to_competitions.map((item) => {
-    return item.attributes.competition.data.attributes.grades.data;
-  });
-
-  // Flatten the gradesArray into a single array of objects
-  const flattenedGradesArray = [].concat(...gradesArray);
-
-  const resultArray = flattenedGradesArray.map((grade) => {
-    return {
-      Name: grade.attributes.gradeName,
-      ID: grade.id,
-    };
-  });
-
-  return resultArray;
-};
+module.exports = AssignTeamToClub;
 
 const getClubRelations = () => {
   return qs.stringify(

@@ -1,58 +1,65 @@
+/** 
+ * SOLID APPROVED  
+ * DO NOT ADJUST UNLESS ERROR IN CODE
+*/
+
 const fetcher = require("../../Utils/fetcher");
-const qs = require("qs");
 const logger = require("../../Utils/logger");
+const qs = require("qs");
 
-function createCompetitionQuery(competitionName) {
-  return qs.stringify(
-    {
-      filters: {
-        competitionName: {
-          $eq: competitionName,
+class CompetitionQueryBuilder {
+  static createCompetitionQuery(competitionName) {
+    return qs.stringify(
+      {
+        filters: {
+          competitionName: {
+            $eq: competitionName,
+          },
         },
       },
-    },
-    {
-      encodeValuesOnly: true,
-    }
-  );
-}
+      {
+        encodeValuesOnly: true,
+      }
+    );
+  }
 
-function createClubToCompetitionQuery(competition) {
-  return qs.stringify(
-    {
-      filters: {
-        competitionUrl: {
-          $eq: competition.competitionUrl,
-        },
-        club: {
-          id: { $eq: competition.club },
-        },
-        competition: {
-          id: { $eq: competition.competition },
+  static createClubToCompetitionQuery(competition) {
+    return qs.stringify(
+      {
+        filters: {
+          competitionUrl: {
+            $eq: competition.competitionUrl,
+          },
+          club: {
+            id: { $eq: competition.club },
+          },
+          competition: {
+            id: { $eq: competition.competition },
+          },
         },
       },
-    },
-    {
-      encodeValuesOnly: true,
-    }
-  );
+      {
+        encodeValuesOnly: true,
+      }
+    );
+  }
 }
 
-class assignCompetitionsToAssociation {
-  async Setup(competitions, ClubId) {
+class AssignCompetitionsToAssociation {
+  async setup(competitions, clubId) {
     const promises = [];
 
     for (const competition of competitions) {
-      const isExisting = await this.checkIfCompetitionExists(
+      const existingCompetitions = await this.checkIfCompetitionExists(
         competition.competitionName,
         "competitions"
       );
 
-      if (isExisting) {
-        competition.club = [ClubId];
-        competition.competition = [isExisting[0].id];
+      if (existingCompetitions) {
+        competition.club = [clubId];
+        competition.competition = [existingCompetitions[0].id];
 
-        const isStored = await this.checkIfClubToCompisAlreadyStored(
+        const isStored = await this.checkIfClubToCompIsAlreadyStored(
           competition
         );
 
@@ -82,7 +89,9 @@ class assignCompetitionsToAssociation {
   }
 
   async checkIfCompetitionExists(competitionName, resourcePath) {
-    const query = createCompetitionQuery(competitionName);
+    const query = CompetitionQueryBuilder.createCompetitionQuery(
+      competitionName
+    );
 
     try {
       const response = await fetcher(`${resourcePath}?${query}`);
@@ -93,8 +102,10 @@ class assignCompetitionsToAssociation {
     }
   }
 
-  async checkIfClubToCompisAlreadyStored(competition) {
-    const query = createClubToCompetitionQuery(competition);
+  async checkIfClubToCompIsAlreadyStored(competition) {
+    const query = CompetitionQueryBuilder.createClubToCompetitionQuery(
+      competition
+    );
 
     try {
       const response = await fetcher(`club-to-competitions?${query}`);
@@ -109,4 +120,4 @@ class assignCompetitionsToAssociation {
   }
 }
 
-module.exports = assignCompetitionsToAssociation;
+module.exports = AssignCompetitionsToAssociation;

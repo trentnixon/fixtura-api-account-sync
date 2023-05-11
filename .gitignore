@@ -67,3 +67,5 @@ build
 # dotenv environment variables file
 .env
 __tests__
+.gitignore
+removed

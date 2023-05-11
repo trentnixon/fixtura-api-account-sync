@@ -1,24 +1,29 @@
+/** 
+ * SOLID APPROVED  
+ * DO NOT ADJUST UNLESS ERROR IN CODE
+*/
+
+
+/*
+AI PROMPT
+
+Lets Refactor the following class, function, or component, adhere to SOLID principles, robust error handling, and efficient management of large and long-term memory storage for maintainability, scalability, and seamless integration within the system.
+
+*/
+
+// server.js
 const express = require("express");
 const bodyParser = require("body-parser");
 const dotenv = require("dotenv");
 const logger = require("./api/Utils/logger");
-const puppeteer = require("puppeteer-extra");
-const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-puppeteer.use(StealthPlugin());
+const ClubDetailsController = require("./api/Puppeteer/ClubDetails/ClubDetailsController");
+const AssociationDetailsController = require("./api/Puppeteer/AssociationDetails/AssociationDetailsController");
 
-// Class Stack
-const getClubDetails = require("./api/Puppeteer/ClubDetails/index");
-const getAssociationDetails = require("./api/Puppeteer/AssociationDetails/index");
-
-// Utils
-// Load the environment variables from the .env file
 dotenv.config();
-// Create a task queue with a concurrency limit
 
 const app = express();
 app.use(bodyParser.json());
 
-// Log all requests and responses
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.path} request received`);
   res.on("finish", () => {
@@ -29,18 +34,12 @@ app.use((req, res, next) => {
   next();
 });
 
-
 app.get("/getClubDetails/:id", async (req, res) => {
   try {
-    const clubDetails = new getClubDetails();
-    const browser = await puppeteer.launch({ headless: true,args: ['--no-sandbox']  }); ;
-    clubDetails.setBrowser(browser); // Pass the browser instance
-    const result = await clubDetails.Setup(req.params.id);
-    logger.info(`'* *************************************************** */`);
-    logger.info(` Club Details has completed, for ID: ${req.params.id}`);
-    logger.info(`'* *************************************************** */`);
-    await browser.close();
-    clubDetails.dispose();
+    const clubController = new ClubDetailsController();
+    await clubController.setup(req.params.id);
+    const result = await clubController.run(req.params.id);
+    await clubController.dispose();
     res.send(result);
   } catch (error) {
     logger.error(`Error getting Club Details: ${error}`);
@@ -50,32 +49,17 @@ app.get("/getClubDetails/:id", async (req, res) => {
 
 app.get("/getAssociationDetails/:id", async (req, res) => {
   try {
-    const browser = await puppeteer.launch({ headless: true,args: ['--no-sandbox']  }); ;
-    const AssociationDetails = new getAssociationDetails();
-    AssociationDetails.setBrowser(browser); // Pass the browser instance
-    const result = await AssociationDetails.Setup(req.params.id);
-    AssociationDetails.dispose();
-    await browser.close();
-    logger.info(
-      `'* ******************************************************** */`
-    );
-    logger.info(` Association Details has completed, for ID: ${req.params.id}`);
-    logger.info(
-      `'* ******************************************************** */`
-    );
+    const associationController = new AssociationDetailsController();
+    const result = await associationController.setup(req.params.id);
+    await associationController.dispose();
     res.send(result);
   } catch (error) {
-    logger.error(`Error getting Club Details: ${error}`);
-    res.status(500).send("Error getting Club Details");
+    logger.error(`Error getting Association Details: ${error}`);
+    res.status(500).send("Error getting Association Details");
   }
 });
 
-(async () => {
-  PQueue = (await import("p-queue")).default;
-  queue = new PQueue({ concurrency: 1 });
-
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => {
-    logger.info(`Server listening on port ${port}`);
-  });
-})();
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  logger.info(`Server listening on port ${port}`);
+});

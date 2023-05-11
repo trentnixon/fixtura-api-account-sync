@@ -121,18 +121,27 @@ class getTeamsGameData {
           return null;
         }
       })
-      );
-  
-      return teamMatches;
+    );
+
+    return teamMatches;
+  }
+
+  findGradeId(array, gradeId) {
+    for (const item of array) {
+      if (item.attributes.gradeId === gradeId) {
+        return item.id;
+      }
     }
-  
-    async LoopTeams() {
-      let teamIndex = 0;
-      try {
-        for (const { id, attributes: team } of this.TEAMS) {
+    return null;
+  }
+
+  async LoopTeams() {
+    let teamIndex = 0;
+    try {
+      for (const { id, attributes: team } of this.TEAMS) {
         logger.info(`Processing team ${team.teamName} (Index ${teamIndex})...`);
         logger.info(`on playHQ URL ${team.href}`);
-        //console.log(team.grade.data.id);
+        
         // Navigate to team page
         await this.page.goto(`https://www.playhq.com${team.href}`);
 
@@ -142,21 +151,29 @@ class getTeamsGameData {
         );
         await this.page.waitForTimeout(1000);
 
-        // Find Team Grade for Gamedata relation
-        const GradeID = team.grade.data.id;
+        const gradeIdSelector = "a.sc-crzoUp.lebimc.button";
+        const gradeId = await this.page.$eval(gradeIdSelector, (element) => {
+          const href = element.getAttribute("href");
+          return href.split("/").pop();
+        });
 
+        const gradeIdFromPage = this.findGradeId(team.grades.data, gradeId);
         // Get the match list
-        const matchList = await this.page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
+        const matchList = await this.page.$$(
+          ".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY"
+        );
 
         // Process the games on the page
-        const GAMEDATA = await this.ProcessGame(matchList, team, GradeID);
+        const GAMEDATA = await this.ProcessGame(
+          matchList,
+          team,
+          gradeIdFromPage
+        );
 
-        // Filter out any null values (i.e. matches that couldn't be processed)
         const validMatches = GAMEDATA.filter((match) => match !== null);
-        //console.log(validMatches);
-
+  
         const uploader = new assignTeamToGameData();
-        await uploader.Setup(validMatches);
+        await uploader.setup(validMatches);
         teamIndex++;
       }
       return true;
@@ -166,7 +183,7 @@ class getTeamsGameData {
     }
   }
 
-  async Setup() {
+  async setup() {
     try {
       this.page = await this.browser.newPage();
       await this.LoopTeams();
@@ -190,6 +207,8 @@ class getTeamsGameData {
 }
 
 module.exports = getTeamsGameData;
+
+
 
 /* *********************************************************** */
 // scrape FUNCS

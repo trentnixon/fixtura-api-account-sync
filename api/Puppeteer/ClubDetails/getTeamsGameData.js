@@ -144,11 +144,13 @@ class getTeamsGameData {
 
   async LoopTeams(page) {
     let teamIndex = 0;
-  
+
     //const Sample = this.TEAMS[0]
     try {
       for (const { id, attributes: team } of this.TEAMS) {
-        logger.info(`Processing team ${team.teamName} id ${id} (Index ${teamIndex})...`);
+        logger.info(
+          `Processing team ${team.teamName} id ${id} (Index ${teamIndex})...`
+        );
         logger.info(`on playHQ URL ${team.href}`);
         // Navigate to team page
         await page.goto(team.href);

@@ -1,15 +1,9 @@
 const logger = require("../../Utils/logger");
 
-class getClubTeams {
-  constructor(href) {
-    this.URL = href;
-    this.browser = null;
-  }
-
-  setBrowser(browser) {
+class TeamProcessor {
+  constructor(browser) {
     this.browser = browser;
   }
-
 
   async processTeam(teamElement, club, competition, page) {
     try {
@@ -19,22 +13,21 @@ class getClubTeams {
       const age = await teamElement.$eval("span:nth-child(4)", (el) => el.textContent);
       const hrefElement = await teamElement.$("a");
       const href = hrefElement ? await hrefElement.evaluate((el) => el.href) : null;
-  
+
       if (href) {
         const newPage = await this.browser.newPage();
         await newPage.goto(href);
-  
+
         await newPage.waitForSelector(".sc-crzoUp.lebimc.button");
         const gradeLinkElement = await newPage.$(".sc-crzoUp.lebimc.button");
         const gradeLink = gradeLinkElement
           ? await gradeLinkElement.evaluate((el) => el.href)
           : null;
-  
+
         await newPage.close();
-  
+
         const teamID = href.split("/").pop();
         const gradeLinkID = gradeLink.split("/").pop();
-        //console.log("this is the teams gradeLinkID", gradeLinkID, teamName, teamID);
         return {
           teamName,
           gradeName,
@@ -42,7 +35,7 @@ class getClubTeams {
           age,
           href,
           teamID,
-          gradeLinkID:[gradeLinkID],
+          gradeLinkID: [gradeLinkID],
           club: [club.data.id],
           competition: [competition.data.id],
         };
@@ -55,7 +48,14 @@ class getClubTeams {
       return null;
     }
   }
-  
+}
+
+class GetClubTeams {
+  constructor(href, browser) {
+    this.URL = href;
+    this.browser = browser;
+    this.teamProcessor = new TeamProcessor(browser);
+  }
 
   async processCompetition(page, competitionData) {
     const {
@@ -71,14 +71,14 @@ class getClubTeams {
         if (index === 0) {
           return null;
         }
-        return this.processTeam(teamElement, club, competition, page);
+        return this.teamProcessor.processTeam(teamElement, club, competition, page);
       })
     );
 
     return competitionTeams.filter((team) => team !== null);
   }
 
-  async Setup(competitionUrls) {
+  async setup(competitionUrls) {
     const page = await this.browser.newPage();
     try {
       const teams = [];
@@ -100,4 +100,4 @@ class getClubTeams {
   }
 }
 
-module.exports = getClubTeams;
+module.exports = GetClubTeams;

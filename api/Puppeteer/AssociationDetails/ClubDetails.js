@@ -1,19 +1,13 @@
 const fetcher = require("../../Utils/fetcher");
-// use Pupeteer
-const getCompetitions = require("../ClubDetails/getCompetitions");
-const getClubTeams = require("../ClubDetails/getClubTeams");
+const GetCompetitions = require("../ClubDetails/getCompetitions");
+const GetClubTeams = require("../ClubDetails/getClubTeams");
 const getTeamsGameData = require("../ClubDetails/getTeamsGameData");
-const getFixutreResults = require("../ClubDetails/OLD_getFixutreResults");
-// isAssign
 const assignClubToCompetition = require("../AssociationCompetitions/assignClubToCompetition");
-const assignTeamToClub = require("../ClubDetails/assignTeamtoClub");
-// utils
+const AssignTeamToClub = require("../ClubDetails/assignTeamtoClub");
 const logger = require("../../Utils/logger");
 const qs = require("qs");
-const getGradeLadders = require("./getGradeLadder");
 
-
-class getClubDetails {
+class GetClubDetails {
   constructor() {
     this.browser = null;
   }
@@ -22,92 +16,100 @@ class getClubDetails {
     this.browser = browser;
   }
 
-  async Setup(CLUBID, CLUBURL) {
-    logger.debug(`Update Club ${CLUBID} on ${CLUBURL}`); 
+  static getClubRelations() {
+    return qs.stringify(
+      {
+        pagination: {
+          page: 1,
+          pageSize: 1,
+        },
+
+        populate: [
+          "href",
+          "competitions",
+          "teams",
+          "teams.grades",
+          "club_to_competitions",
+          "club_to_competitions.club",
+          "club_to_competitions.competition",
+          "club_to_competitions.competition.grades",
+          "teams.game_meta_data",
+        ],
+      },
+      {
+        encodeValuesOnly: true,
+      }
+    );
+  }
+
+  static extractGrades(activeClubTeams) {
+    const club_to_competitions =
+      activeClubTeams.attributes.club_to_competitions.data;
+
+    const gradesArray = club_to_competitions.map((item) => {
+      return item.attributes.competition.data.attributes.grades.data;
+    });
+
+    const flattenedGradesArray = [].concat(...gradesArray);
+
+    const resultArray = flattenedGradesArray.map((grade) => {
+      return {
+        Name: grade.attributes.gradeName,
+        ID: grade.id,
+      };
+    });
+
+    return resultArray;
+  }
+
+  // HELPER
+  async FetchClubsInAssociation(CLUBID) {
+    return await fetcher(
+      `clubs/${CLUBID}?${GetClubDetails.getClubRelations()}`
+    );
+  }
+
+  async FetchClubDetails(CLUBID) {
+    return await fetcher(
+      `clubs/${CLUBID}?${GetClubDetails.getClubRelations()}`
+    );
+  }
+
+  async setup(CLUBID, CLUBURL) {
+    logger.debug(`Update Club ${CLUBID} on ${CLUBURL}`);
 
     try {
-      /* **************************************************************************** */
-      // Step 2: Check the club's competition page and update any old ones
-      /* **************************************************************************** */
+      const ListCompetitionsToAssociations = await this.processCompetitions(
+        CLUBURL
+      );
 
-      const getCompetitionsObj = new getCompetitions(CLUBURL);
-      getCompetitionsObj.setBrowser(this.browser);
-      const competitions = await getCompetitionsObj.Setup();
-
-      // if no results then exit out of class
-      if (!competitions) {
+      if (!ListCompetitionsToAssociations) {
         logger.debug(`No competitions found for club ${CLUBID}`);
         return false;
       }
-
-      /* **************************************************************************** */
-      // Step 3: Store and assign competitions to club
-      /* **************************************************************************** */
-
-      const uploader = new assignClubToCompetition();
-      await uploader.Setup(competitions, CLUBID);
-
-      /* **************************************************************************** */
-      // Step 3.5 Refetch Club Detials
-      /* **************************************************************************** */
-
-      const ActiveClub = await fetcher(`clubs/${CLUBID}?${getClubRelations()}`);
-
-      /* **************************************************************************** */
-      // Step 4 // Refetch the Club on its ID, Get the Teams!!!
-      /* **************************************************************************** */
-      // problem CLASS: error in class
-      const ClubTeams = new getClubTeams();
-      ClubTeams.setBrowser(this.browser);
-      const ClubTeamsresult = await ClubTeams.Setup(
-        ActiveClub.attributes.club_to_competitions.data
+      console.log(ListCompetitionsToAssociations);
+      const AssignListCompetitionsToAssociations =
+        new assignClubToCompetition();
+      await AssignListCompetitionsToAssociations.setup(
+        ListCompetitionsToAssociations,
+        CLUBID
       );
 
-      /* **************************************************************************** */
-      // Step 5 // Store Teams to Clubs and Comps
-      /* **************************************************************************** */
-      const TeamToClub = new assignTeamToClub();
-      await TeamToClub.Setup(ClubTeamsresult, CLUBID);
+      const getActiveClubsInAssocaition = await this.FetchClubsInAssociation(
+        CLUBID
+      );
+      const ListOfAssociationTeams = await this.processClubTeams(
+        getActiveClubsInAssocaition
+      );
 
-      /* **************************************************************************** */
-      // Step 6 // Fixture to Team and Grade
-      /* **************************************************************************** */
+      await this.processTeamsToClub(ListOfAssociationTeams, CLUBID);
+
       logger.info(
         `Fecth Active Club Teams on CLUBID : ${CLUBID} : Page ClubDetails.js`
       );
-      const ActiveClubTeams = await fetcher(
-        `clubs/${CLUBID}?${getClubRelations()}`
-      );
-      const TeamsGameData = new getTeamsGameData(
-        ActiveClubTeams.attributes.teams,
-        extractGrades(ActiveClubTeams)
-      );
-      TeamsGameData.setBrowser(this.browser);
-      await TeamsGameData.Setup();
 
-      /* **************************************************************************** */
-      // Step 7 // Fixture to Team and Grade
-      /* **************************************************************************** */
-      const FixutreResults = new getFixutreResults();
-      FixutreResults.setBrowser(this.browser);
-      await FixutreResults.Setup(ActiveClubTeams.attributes.teams);
+      await this.processTeamsGameData(CLUBID);
 
-       /* **************************************************************************** */
-      // Step 8 // Get the Grade Ladders
-      /* **************************************************************************** */
-
-      console.log("ActiveClubTeams")
-      console.log(ActiveClubTeams.attributes.teams.data)
-      const GetTheGradeLadder = new getGradeLadders(
-        ActiveClubTeams.attributes.teams,
-        extractGrades(ActiveClubTeams)  
-      );
-      GetTheGradeLadder.setBrowser(this.browser);
-      await GetTheGradeLadder.Setup();
-
-
-
-      // FINISHED
       return true;
     } catch (error) {
       logger.error(`Error processing Association`, error);
@@ -115,53 +117,32 @@ class getClubDetails {
 
     return { complete: true };
   }
+  async processCompetitions(CLUBURL) {
+    const getCompetitionsObj = new GetCompetitions(CLUBURL, this.browser);
+    return await getCompetitionsObj.setup();
+  }
+
+  async processClubTeams(getActiveClubsInAssocaition) {
+    const ClubTeams = new GetClubTeams(null, this.browser); // pass the browser instance here
+    return await ClubTeams.setup(
+      getActiveClubsInAssocaition.attributes.club_to_competitions.data
+    );
+  }
+
+  async processTeamsToClub(ListOfAssociationTeams, CLUBID) {
+    const AssignListOfTeamsToAssociation = new AssignTeamToClub();
+    await AssignListOfTeamsToAssociation.Setup(ListOfAssociationTeams, CLUBID);
+  }
+
+  async processTeamsGameData(CLUBID) {
+    const ActiveClubTeams = await this.FetchClubsInAssociation(CLUBID);
+    const TeamsGameData = new getTeamsGameData(
+      ActiveClubTeams.attributes.teams,
+      GetClubDetails.extractGrades(ActiveClubTeams)
+    );
+    TeamsGameData.setBrowser(this.browser);
+    await TeamsGameData.Setup();
+  }
 }
 
-module.exports = getClubDetails;
-
-const getClubRelations = () => {
-  return qs.stringify(
-    {
-      pagination: {
-        page: 1,
-        pageSize: 1,
-      },
-
-      populate: [
-        "href",
-        "competitions",
-        "teams",
-        "teams.grades",
-        "club_to_competitions",
-        "club_to_competitions.club",
-        "club_to_competitions.competition",
-        "club_to_competitions.competition.grades",
-        "teams.game_meta_data",
-      ],
-    },
-    {
-      encodeValuesOnly: true,
-    }
-  );
-};
-
-const extractGrades = (activeClubTeams) => {
-  const club_to_competitions =
-    activeClubTeams.attributes.club_to_competitions.data;
-
-  const gradesArray = club_to_competitions.map((item) => {
-    return item.attributes.competition.data.attributes.grades.data;
-  });
-
-  // Flatten the gradesArray into a single array of objects
-  const flattenedGradesArray = [].concat(...gradesArray);
-
-  const resultArray = flattenedGradesArray.map((grade) => {
-    return {
-      Name: grade.attributes.gradeName,
-      ID: grade.id,
-    };
-  });
-
-  return resultArray;
-};
+module.exports = GetClubDetails;

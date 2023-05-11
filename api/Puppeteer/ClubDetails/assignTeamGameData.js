@@ -95,7 +95,7 @@ class assignTeamToGameData {
         },
       },
       {
-        encodeValuesOnly: true,
+        encodeValuesOnly: true, 
       }
     );
     try {

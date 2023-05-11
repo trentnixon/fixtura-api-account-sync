@@ -1,8 +1,8 @@
 const fetcher = require("../../Utils/fetcher");
 // has Pupeteer
 const getCompetitions = require("./getCompetitions");
-//const getClubDetails = require("./ClubDetails");
-//const getNoClubDetails = require("../OLD_NoClubAssociations/NoClubsInAssociationDetails");
+const getClubDetails = require("./ClubDetails");
+const getNoClubDetails = require("../NoClubAssociations/NoClubsInAssociationDetails");
 // is assign
 const assignCompetitionsToAssociation = require("./assignCompetitionsToAssociation");
 const logger = require("../../Utils/logger");
@@ -14,9 +14,9 @@ class getAssociationDetails {
     this.browser = null;
     this.disposables = [];
   }
-
+ 
   setBrowser(browser) {
-    this.browser = browser; 
+    this.browser = browser;  
   }
   
   async Setup(ACCOUNTID) {
@@ -64,14 +64,14 @@ class getAssociationDetails {
       // Step 4 // Refetch the Associtaions on its ID
       /* **************************************************************************** */
 
-   /*    const ActiveAssociation = await fetcher(
+      const ActiveAssociation = await fetcher(
         `associations/${ASSOCIATIONID}?${getClubRelations()}`
       );
- */
+
       // CLEAN UP ALL OF THIS!!!/
       // The MAIN ASSOCIATION CLASS NEEDS THE LADDER SCRAP
       // Find association databy looping through the clubs assigned to the association and grabbing there data via the club updater
-    /*   const ASSOCIATIONCLUBS = ActiveAssociation.attributes.clubs.data;
+      const ASSOCIATIONCLUBS = ActiveAssociation.attributes.clubs.data;
       logger.info("ASSOCIATIONCLUBS ", ASSOCIATIONCLUBS.length);
       console.log(ASSOCIATIONCLUBS.length )
       if (ASSOCIATIONCLUBS.length > 0) {
@@ -101,7 +101,7 @@ class getAssociationDetails {
           // Add the NoClubDetails instance to the disposables array
           this.disposables.push(NoClubDetails);
         }
-      } */
+      }
 
       return true;
     } catch (error) {
@@ -168,7 +168,7 @@ const getApprovedAssociationsAccounts = () => {
     }
   );
 };
-/* 
+
 const getClubRelations = () => {
   return qs.stringify(
     {
@@ -192,4 +192,3 @@ const getClubRelations = () => {
     }
   );
 };
- */
