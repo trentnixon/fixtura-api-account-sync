@@ -15,15 +15,24 @@ class AssignTeamToClub {
 
   async Setup(ClubTeamsresult, CLUBID) {
     try {
+      logger.info(`Setup started for Club ID: ${CLUBID}`);
       const combinedClubTeams = this.combineClubTeams(ClubTeamsresult);
+      logger.info(`Combined club teams: ${JSON.stringify(combinedClubTeams)}`);
+
       const getGrades = await this.getClub(CLUBID);
+      logger.info(`Club data retrieved: ${JSON.stringify(getGrades)}`);
+      
       const TeamStrapiIDS = this.getTeamStrapiIds(getGrades);
+      logger.info(`Team Strapi IDs: ${JSON.stringify(TeamStrapiIDS)}`);
 
       const processedTeams = await this.processTeams(
         combinedClubTeams,
         TeamStrapiIDS
       );
+      logger.info(`Processed teams: ${JSON.stringify(processedTeams)}`);
+
       await this.storeTeams(processedTeams);
+      logger.info("Teams stored successfully");
 
       return { success: true };
     } catch (error) {
@@ -85,6 +94,7 @@ class AssignTeamToClub {
   }
 
   async storeTeams(processedTeams) {
+    logger.info("Storing teams...");
     const promises = processedTeams.map((team) => {
       return fetcher(
         `teams${team.action === "PUT" ? `/${team.id}` : ""}`,
@@ -94,6 +104,7 @@ class AssignTeamToClub {
     });
 
     await Promise.all(promises);
+    logger.info("Teams stored");
   }
 
   async checkIfTeamExists(teamID, resourcePath) {
@@ -130,7 +141,7 @@ class AssignTeamToClub {
       logger.error(`Error getting club with ID ${CLUBID}:`, err);
     }
   }
-
+ 
   async getStrapiGradeIDFromPlayHQID(PLAYHQGRADEID) {
     logger.info(
       `Fecth Strapi ID Teams on PLAYHQ ID  : ${PLAYHQGRADEID} : Page assignTeamtoClub.js`
