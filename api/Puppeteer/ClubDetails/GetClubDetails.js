@@ -39,7 +39,7 @@ class ClubDetailsHandler {
 
       /* Step 2 */
       // Assign the selected club to the Comps found
-//      await this.processAssignClubToCompetition(competitions, CLUBID);
+      await this.processAssignClubToCompetition(competitions, CLUBID);
 
       /* Step 3 */
       // Refetch the club from Strapi for the new Data and IDS
