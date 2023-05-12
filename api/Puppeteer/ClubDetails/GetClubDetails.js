@@ -58,10 +58,10 @@ class ClubDetailsHandler {
 
       /* Step 7 */
       // Update the UI
-      await this.dependencies.changeisUpdating(ACCOUNTID, false);
+      //await this.dependencies.changeisUpdating(ACCOUNTID, false);
       /* Step 7 */
       // Add this data collection
-      await this.createDataCollection(ACCOUNTID, { error: false });
+      //await this.createDataCollection(ACCOUNTID, { error: false });
 
       return true;
     } catch (error) {
@@ -141,7 +141,7 @@ class GetClubDetails {
 
 module.exports = GetClubDetails;
 
-const createDataCollection = async (ID, ERR) => {
+/* const createDataCollection = async (ID, ERR) => {
   //data-collections
   const currentDate = new Date();
   await fetcher(`data-collections`, `POST`, {
@@ -151,7 +151,7 @@ const createDataCollection = async (ID, ERR) => {
     },
   });
   return true;
-};
+}; */
 
 const getApprovedClubAccounts = () => {
   return qs.stringify(

@@ -14,7 +14,7 @@ class TeamProcessor {
       const hrefElement = await teamElement.$("a");
       const href = hrefElement ? await hrefElement.evaluate((el) => el.href) : null;
   
-      console.log("the error is on this href", href)
+      //console.log("the error is on this href", href)
       if (href) {
         const newPage = await this.browser.newPage();
         await newPage.goto(href);
@@ -86,8 +86,8 @@ class GetClubTeams {
   }
 
   async setup(competitionUrls) {
-    console.log("competitionUrls")
-    console.log(competitionUrls)
+   /*  console.log("competitionUrls")
+    console.log(competitionUrls) */
     const page = await this.browser.newPage();
     try {
       const teams = [];
