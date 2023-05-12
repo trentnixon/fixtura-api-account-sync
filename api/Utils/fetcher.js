@@ -24,7 +24,8 @@ async function fetcher(PATH, method = "GET", body = {}, retry = true) {
     const res = await response.json();
 
     if (!response.ok) {
-      console.log(res.error);
+      console.log(res.error, method);
+      console.log(res.error.details.errors);
       throw new Error(`Failed to fetch data from ${PATH}. Error: `);
     }
 

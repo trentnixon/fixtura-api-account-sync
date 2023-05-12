@@ -62,14 +62,27 @@ class GetClubDetails {
     return resultArray;
   }
 
-  // HELPER
-  async FetchClubsInAssociation(CLUBID) {
-    return await fetcher(
-      `clubs/${CLUBID}?${GetClubDetails.getClubRelations()}`
-    );
+  static extractGradesVersion2(activeClubTeams) {
+    const ListedTeams = activeClubTeams.attributes.teams.data;
+
+    const gradesArray = ListedTeams.map((item) => {
+      return item.attributes.grades.data;
+    });
+
+    const flattenedGradesArray = [].concat(...gradesArray);
+
+    const resultArray = flattenedGradesArray.map((grade) => {
+      return {
+        Name: grade.attributes.gradeName,
+        ID: grade.id,
+      };
+    });
+
+    return resultArray;
   }
 
-  async FetchClubDetails(CLUBID) {
+  // HELPER
+  async FetchClubsInAssociation(CLUBID) {
     return await fetcher(
       `clubs/${CLUBID}?${GetClubDetails.getClubRelations()}`
     );
@@ -78,7 +91,7 @@ class GetClubDetails {
   async setup(CLUBID, CLUBURL) {
     logger.debug(`Update Club ${CLUBID} on ${CLUBURL}`);
 
-    try {
+    try { 
       const ListCompetitionsToAssociations = await this.processCompetitions(
         CLUBURL
       );
@@ -87,7 +100,6 @@ class GetClubDetails {
         logger.debug(`No competitions found for club ${CLUBID}`);
         return false;
       }
-      console.log(ListCompetitionsToAssociations);
       const AssignListCompetitionsToAssociations =
         new assignClubToCompetition();
       await AssignListCompetitionsToAssociations.setup(
@@ -135,10 +147,10 @@ class GetClubDetails {
   }
 
   async processTeamsGameData(CLUBID) {
-    const ActiveClubTeams = await this.FetchClubsInAssociation(CLUBID);
+    const PrcessingClubFromStrapi = await this.FetchClubsInAssociation(CLUBID);
     const TeamsGameData = new getTeamsGameData(
-      ActiveClubTeams.attributes.teams,
-      GetClubDetails.extractGrades(ActiveClubTeams)
+      PrcessingClubFromStrapi.attributes.teams,
+      GetClubDetails.extractGradesVersion2(PrcessingClubFromStrapi)  
     );
     TeamsGameData.setBrowser(this.browser);
     await TeamsGameData.Setup();

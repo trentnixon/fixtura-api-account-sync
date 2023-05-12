@@ -30,28 +30,63 @@ class ClubDetailsHandler {
     const CLUBID = Account.attributes.clubs.data[0].id;
 
     try {
+      /* Step 1 */
+      // Get the Comps for this club
       const competitions = await this.processCompetitions(Account);
       if (!competitions) return false;
-      //console.log(competitions);
-      const uploader = new assignClubToCompetition();
-      await uploader.setup(competitions, CLUBID);
+  
 
-      const ActiveClub = await this.fetcher(
-        `clubs/${CLUBID}?${getClubRelations()}`
-      );
-      const ClubTeamsresult = await this.processClubTeams(ActiveClub);
+      /* Step 2 */
+      // Assign the selected club to the Comps found
+      await this.processAssignClubToCompetition(competitions, CLUBID);
 
-      await this.processTeamsToClub(CLUBID, ClubTeamsresult);
-      await this.processTeamsGameData(CLUBID);
-      
+      /* Step 3 */
+      // Refetch the club from Strapi for the new Data and IDS
+      const ActiveClub = await this.reFetchClubData(CLUBID);
+
+      /* Step 4 */
+      // Find all of the Teams Associatiated with this Club
+      const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
+  //    console.log(ListOfTeamsInClub)
+      /* Step 5 */
+      // Now assign those teams to the Club ID
+      await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
+
+      /* Step 6 */
+      // Get the Game Data for the Teams found
+       await this.processTeamsGameData(CLUBID);
+
+      /* Step 7 */
+      // Update the UI
       await this.dependencies.changeisUpdating(ACCOUNTID, false);
-      await createDataCollection(ACCOUNTID, { error: false });
+      /* Step 7 */
+      // Add this data collection
+      await this.createDataCollection(ACCOUNTID, { error: false });
 
       return true;
     } catch (error) {
       logger.error(`Error processing club ${Account.id}:`, error);
       return { complete: true };
     }
+  }
+
+  async reFetchClubData(CLUBID) {
+    return await this.fetcher(`clubs/${CLUBID}?${getClubRelations()}`);
+  }
+  async createDataCollection(ID, ERR) {
+    //data-collections
+    const currentDate = new Date();
+    await fetcher(`data-collections`, `POST`, {
+      data: {
+        account: [ID],
+        whenWasTheLastCollection: currentDate,
+      },
+    });
+    return true;
+  }
+  async processAssignClubToCompetition(competitions, CLUBID) {
+    const uploader = new assignClubToCompetition();
+    await uploader.setup(competitions, CLUBID);
   }
 
   async processCompetitions(Account) {
@@ -78,9 +113,10 @@ class ClubDetailsHandler {
     const ActiveClubTeams = await this.fetcher(
       `clubs/${CLUBID}?${getClubRelations()}`
     );
+    //console.log(ActiveClubTeams)
     const TeamsGameData = new getTeamsGameData(
       ActiveClubTeams.attributes.teams,
-      extractGrades(ActiveClubTeams)
+      extractGradesVersion2(ActiveClubTeams)
     );
     TeamsGameData.setBrowser(this.browser);
     await TeamsGameData.Setup();
@@ -117,15 +153,6 @@ const createDataCollection = async (ID, ERR) => {
   return true;
 };
 
-/* const changeIsUpdating = async (ID, isUpdating) => {
-  await fetcher(`accounts/${ID}`, `PUT`, {
-    data: {
-      isUpdating: isUpdating,
-    },
-  });
-  return true;
-}; */
-
 const getApprovedClubAccounts = () => {
   return qs.stringify(
     {
@@ -149,7 +176,7 @@ const getClubRelations = () => {
         "href",
         "competitions",
         "teams",
-        "teams.grade",
+        "teams.grades",
         "club_to_competitions",
         "club_to_competitions.club",
         "club_to_competitions.competition",
@@ -163,7 +190,7 @@ const getClubRelations = () => {
   );
 };
 
-const extractGrades = (activeClubTeams) => {
+/* const extractGrades = (activeClubTeams) => {
   const club_to_competitions =
     activeClubTeams.attributes.club_to_competitions.data;
 
@@ -182,4 +209,23 @@ const extractGrades = (activeClubTeams) => {
   });
 
   return resultArray;
-};
+}; */
+
+function extractGradesVersion2(activeClubTeams) {
+  const ListedTeams = activeClubTeams.attributes.teams?.data;
+  //console.log(ListedTeams); 
+  const gradesArray = ListedTeams.map((item) => {
+    return item.attributes.grades.data;
+  });
+
+  const flattenedGradesArray = [].concat(...gradesArray);
+
+  const resultArray = flattenedGradesArray.map((grade) => {
+    return {
+      Name: grade.attributes.gradeName,
+      ID: grade.id,
+    };
+  });
+
+  return resultArray;
+}

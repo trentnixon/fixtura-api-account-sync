@@ -8,7 +8,7 @@ class AssignTeamToClub {
     const strapiIDs = [];
     for (const gradeLinkID of gradeLinkIDs) {
       const strapiID = await this.getStrapiGradeIDFromPlayHQID(gradeLinkID);
-      strapiIDs.push(strapiID[0].id);
+      strapiIDs.push(strapiID[0].id); 
     }
     return strapiIDs;
   }

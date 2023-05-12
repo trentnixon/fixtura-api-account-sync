@@ -34,11 +34,11 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/getClubDetails/:id", async (req, res) => {
+app.get("/getClubDetails/:id", async (req, res) => { 
   try {
     const clubController = new ClubDetailsController();
     await clubController.setup(req.params.id);
-    const result = await clubController.run(req.params.id);
+    const result = await clubController.run(req.params.id); 
     await clubController.dispose();
     res.send(result);
   } catch (error) {

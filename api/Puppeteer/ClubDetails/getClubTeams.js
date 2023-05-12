@@ -13,21 +13,27 @@ class TeamProcessor {
       const age = await teamElement.$eval("span:nth-child(4)", (el) => el.textContent);
       const hrefElement = await teamElement.$("a");
       const href = hrefElement ? await hrefElement.evaluate((el) => el.href) : null;
-
+  
+      console.log("the error is on this href", href)
       if (href) {
         const newPage = await this.browser.newPage();
         await newPage.goto(href);
-
-        await newPage.waitForSelector(".sc-crzoUp.lebimc.button");
-        const gradeLinkElement = await newPage.$(".sc-crzoUp.lebimc.button");
-        const gradeLink = gradeLinkElement
-          ? await gradeLinkElement.evaluate((el) => el.href)
-          : null;
-
+  
+        let gradeLink = null;
+        try {
+          await newPage.waitForSelector(".sc-crzoUp.lebimc.button", { timeout: 5000 });
+          const gradeLinkElement = await newPage.$(".sc-crzoUp.lebimc.button");
+          gradeLink = gradeLinkElement
+            ? await gradeLinkElement.evaluate((el) => el.href)
+            : null;
+        } catch (error) {
+          logger.warn("Element .sc-crzoUp.lebimc.button not found. Proceeding without it.");
+        }
+  
         await newPage.close();
-
+  
         const teamID = href.split("/").pop();
-        const gradeLinkID = gradeLink.split("/").pop();
+        const gradeLinkID = gradeLink ? gradeLink.split("/").pop() : null;
         return {
           teamName,
           gradeName,
@@ -35,7 +41,7 @@ class TeamProcessor {
           age,
           href,
           teamID,
-          gradeLinkID: [gradeLinkID],
+          gradeLinkID: gradeLinkID ? [gradeLinkID] : [],
           club: [club.data.id],
           competition: [competition.data.id],
         };
@@ -48,6 +54,7 @@ class TeamProcessor {
       return null;
     }
   }
+  
 }
 
 class GetClubTeams {
@@ -79,6 +86,8 @@ class GetClubTeams {
   }
 
   async setup(competitionUrls) {
+    console.log("competitionUrls")
+    console.log(competitionUrls)
     const page = await this.browser.newPage();
     try {
       const teams = [];

@@ -51,6 +51,8 @@ class getTeamsGameData {
     try {
       // Scrape the league name
       const leagueName = await ScrapeLeagueName(page);
+
+      console.log(this.ActiveGrades)
       const gradeObj = this.ActiveGrades.find(
         (grade) => grade.Name === leagueName
       );
@@ -163,7 +165,7 @@ class getTeamsGameData {
 
         // Find Team Grade for Gamedata relation
         const GradeID = await this.getGradeID(page);
-
+ 
         // Get the match list
         const matchList = await page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
 

@@ -1,54 +1,35 @@
 const fetcher = require("../../Utils/fetcher");
 const qs = require("qs");
 
-/*
-{
-  round: 'Round 7',
-  date: 'Sunday, 15 January 2023',
-  type: 'One Day',
-  time: '10:00 AM, Sun, 15 Jan 23',
-  ground: 'Runaway Bay Cricket Club / Sam Loxton Oval 1',
-  status: 'Final',
-  urlToScoreCard: 'https://www.playhq.com/cricket-australia/org/cricket-gold-coast-ltd/cricket-gold-coast-senior-competition-summer-202223/taper-over-40-division-3/game-centre/37c3b2b5',
-  team: [ 82 ],
-  gameID: '37c3b2b5',
-  teamHome: 'Runaway Bay Over 40 Div 3',
-  teamAway: 'Coomera Hope Island Over 40 Div 3 White'
-}
-*/
 class assignTeamToGameData {
   async Setup(GameData) {
     const promises = [];
-    //console.log(GameData)
+   
     for (const Games of GameData) {
-
-      if(Games.teamHomeID === undefined)
-        {
-          console.log(`Games.teamHomeID was Undefined ${Games.teamHomeID}`) 
-          continue
-        }
+      if (Games.teamHomeID === undefined) {
+        console.log(`Games.teamHomeID was Undefined ${Games.teamHomeID}`);
+        continue;
+      }
 
       const isExisting = await this.checkIfCompetitionExists(
         Games.gameID,
-        "game-meta-datas"  
+        "game-meta-datas"
       );
 
       const HomeTeamID = await this.GetTeamsIDS(Games.teamHomeID);
-      const AwayTeamID = await this.GetTeamsIDS(Games.teamAwayID); 
+      const AwayTeamID = await this.GetTeamsIDS(Games.teamAwayID);
 
       //console.log("HomeTeamID res ", HomeTeamID, 'on', Games.teamHomeID)
       //console.log("AwayTeamID res ", AwayTeamID, 'on', Games.teamHomeID)
       HomeTeamID ? Games.teams.push(HomeTeamID) : false;
       AwayTeamID ? Games.teams.push(AwayTeamID) : false;
 
-
       //console.log('Games.teams : ',Games.teams, 'on', Games.teamHomeID)
       if (!isExisting) {
+     
         promises.push(fetcher("game-meta-datas", "POST", { data: Games }));
       } else {
-       /*  console.log(
-          `${Games.gameID} is already stored as a Game. so lets update ${isExisting}`
-        ); */
+      
         promises.push(
           fetcher(`game-meta-datas/${isExisting}`, "PUT", { data: Games })
         );
@@ -95,7 +76,7 @@ class assignTeamToGameData {
         },
       },
       {
-        encodeValuesOnly: true, 
+        encodeValuesOnly: true,
       }
     );
     try {
