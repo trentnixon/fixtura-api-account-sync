@@ -38,7 +38,11 @@ app.get("/getClubDetails/:id", async (req, res) => {
   try {
     const clubController = new ClubDetailsController();
     await clubController.setup(req.params.id);
-    const result = await clubController.run(req.params.id); 
+
+    console.log("TEST 1 . Before running ClubDetailsController run method");
+    const result = await clubController.setupAndRun(req.params.id); 
+    console.log("TEST LAST . After running ClubDetailsController run method");
+
     await clubController.dispose();
     console.log("CLUB SYNC UPDATE COMPLETE")
     res.send(result);
@@ -47,6 +51,9 @@ app.get("/getClubDetails/:id", async (req, res) => {
     res.status(500).send("Error getting Club Details");
   }
 });
+
+
+
 
 app.get("/getAssociationDetails/:id", async (req, res) => {
   try {

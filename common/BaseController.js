@@ -24,9 +24,9 @@ class BaseController {
     }
   }
 
-  async run(accountId) {
+/*   async run(accountId) {
     throw new Error("Method not implemented");
-  }
+  } */
 
   async dispose() {
     for (const disposable of this.disposables) {

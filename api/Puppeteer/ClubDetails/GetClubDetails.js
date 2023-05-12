@@ -131,6 +131,7 @@ class GetClubDetails {
   }
 
   async Setup(ACCOUNTID) {
+    console.log('TEST 3 . GetClubDetails Setup called');
     await this.dependencies.changeisUpdating(ACCOUNTID, true);
     return await this.clubDetailsHandler.processClub(ACCOUNTID);
   }
