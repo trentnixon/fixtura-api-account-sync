@@ -47,7 +47,8 @@ class ClubDetailsHandler {
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
       const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-      //console.log(ListOfTeamsInClub)
+      console.log("ListOfTeamsInClub")
+      console.log(ListOfTeamsInClub)
       /* Step 5 */
       // Now assign those teams to the Club ID
       await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
