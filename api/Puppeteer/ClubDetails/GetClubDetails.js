@@ -63,6 +63,7 @@ class ClubDetailsHandler {
       // Add this data collection
       //await this.createDataCollection(ACCOUNTID, { error: false });
 
+      
       return true;
     } catch (error) {
       logger.error(`Error processing club ${Account.id}:`, error);

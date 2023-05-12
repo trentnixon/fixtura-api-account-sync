@@ -1,6 +1,6 @@
 const puppeteer = require("puppeteer-extra");
-puppeteer.use(StealthPlugin());
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+puppeteer.use(StealthPlugin());
 const fetcher = require("../api/Utils/fetcher");
 
 const qs = require("qs");
