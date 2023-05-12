@@ -133,7 +133,7 @@ class GetClubDetails {
     await this.dependencies.changeisUpdating(ACCOUNTID, true);
     return await this.clubDetailsHandler.processClub(ACCOUNTID);
   }
-
+ 
   dispose() {
     // Implement a dispose method if needed for cleanup
   }

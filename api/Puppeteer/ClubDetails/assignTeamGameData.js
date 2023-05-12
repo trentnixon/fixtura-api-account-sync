@@ -10,10 +10,12 @@ class assignTeamToGameData {
         console.log(`Games.teamHomeID was Undefined ${Games.teamHomeID}`);
         continue;
       }
-
+      console.log("processing Game")
+      console.log(Games)
+      
       const isExisting = await this.checkIfCompetitionExists(
         Games.gameID,
-        "game-meta-datas"
+        "game-meta-datas" 
       );
 
       const HomeTeamID = await this.GetTeamsIDS(Games.teamHomeID);
