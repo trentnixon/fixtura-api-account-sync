@@ -6,6 +6,8 @@ class TeamProcessor {
   }
 
   async processTeam(teamElement, club, competition, page) {
+    logger.warn(`"Processing club" ${club.data.id}`);
+    
     try {
       const teamName = await teamElement.$eval("span:nth-child(1)", (el) => el.textContent);
       const gradeName = await teamElement.$eval("span:nth-child(2)", (el) => el.textContent);
@@ -13,7 +15,7 @@ class TeamProcessor {
       const age = await teamElement.$eval("span:nth-child(4)", (el) => el.textContent);
       const hrefElement = await teamElement.$("a");
       const href = hrefElement ? await hrefElement.evaluate((el) => el.href) : null;
-  
+      logger.warn(`"Processing Team" ${teamName}`);
       //console.log("the error is on this href", href)
       if (href) {
         const newPage = await this.browser.newPage();

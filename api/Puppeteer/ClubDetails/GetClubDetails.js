@@ -4,12 +4,12 @@
  */
 
 const fetcher = require("../../Utils/fetcher");
-// has Pupeteer
+// getters
 const GetCompetitions = require("./getCompetitions"); 
 const GetClubTeams = require("./getClubTeams");
 const getTeamsGameData = require("./getTeamsGameData");
 
-// isAssign
+// setters
 const assignClubToCompetition = require("../AssociationCompetitions/assignClubToCompetition");
 const AssignTeamToClub = require("./assignTeamtoClub");
 // utils
