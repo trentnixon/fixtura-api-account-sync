@@ -58,7 +58,7 @@ class TeamProcessor {
 }
 
 class GetClubTeams {
-  constructor(href, browser) {
+  constructor(href, browser) { 
     this.URL = href;
     this.browser = browser;
     this.teamProcessor = new TeamProcessor(browser);
@@ -69,25 +69,34 @@ class GetClubTeams {
       attributes: { competitionUrl, club, competition },
     } = competitionData;
     logger.info(`Processing competition URL: ${competitionUrl}`);
-    await page.goto(competitionUrl);
-    await page.waitForSelector('[data-testid="teams-list"] > li');
-    const teamList = await page.$$('[data-testid="teams-list"] > li');
+    try {
+      await page.goto(competitionUrl);
+      logger.info(`Navigated to competition URL: ${competitionUrl}`);
+      
+      await page.waitForSelector('[data-testid="teams-list"] > li');
+      logger.info(`Found teams list on competition URL: ${competitionUrl}`);
+      
+      const teamList = await page.$$('[data-testid="teams-list"] > li');
+      logger.info(`Retrieved ${teamList.length} team elements from competition URL: ${competitionUrl}`);
 
-    const competitionTeams = await Promise.all(
-      teamList.map(async (teamElement, index) => {
-        if (index === 0) {
-          return null;
-        }
-        return this.teamProcessor.processTeam(teamElement, club, competition, page);
-      })
-    );
+      const competitionTeams = await Promise.all(
+        teamList.map(async (teamElement, index) => {
+          if (index === 0) {
+            return null;
+          }
+          return this.teamProcessor.processTeam(teamElement, club, competition, page);
+        })
+      );
 
-    return competitionTeams.filter((team) => team !== null);
+      logger.info(`Processed ${competitionTeams.length} teams from competition URL: ${competitionUrl}`);
+      return competitionTeams.filter((team) => team !== null);
+    } catch (error) {
+      logger.error(`Error processing competition URL: ${competitionUrl}`, error);
+      throw error;
+    }
   }
 
   async setup(competitionUrls) {
-   /*  console.log("competitionUrls")
-    console.log(competitionUrls) */
     const page = await this.browser.newPage();
     try {
       const teams = [];
@@ -100,9 +109,11 @@ class GetClubTeams {
         teams.push(...competitionTeams);
       }
 
+      logger.info(`Total teams processed: ${teams.length}`);
       return teams;
     } catch (error) {
       logger.error(`Error getting teams:`, error);
+      throw error;
     } finally {
       await page.close();
     }
