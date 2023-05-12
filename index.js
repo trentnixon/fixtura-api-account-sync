@@ -40,6 +40,7 @@ app.get("/getClubDetails/:id", async (req, res) => {
     await clubController.setup(req.params.id);
     const result = await clubController.run(req.params.id); 
     await clubController.dispose();
+    console.log("CLUB SYNC UPDATE COMPLETE")
     res.send(result);
   } catch (error) {
     logger.error(`Error getting Club Details: ${error}`);
@@ -52,6 +53,7 @@ app.get("/getAssociationDetails/:id", async (req, res) => {
     const associationController = new AssociationDetailsController();
     const result = await associationController.setup(req.params.id);
     await associationController.dispose();
+    console.log("ASSOCIATION SYNC UPDATE COMPLETE")
     res.send(result);
   } catch (error) {
     logger.error(`Error getting Association Details: ${error}`);

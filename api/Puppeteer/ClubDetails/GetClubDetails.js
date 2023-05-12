@@ -141,18 +141,6 @@ class GetClubDetails {
 
 module.exports = GetClubDetails;
 
-/* const createDataCollection = async (ID, ERR) => {
-  //data-collections
-  const currentDate = new Date();
-  await fetcher(`data-collections`, `POST`, {
-    data: {
-      account: [ID],
-      whenWasTheLastCollection: currentDate,
-    },
-  });
-  return true;
-}; */
-
 const getApprovedClubAccounts = () => {
   return qs.stringify(
     {
