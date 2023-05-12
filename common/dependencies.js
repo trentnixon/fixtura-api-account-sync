@@ -1,9 +1,9 @@
 const puppeteer = require("puppeteer-extra");
+puppeteer.use(StealthPlugin());
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const fetcher = require("../api/Utils/fetcher");
-const qs = require("qs");
-puppeteer.use(StealthPlugin());
 
+const qs = require("qs");
 const changeisUpdating = async (ID, isUpdating) => {
   const currentDate = new Date();
 

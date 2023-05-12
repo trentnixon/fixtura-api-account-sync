@@ -34,8 +34,7 @@ class ClubDetailsHandler {
       // Get the Comps for this club
       const competitions = await this.processCompetitions(Account);
       if (!competitions) return false; 
-      
-      console.log(competitions)
+      // console.log(competitions)
 
       /* Step 2 */
       // Assign the selected club to the Comps found
@@ -43,8 +42,8 @@ class ClubDetailsHandler {
 
       /* Step 3 */
       // Refetch the club from Strapi for the new Data and IDS
-//      const ActiveClub = await this.reFetchClubData(CLUBID);
-
+      const ActiveClub = await this.reFetchClubData(CLUBID);
+      console.log(ActiveClub)
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
 //      const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
