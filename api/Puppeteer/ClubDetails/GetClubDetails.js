@@ -43,11 +43,11 @@ class ClubDetailsHandler {
       /* Step 3 */
       // Refetch the club from Strapi for the new Data and IDS
       const ActiveClub = await this.reFetchClubData(CLUBID);
-      console.log(ActiveClub)
+      //console.log(ActiveClub)
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
-//      const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-//    console.log(ListOfTeamsInClub)
+      const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
+      console.log(ListOfTeamsInClub)
       /* Step 5 */
       // Now assign those teams to the Club ID
  //     await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
@@ -63,7 +63,7 @@ class ClubDetailsHandler {
       // Add this data collection
       //await this.createDataCollection(ACCOUNTID, { error: false });
 
-      
+
       return true;
     } catch (error) {
       logger.error(`Error processing club ${Account.id}:`, error);
