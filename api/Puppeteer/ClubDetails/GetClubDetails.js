@@ -5,7 +5,7 @@
 
 const fetcher = require("../../Utils/fetcher");
 // has Pupeteer
-const GetCompetitions = require("./getCompetitions");
+const GetCompetitions = require("./getCompetitions"); 
 const GetClubTeams = require("./getClubTeams");
 const getTeamsGameData = require("./getTeamsGameData");
 
@@ -33,28 +33,29 @@ class ClubDetailsHandler {
       /* Step 1 */
       // Get the Comps for this club
       const competitions = await this.processCompetitions(Account);
-      if (!competitions) return false;
-  
+      if (!competitions) return false; 
+      
+      console.log(competitions)
 
       /* Step 2 */
       // Assign the selected club to the Comps found
-      await this.processAssignClubToCompetition(competitions, CLUBID);
+//      await this.processAssignClubToCompetition(competitions, CLUBID);
 
       /* Step 3 */
       // Refetch the club from Strapi for the new Data and IDS
-      const ActiveClub = await this.reFetchClubData(CLUBID);
+//      const ActiveClub = await this.reFetchClubData(CLUBID);
 
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
-      const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-  //    console.log(ListOfTeamsInClub)
+//      const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
+//    console.log(ListOfTeamsInClub)
       /* Step 5 */
       // Now assign those teams to the Club ID
-      await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
+ //     await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
 
       /* Step 6 */
       // Get the Game Data for the Teams found
-       await this.processTeamsGameData(CLUBID);
+//       await this.processTeamsGameData(CLUBID);
 
       /* Step 7 */
       // Update the UI

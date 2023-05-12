@@ -28,7 +28,7 @@ class GetCompetitions {
       if (competitions.length === 0) {
         logger.info(`No competitions found for club ${this.URL}`);
         await page.close();
-        return false;
+        return false; 
       }
 
       await page.close();
@@ -36,11 +36,11 @@ class GetCompetitions {
     } catch (error) {
       logger.error(`Error in setup method of GetCompetitions: ${error}`);
       throw error;
-    }
+    } 
   }
 
   async fetchCompetitions(page, url) {
-    try {
+    try { 
       logger.info(`Checking this Competition ${url}`);
       await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
