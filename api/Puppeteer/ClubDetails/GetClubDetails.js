@@ -55,7 +55,7 @@ class ClubDetailsHandler {
 
       /* Step 6 */
       // Get the Game Data for the Teams found
-//       await this.processTeamsGameData(CLUBID);
+       await this.processTeamsGameData(CLUBID);
 
       /* Step 7 */
       // Update the UI
