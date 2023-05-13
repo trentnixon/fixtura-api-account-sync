@@ -166,9 +166,7 @@ class getTeamsGameData {
 
         let validMatches = GAMEDATA.filter((match) => match !== null);
 
-        //await assignGamesToStrapi.setup(validMatches);
-        // Invoke the garbage collector manually
-        await this.page.evaluate(() => global.gc && global.gc());
+ 
         // Clear the accumulated data
         validMatches = null;
         GAMEDATA = null;
@@ -181,8 +179,59 @@ class getTeamsGameData {
       throw error;
     }
   }
-
+  async *processTeamMatches() {
+    for (const { id, attributes: team } of this.TEAMS) {
+      logger.info(`Processing team ${team.teamName}...`);
+      logger.info(`on playHQ URL ${team.href}`);
+  
+      // Navigate to team page
+      await this.page.goto(`https://www.playhq.com${team.href}`);
+  
+      // Wait for the match list to be rendered
+      await this.page.waitForSelector(
+        ".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY,.sc-bqGHjH.sc-dlMBXb.blmUXq.jAJvWi"
+      );
+      await this.page.waitForTimeout(1000);
+  
+      const gradeIdSelector = "a.sc-crzoUp.lebimc.button";
+      const gradeId = await this.page.$eval(gradeIdSelector, (element) => {
+        const href = element.getAttribute("href");
+        return href.split("/").pop();
+      });
+  
+      let gradeIdFromPage = this.findGradeId(team.grades.data, gradeId);
+      // Get the match list
+      let matchList = await this.page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
+  
+      // Process the games on the page
+      let GAMEDATA = await this.ProcessGame(
+        matchList,
+        team,
+        gradeIdFromPage
+      );
+  
+      yield GAMEDATA;
+    }
+  }
+  
   async setup() {
+    try {
+      this.page = await this.browser.newPage();
+  
+      const uploader = new assignTeamToGameData();
+      for await (const teamMatches of this.processTeamMatches()) {
+        const validMatches = teamMatches.filter((match) => match !== null);
+        await uploader.setup(validMatches);
+      }
+  
+      return true;
+    } catch (err) {
+      logger.error("Error setting up getTeamsGameData:", err);
+      throw err;
+    }
+  }
+  
+  /* async setup() {
     try {
       this.page = await this.browser.newPage();
       await this.LoopTeams();
@@ -191,7 +240,7 @@ class getTeamsGameData {
       logger.error("Error setting up getTeamsGameData:", err);
       throw err;
     }
-  }
+  } */
 
   async dispose() {
     if (this.page) {
