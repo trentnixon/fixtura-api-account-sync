@@ -137,6 +137,7 @@ class getTeamsGameData {
 
   async LoopTeams() {
     let teamIndex = 0;
+    const uploader = new assignTeamToGameData();
     try {
       for (const { id, attributes: team } of this.TEAMS) {
         logger.info(`Processing team ${team.teamName} (Index ${teamIndex})...`);
@@ -157,9 +158,9 @@ class getTeamsGameData {
           return href.split("/").pop();
         });
 
-        const gradeIdFromPage = this.findGradeId(team.grades.data, gradeId);
+        let gradeIdFromPage = this.findGradeId(team.grades.data, gradeId);
         // Get the match list
-        const matchList = await this.page.$$(
+        let matchList = await this.page.$$(
           ".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY"
         );
 
@@ -168,11 +169,12 @@ class getTeamsGameData {
           matchList,
           team,
           gradeIdFromPage
-        );
+        )
+        matchList.length = 0;
 
         const validMatches = GAMEDATA.filter((match) => match !== null);
-  
-        const uploader = new assignTeamToGameData();
+        
+        
         await uploader.setup(validMatches);
         teamIndex++;
       }
