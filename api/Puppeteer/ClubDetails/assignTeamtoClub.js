@@ -29,8 +29,7 @@ class AssignTeamToClub {
         combinedClubTeams,
         TeamStrapiIDS
       );
-      logger.info(`Processed teams: ${JSON.stringify(processedTeams)}`);
-
+    
       await this.storeTeams(processedTeams);
       logger.info("Teams stored successfully");
 

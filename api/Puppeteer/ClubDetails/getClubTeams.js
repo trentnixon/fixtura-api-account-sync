@@ -19,18 +19,20 @@ class TeamProcessor {
       //console.log("the error is on this href", href)
       if (href) {
         const newPage = await this.browser.newPage();
-        await newPage.goto(href);
-  
-        let gradeLink = null;
-        try {
-          await newPage.waitForSelector(".sc-crzoUp.lebimc.button", { timeout: 5000 });
-          const gradeLinkElement = await newPage.$(".sc-crzoUp.lebimc.button");
-          gradeLink = gradeLinkElement
-            ? await gradeLinkElement.evaluate((el) => el.href)
-            : null;
-        } catch (error) {
-          logger.warn("Element .sc-crzoUp.lebimc.button not found. Proceeding without it.");
-        }
+      await newPage.goto(href);
+
+      let gradeLink = null;
+      try {
+        await newPage.waitForSelector(".sc-crzoUp.lebimc.button", { timeout: 5000 });
+        const gradeLinkElement = await newPage.$(".sc-crzoUp.lebimc.button");
+        gradeLink = gradeLinkElement
+          ? await gradeLinkElement.evaluate((el) => el.href)
+          : null;
+      } catch (error) {
+        logger.warn("Element .sc-crzoUp.lebimc.button not found. Proceeding without it.");
+        // Add a return statement or handle the error appropriately
+        // return null; // Uncomment this line if you want to stop processing this team
+      }
   
         await newPage.close();
   
