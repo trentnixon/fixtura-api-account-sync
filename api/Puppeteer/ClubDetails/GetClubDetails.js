@@ -2,7 +2,7 @@
  * SOLID APPROVED
  * DO NOT ADJUST UNLESS ERROR IN CODE
  */
-
+const BaseController = require("../../../common/BaseController");
 const fetcher = require("../../Utils/fetcher");
 // getters
 const GetCompetitions = require("./getCompetitions"); 
@@ -16,15 +16,16 @@ const AssignTeamToClub = require("./assignTeamtoClub");
 const logger = require("../../Utils/logger");
 const qs = require("qs");
 
-class ClubDetailsHandler {
-  constructor(fetcher, browser) {
-    this.fetcher = fetcher;
-    this.browser = browser;
+class GetClubDetails extends BaseController{
+  constructor() {
+    super(); // Add this line
     this.dependencies = require("../../../common/dependencies");
   }
 
+  
   async processClub(ACCOUNTID) {
-    const Account = await this.fetcher(
+  
+    const Account = await fetcher(
       `accounts/${ACCOUNTID}?${getApprovedClubAccounts()}`
     );
     const CLUBID = Account.attributes.clubs.data[0].id;
@@ -34,16 +35,12 @@ class ClubDetailsHandler {
       // Get the Comps for this club
       const competitions = await this.processCompetitions(Account);
       if (!competitions) return false; 
-      // console.log(competitions)
-
       /* Step 2 */
       // Assign the selected club to the Comps found
       await this.processAssignClubToCompetition(competitions, CLUBID);
-
       /* Step 3 */
       // Refetch the club from Strapi for the new Data and IDS
       const ActiveClub = await this.reFetchClubData(CLUBID);
-      //console.log(ActiveClub)
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
       const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
@@ -59,12 +56,11 @@ class ClubDetailsHandler {
 
       /* Step 7 */
       // Update the UI
-      //await this.dependencies.changeisUpdating(ACCOUNTID, false);
-      /* Step 7 */
+      await this.dependencies.changeisUpdating(ACCOUNTID, false);
+      /* Step 8 */
       // Add this data collection
-      //await this.createDataCollection(ACCOUNTID, { error: false });
-
-
+      await this.createDataCollection(ACCOUNTID, { error: false });
+      
       return true;
     } catch (error) {
       logger.error(`Error processing club ${Account.id}:`, error);
@@ -73,7 +69,7 @@ class ClubDetailsHandler {
   }
 
   async reFetchClubData(CLUBID) {
-    return await this.fetcher(`clubs/${CLUBID}?${getClubRelations()}`);
+    return await fetcher(`clubs/${CLUBID}?${getClubRelations()}`);
   }
   async createDataCollection(ID, ERR) {
     //data-collections
@@ -112,7 +108,7 @@ class ClubDetailsHandler {
   }
 
   async processTeamsGameData(CLUBID) {
-    const ActiveClubTeams = await this.fetcher(
+    const ActiveClubTeams = await fetcher(
       `clubs/${CLUBID}?${getClubRelations()}`
     );
     //console.log(ActiveClubTeams)
@@ -123,23 +119,16 @@ class ClubDetailsHandler {
     TeamsGameData.setBrowser(this.browser);
     await TeamsGameData.Setup();
   }
-}
+  async setup(accountId) {
+    console.log('TEST 1 . GetClubDetails Setup called');
+    await this.initDependencies(accountId); // Call the initDependencies method from the BaseController
+    const result = await this.processClub(accountId);
+    await this.dependencies.changeisUpdating(accountId, false);
+    await this.dependencies.createDataCollection(accountId, { error: false });
 
-class GetClubDetails {
-  constructor(fetcher, browser) {
-    this.clubDetailsHandler = new ClubDetailsHandler(fetcher, browser);
-    this.dependencies = require("../../../common/dependencies");
-  }
-
-  async Setup(ACCOUNTID) {
-    console.log('TEST 3 . GetClubDetails Setup called');
-    await this.dependencies.changeisUpdating(ACCOUNTID, true);
-    return await this.clubDetailsHandler.processClub(ACCOUNTID);
+    return result;
   }
  
-  dispose() {
-    // Implement a dispose method if needed for cleanup
-  }
 }
 
 module.exports = GetClubDetails;
@@ -180,27 +169,6 @@ const getClubRelations = () => {
     }
   );
 };
-
-/* const extractGrades = (activeClubTeams) => {
-  const club_to_competitions =
-    activeClubTeams.attributes.club_to_competitions.data;
-
-  const gradesArray = club_to_competitions.map((item) => {
-    return item.attributes.competition.data.attributes.grades.data;
-  });
-
-  // Flatten the gradesArray into a single array of objects
-  const flattenedGradesArray = [].concat(...gradesArray);
-
-  const resultArray = flattenedGradesArray.map((grade) => {
-    return {
-      Name: grade.attributes.gradeName,
-      ID: grade.id,
-    };
-  });
-
-  return resultArray;
-}; */
 
 function extractGradesVersion2(activeClubTeams) {
   const ListedTeams = activeClubTeams.attributes.teams?.data;

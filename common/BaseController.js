@@ -14,19 +14,10 @@ class BaseController {
     this.browser = browser;
   }
 
-  async setup(accountId) {
-    try {
-      await this.dependencies.changeisUpdating(accountId, true);
-      return await this.run(accountId);
-    } finally {
-      await this.dependencies.changeisUpdating(accountId, false);
-      await this.dependencies.createDataCollection(accountId, { error: false });
-    }
+  async initDependencies(accountId) {
+    this.browser = await this.dependencies.getPuppeteerInstance();
+    await this.dependencies.changeisUpdating(accountId, true);
   }
-
-/*   async run(accountId) {
-    throw new Error("Method not implemented");
-  } */
 
   async dispose() {
     for (const disposable of this.disposables) {
@@ -44,3 +35,4 @@ class BaseController {
 }
 
 module.exports = BaseController;
+

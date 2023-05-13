@@ -2,20 +2,19 @@
 const BaseController = require("../../../common/BaseController");
 const getCompetitions = require("./getCompetitions");
 const assignCompetitionsToAssociation = require("./assignCompetitionsToAssociation");
-
 const GetClubDetails = require("./ClubDetails");
 const GetNoClubDetails = require("../NoClubAssociations/NoClubsInAssociationDetails");
 
-const logger = require("../../Utils/logger"); 
+const logger = require("../../Utils/logger");
 const fetcher = require("../../Utils/fetcher");
 
 class AssociationDetailsController extends BaseController {
-  async setup(accountId) {
-    this.browser = await this.dependencies.getPuppeteerInstance();
-    return await super.setup(accountId); 
+  constructor() {
+    super();
+    this.dependencies = require("../../../common/dependencies");
   }
 
-  async run(accountId) {
+  async processAssociation(accountId) {
     const Account = await fetcher(
       `accounts/${accountId}?${this.dependencies.getApprovedAssociationsAccounts()}`
     );
@@ -73,6 +72,18 @@ class AssociationDetailsController extends BaseController {
 
     return { complete: true };
   }
+
+  async setup(accountId) {
+    await this.initDependencies(accountId);
+    const result = await this.processAssociation(accountId);
+    await this.dependencies.changeisUpdating(accountId, false);
+    await this.dependencies.createDataCollection(accountId, { error: false });
+
+    return result;
+  }
+
+
 }
 
 module.exports = AssociationDetailsController;
+
