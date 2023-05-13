@@ -12,7 +12,7 @@ class AssociationDetailsController extends BaseController {
   constructor() {
     super();
     this.dependencies = require("../../../common/dependencies");
-  } 
+  }
 
   async processAssociation(accountId) {
     const Account = await fetcher(
@@ -24,7 +24,8 @@ class AssociationDetailsController extends BaseController {
       let getCompetitionsObj = new getCompetitions(Account);
       getCompetitionsObj.setBrowser(this.browser);
       const competitions = await getCompetitionsObj.setup();
-      getCompetitionsObj = null
+      await getCompetitionsObj.dispose();
+      getCompetitionsObj = null;
       this.disposables.push(getCompetitionsObj);
 
       if (!competitions) {
@@ -32,11 +33,12 @@ class AssociationDetailsController extends BaseController {
         return false;
       }
 
-        console.log(competitions)
-  /*     const uploader = new assignCompetitionsToAssociation();
-      const result = await uploader.Setup(competitions, associationId);
+      let uploader = new assignCompetitionsToAwssociation();
+      let result = await uploader.Setup(competitions, associationId);
+      uploader = null;
       logger.debug(`Assigned competitions to club: ${result.success}`);
-
+      result = null
+      /*
       const ActiveAssociation = await fetcher(
         `associations/${associationId}?${this.dependencies.getClubRelationsForAssociation()}`
       );
@@ -85,9 +87,6 @@ class AssociationDetailsController extends BaseController {
 
     return result;
   }
-
-
 }
 
 module.exports = AssociationDetailsController;
-

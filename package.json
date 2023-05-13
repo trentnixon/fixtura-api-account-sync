@@ -6,8 +6,8 @@
   "scripts": {
     "test": "jest",
     "worker": "nodemon worker.js",
-    "start": "node index.js",
-    "dev": "set NODE_ENV=development && set PORT=7000 && nodemon index.js",
+    "start": "node worker.js",
+    "dev": "set NODE_ENV=development && set PORT=7000 && nodemon worker.js",
     "LOGS": "heroku logs --tail"
   },
   "author": "",

@@ -66,7 +66,8 @@ class getCompetitions {
   }
 
   async dispose() {
-    // Add any cleanup code if needed
+    this.url = null;
+    this.browser = null;
   }
 }
 
