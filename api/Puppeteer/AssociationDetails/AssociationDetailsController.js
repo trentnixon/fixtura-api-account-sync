@@ -38,13 +38,13 @@ class AssociationDetailsController extends BaseController {
       uploader = null;
       logger.debug(`Assigned competitions to club: ${result.success}`);
       result = null
-      /*
+     
       const ActiveAssociation = await fetcher(
         `associations/${associationId}?${this.dependencies.getClubRelationsForAssociation()}`
       );
 
       const associationClubs = ActiveAssociation.attributes.clubs.data;
-
+ 
       if (associationClubs.length > 0) {
         logger.info("Process Association with Clubs");
 
@@ -67,7 +67,7 @@ class AssociationDetailsController extends BaseController {
           await noClubDetailsObj.setup(competition);
           this.disposables.push(noClubDetailsObj);
         }
-      } */
+      }
 
       return true;
     } catch (error) {

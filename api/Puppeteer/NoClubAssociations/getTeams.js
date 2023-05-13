@@ -82,6 +82,7 @@ class GetTeams {
       }
     }
   }
+  
 }
 
 module.exports = GetTeams;

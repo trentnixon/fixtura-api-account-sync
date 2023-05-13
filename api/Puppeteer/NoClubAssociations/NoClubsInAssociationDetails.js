@@ -12,7 +12,7 @@ const qs = require("qs");
 class GetNoClubDetails {
   constructor() {
     this.browser = null;
-  }
+  } 
 
   setBrowser(browser) {
     this.browser = browser;
@@ -20,13 +20,14 @@ class GetNoClubDetails {
 
   async setup(competition) {
     try {
-      const getCompTeams = new GetTeams(this.browser);
-      const teamList = await getCompTeams.setup(competition);
-      
+      let getCompTeams = new GetTeams(this.browser);
+      let teamList = await getCompTeams.setup(competition);
+       
       const assignTeam = new assignIntTeamsToAssociation();
       await assignTeam.setup(teamList);
-
-      const activeCompetition = await fetcher(
+      getCompTeams = null
+      teamList = null
+   /*    const activeCompetition = await fetcher(
         `competitions/${competition.id}?${getCompetitionRelations()}`
       );
 
@@ -35,7 +36,7 @@ class GetNoClubDetails {
       );
       teamsGameData.setBrowser(this.browser);
       await teamsGameData.setup();
-
+ */
       return true;
     } catch (error) {
       console.error(`Error processing Association `, error);
