@@ -138,7 +138,7 @@ class getTeamsGameData {
 
   async LoopTeams() {
     let teamIndex = 0;
-    const uploader = new assignTeamToGameData();
+    //const uploader = new assignTeamToGameData();
     try {
       for (const { id, attributes: team } of this.TEAMS) {
         logger.info(`Processing team ${team.teamName} (Index ${teamIndex})...`);
@@ -176,7 +176,7 @@ class getTeamsGameData {
         let validMatches = GAMEDATA.filter((match) => match !== null);
         
         
-        await uploader.setup(validMatches);
+        //await uploader.setup(validMatches);
         validMatches=null
         teamIndex++;
       }
