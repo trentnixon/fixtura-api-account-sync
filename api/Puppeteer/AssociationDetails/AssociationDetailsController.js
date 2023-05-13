@@ -72,8 +72,6 @@ class AssociationDetailsController extends BaseController {
       return true;
     } catch (error) {
       logger.error(`Error processing Association ${Account.id}:`, error);
-    } finally {
-      //await this.dispose(); // Dispose resources after processing
     }
 
     return { complete: true };
@@ -81,17 +79,26 @@ class AssociationDetailsController extends BaseController {
 
   async setup(accountId) {
     try {
+      logger.info("Session Setup Init has Started");
       await this.initDependencies(accountId);
+      logger.info("Puppeteer has Loaded");
       const result = await this.processAssociation(accountId);
-      await this.dependencies.changeisUpdating(accountId, false);
-      await this.dependencies.createDataCollection(accountId, { error: false });
-
+    
       return result;
     } catch (err) {
-      console.error('Error during setup:', err);
+      logger.error('Error during setup:', err);
+      
+      await this.dependencies.changeisUpdating(accountId, false);
+      logger.info("Set Account to False| ERROR ");
       await this.dependencies.createDataCollection(accountId, { error: true });
+      logger.info("Create a Data Entry | ERROR");
     } finally {
+      await this.dependencies.changeisUpdating(accountId, false);
+      logger.info("Set Account to False| Finally ");
+      await this.dependencies.createDataCollection(accountId, { error: true });
+      logger.info("Create a Data Entry | Finally");
       await this.dispose(); 
+      logger.info("Dispose of items and Pupeteer | Finally");
     }
   }
 }

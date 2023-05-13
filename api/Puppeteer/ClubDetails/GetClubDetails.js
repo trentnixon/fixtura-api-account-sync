@@ -46,11 +46,11 @@ class GetClubDetails extends BaseController {
       console.log(ListOfTeamsInClub);
       /* Step 5 */
       // Now assign those teams to the Club ID
- //     await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
+      //     await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
 
       /* Step 6 */
       // Get the Game Data for the Teams found
- //     await this.processTeamsGameData(CLUBID);
+      //     await this.processTeamsGameData(CLUBID);
 
       return true;
     } catch (error) {
@@ -62,7 +62,7 @@ class GetClubDetails extends BaseController {
   async reFetchClubData(CLUBID) {
     return await fetcher(`clubs/${CLUBID}?${getClubRelations()}`);
   }
- 
+
   async processAssignClubToCompetition(competitions, CLUBID) {
     const uploader = new assignClubToCompetition();
     await uploader.setup(competitions, CLUBID);
@@ -106,18 +106,23 @@ class GetClubDetails extends BaseController {
     try {
       await this.initDependencies(accountId); // Call the initDependencies method from the BaseController
       const result = await this.processClub(accountId);
-      await this.dependencies.changeisUpdating(accountId, false);
-      await this.dependencies.createDataCollection(accountId, { error: false });
-  
       return result;
     } catch (err) {
-      console.error('Error during setup:', err);
+      logger.error("Error during setup:", err);
+
+      await this.dependencies.changeisUpdating(accountId, false);
+      logger.info("Set Account to False| ERROR ");
       await this.dependencies.createDataCollection(accountId, { error: true });
+      logger.info("Create a Data Entry | ERROR");
     } finally {
-      await this.dispose(); 
+      await this.dependencies.changeisUpdating(accountId, false);
+      logger.info("Set Account to False| Finally ");
+      await this.dependencies.createDataCollection(accountId, { error: true });
+      logger.info("Create a Data Entry | Finally");
+      await this.dispose();
+      logger.info("Dispose of items and Pupeteer | Finally");
     }
   }
-  
 }
 
 module.exports = GetClubDetails;

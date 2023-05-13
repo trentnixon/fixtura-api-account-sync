@@ -20,24 +20,24 @@ class GetNoClubDetails {
 
   async setup(competition) {
     try {
-     /*  let getCompTeams = new GetTeams(this.browser);
+      let getCompTeams = new GetTeams(this.browser);
       let teamList = await getCompTeams.setup(competition);
        
       const assignTeam = new assignIntTeamsToAssociation();
       await assignTeam.setup(teamList);
       getCompTeams = null
-      teamList = null */
-      let activeCompetition = await fetcher(
+      teamList = null
+     /*  let activeCompetition = await fetcher(
         `competitions/${competition.id}?${getCompetitionRelations()}`
       );
- 
+
       const teamsGameData = new getTeamsGameData(
         activeCompetition.attributes.teams
       );
       teamsGameData.setBrowser(this.browser);
       await teamsGameData.setup();
 
-      activeCompetition=null
+      activeCompetition=null */
       return true;
     } catch (error) {
       console.error(`Error processing Association `, error);
