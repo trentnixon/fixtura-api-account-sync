@@ -6,7 +6,7 @@ class TeamProcessor {
   }
 
   async processTeam(teamElement, club, competition, page) {
-    logger.warn(`"Processing club" ${club.data.id}`);
+    logger.info(`"Processing club" ${club.data.id}`);
     
     try {
       const teamName = await teamElement.$eval("span:nth-child(1)", (el) => el.textContent);
