@@ -2,7 +2,7 @@
   "name": "apifetch",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "worker.js",
   "scripts": {
     "test": "jest",
     "worker": "nodemon worker.js",

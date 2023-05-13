@@ -28,7 +28,7 @@ class TeamProcessor {
         gradeLink = gradeLinkElement
           ? await gradeLinkElement.evaluate((el) => el.href)
           : null;
-      } catch (error) {
+      } catch (error) { 
         logger.warn("Element .sc-crzoUp.lebimc.button not found. Proceeding without it.");
         // Add a return statement or handle the error appropriately
         // return null; // Uncomment this line if you want to stop processing this team
