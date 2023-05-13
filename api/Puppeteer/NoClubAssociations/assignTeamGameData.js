@@ -14,6 +14,29 @@ class assignTeamToGameData {
         logger.warn(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
         return;
       }
+  
+      const existingGameId = await this.checkIfCompetitionExists(game.gameID, "game-meta-datas");
+  
+      const [homeTeamID, awayTeamID] = await this.getTeamsIds([game.teamHomeID, game.teamAwayID]);
+      homeTeamID && game.teams.push(homeTeamID);
+      awayTeamID && game.teams.push(awayTeamID);
+  
+      return existingGameId ? this.updateGameData(existingGameId, game) : this.storeGameData(game);
+    });
+  
+    await Promise.all(promises);
+  
+    return {
+      success: true,
+    };
+  }
+  
+  /* async setup(gameData) {
+    const promises = gameData.map(async (game) => {
+      if (!game.teamHomeID) {
+        logger.warn(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
+        return;
+      }
 
       const existingGameId = await this.checkIfCompetitionExists(game.gameID, "game-meta-datas");
 
@@ -30,7 +53,7 @@ class assignTeamToGameData {
     return {
       success: true,
     };
-  }
+  } */
 
   async checkIfCompetitionExists(gameID, resourcePath) {
     const query = qs.stringify(
@@ -55,7 +78,29 @@ class assignTeamToGameData {
     }
   }
 
-  async getTeamsIds(teamID) {
+  async getTeamsIds(teamIDs) {
+    const query = qs.stringify(
+      {
+        filters: {
+          teamID: {
+            $in: teamIDs,
+          },
+        },
+      },
+      {
+        encodeValuesOnly: true,
+      }
+    );
+    try {
+      const response = await fetcher(`teams?${query}`);
+      return response.length === 0 ? [false, false] : [response[0].id, response[1].id];
+    } catch (error) {
+      logger.error(`Error checking teamIDs ${teamIDs}:`, error);
+      return [false, false];
+    }
+  }
+  
+  /* async getTeamsIds(teamID) {
     const query = qs.stringify(
       {
         filters: {
@@ -75,7 +120,7 @@ class assignTeamToGameData {
       logger.error(`Error checking teamID ${teamID}:`, error);
       return false;
     }
-  }
+  } */
 
   async storeGameData(game) {
     logger.info(`Storing game ${game.gameID}`);

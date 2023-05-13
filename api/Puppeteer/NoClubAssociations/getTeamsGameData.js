@@ -48,6 +48,7 @@ class getTeamsGameData {
     this.browser = browser;
   }
 
+  
   async ProcessGame(matchList, team, GradeID) {
     const teamMatches = await Promise.all(
       matchList.map(async (matchElement, index) => {

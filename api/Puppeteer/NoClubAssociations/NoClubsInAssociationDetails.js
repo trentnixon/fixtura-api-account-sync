@@ -30,7 +30,7 @@ class GetNoClubDetails {
       let activeCompetition = await fetcher(
         `competitions/${competition.id}?${getCompetitionRelations()}`
       );
-
+ 
       const teamsGameData = new getTeamsGameData(
         activeCompetition.attributes.teams
       );
