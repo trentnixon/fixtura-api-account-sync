@@ -104,7 +104,6 @@ class GetClubTeams {
     const page = await this.browser.newPage();
     try {
       const teams = [];
-
       for (const competitionData of competitionUrls) {
         const competitionTeams = await this.processCompetition(
           page,

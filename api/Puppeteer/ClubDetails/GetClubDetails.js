@@ -42,7 +42,7 @@ class GetClubDetails extends BaseController {
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
       const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-      console.log("ListOfTeamsInClub", ListOfTeamsInClub.length);
+      console.log("ListOfTeamsInClub", ListOfTeamsInClub);
 
       /* Step 5 */
       // Now assign those teams to the Club ID
