@@ -29,7 +29,7 @@ class getAssociationDetails {
       `accounts/${ACCOUNTID}?${getApprovedAssociationsAccounts()}`
     );
     // Let the DB know this Account it updating
-    await changeisUpdating(ACCOUNTID, true);
+    //await changeisUpdating(ACCOUNTID, true);
     const ASSOCIATIONID = Account.attributes.associations.data[0].id;
 
     try {
@@ -46,8 +46,8 @@ class getAssociationDetails {
         logger.debug(`No competitions found for club ${ASSOCIATIONID}`);
         // create new data colletion ID
         // Let the DB know this Account it updating
-        await changeisUpdating(ACCOUNTID, false);
-        await createDataCollection(ACCOUNTID, { error: false });
+        //await changeisUpdating(ACCOUNTID, false);
+        //await createDataCollection(ACCOUNTID, { error: false });
         // return false back to the paent
         return false;
       }
@@ -113,8 +113,8 @@ class getAssociationDetails {
     // Step 8 // let the DB know that a data collection happened
     /* **************************************************************************** */
     // Let the DB know this Account it updating
-    await changeisUpdating(ACCOUNTID, false);
-    await createDataCollection(ACCOUNTID, { error: false });
+    //await changeisUpdating(ACCOUNTID, false);
+    //await createDataCollection(ACCOUNTID, { error: false });
 
     return { complete: true };
   }
@@ -134,7 +134,7 @@ class getAssociationDetails {
 }
 
 module.exports = getAssociationDetails;
-
+/* 
 const createDataCollection = async (ID, ERR) => {
   //data-collections
   const currentDate = new Date();
@@ -145,7 +145,7 @@ const createDataCollection = async (ID, ERR) => {
     },
   });
   return true;
-};
+}; */
 
 const changeisUpdating = async (ID, isUpdating) => {
   //data-collections

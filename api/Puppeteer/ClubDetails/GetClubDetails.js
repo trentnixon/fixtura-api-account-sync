@@ -56,10 +56,10 @@ class GetClubDetails extends BaseController{
 
       /* Step 7 */
       // Update the UI
-      await this.dependencies.changeisUpdating(ACCOUNTID, false);
+      //await this.dependencies.changeisUpdating(ACCOUNTID, false);
       /* Step 8 */
       // Add this data collection
-      await this.createDataCollection(ACCOUNTID, { error: false });
+      //await this.createDataCollection(ACCOUNTID, { error: false });
       
       return true;
     } catch (error) {
@@ -71,7 +71,7 @@ class GetClubDetails extends BaseController{
   async reFetchClubData(CLUBID) {
     return await fetcher(`clubs/${CLUBID}?${getClubRelations()}`);
   }
-  async createDataCollection(ID, ERR) {
+ /*  async createDataCollection(ID, ERR) {
     //data-collections
     const currentDate = new Date();
     await fetcher(`data-collections`, `POST`, {
@@ -81,7 +81,7 @@ class GetClubDetails extends BaseController{
       },
     });
     return true;
-  }
+  } */
   async processAssignClubToCompetition(competitions, CLUBID) {
     const uploader = new assignClubToCompetition();
     await uploader.setup(competitions, CLUBID);
