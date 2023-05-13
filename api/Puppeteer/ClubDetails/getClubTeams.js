@@ -117,7 +117,7 @@ class GetClubTeams {
       return teams;
     } catch (error) {
       logger.error(`Error getting teams:`, error);
-      throw error;
+      //throw error;
     } finally {
       await page.close();
     }
