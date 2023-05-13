@@ -214,23 +214,23 @@ class getTeamsGameData {
     }
   }
   
-  async setup() {
-    try {
-      this.page = await this.browser.newPage();
-  
-      const uploader = new assignTeamToGameData();
-      for await (const teamMatches of this.processTeamMatches()) {
-        const validMatches = teamMatches.filter((match) => match !== null);
-        await uploader.setup(validMatches);
-      }
-  
-      return true;
-    } catch (err) {
-      logger.error("Error setting up getTeamsGameData:", err);
-      throw err;
+async setup() {
+  try {
+    this.page = await this.browser.newPage();
+
+    const uploader = new assignTeamToGameData();
+    for await (const teamMatches of this.processTeamMatches()) {
+      const validMatches = teamMatches.filter((match) => match !== null);
+      await uploader.setup(validMatches);
     }
+
+    return true;
+  } catch (err) {
+    logger.error("Error setting up getTeamsGameData:", err);
+    throw err;
   }
-  
+}
+
   /* async setup() {
     try {
       this.page = await this.browser.newPage();
