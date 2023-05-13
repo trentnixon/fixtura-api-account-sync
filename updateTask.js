@@ -22,17 +22,5 @@ async function updateAssociationDetails(id) {
     throw error;
   }
 }
-/* async function updateAssociationDetails(id) {
-  try {
-    const associationController = new AssociationDetailsController();
-    await associationController.setup(id);
-    await associationController.dispose();
-    console.log("ASSOCIATION SYNC UPDATE COMPLETE");
-    return result;
-  } catch (error) {
-    console.error(`Error getting Association Details: ${error}`);
-    throw error;
-  } 
-} */
 
 module.exports = { updateClubDetails, updateAssociationDetails };

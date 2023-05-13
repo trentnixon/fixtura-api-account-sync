@@ -12,7 +12,7 @@ class AssociationDetailsController extends BaseController {
   constructor() {
     super();
     this.dependencies = require("../../../common/dependencies");
-  }
+  } 
 
   async processAssociation(accountId) {
     const Account = await fetcher(
@@ -21,9 +21,10 @@ class AssociationDetailsController extends BaseController {
     const associationId = Account.attributes.associations.data[0].id;
 
     try {
-      const getCompetitionsObj = new getCompetitions(Account);
+      let getCompetitionsObj = new getCompetitions(Account);
       getCompetitionsObj.setBrowser(this.browser);
       const competitions = await getCompetitionsObj.setup();
+      getCompetitionsObj = null
       this.disposables.push(getCompetitionsObj);
 
       if (!competitions) {
@@ -31,7 +32,8 @@ class AssociationDetailsController extends BaseController {
         return false;
       }
 
-      const uploader = new assignCompetitionsToAssociation();
+        console.log(competitions)
+  /*     const uploader = new assignCompetitionsToAssociation();
       const result = await uploader.Setup(competitions, associationId);
       logger.debug(`Assigned competitions to club: ${result.success}`);
 
@@ -63,11 +65,13 @@ class AssociationDetailsController extends BaseController {
           await noClubDetailsObj.setup(competition);
           this.disposables.push(noClubDetailsObj);
         }
-      }
+      } */
 
       return true;
     } catch (error) {
       logger.error(`Error processing Association ${Account.id}:`, error);
+    } finally {
+      await this.dispose(); // Dispose resources after processing
     }
 
     return { complete: true };
