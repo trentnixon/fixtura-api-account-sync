@@ -119,6 +119,7 @@ class GetClubTeams {
       logger.error(`Error getting teams:`, error);
       //throw error;
     } finally {
+      logger.error(`CLASS GetClubTeams: Page Closed!!`);
       await page.close();
     }
   }

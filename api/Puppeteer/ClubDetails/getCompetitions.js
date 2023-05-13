@@ -1,10 +1,10 @@
-/** 
- * SOLID APPROVED  
+/**
+ * SOLID APPROVED
  * DO NOT ADJUST UNLESS ERROR IN CODE
  * This class is used by:
  * Clubs ALL
  *  Associations - has Clubs
-*/
+ */
 const logger = require("../../Utils/logger");
 
 class GetCompetitions {
@@ -27,25 +27,25 @@ class GetCompetitions {
 
       if (competitions.length === 0) {
         logger.info(`No competitions found for club ${this.URL}`);
-        await page.close();
-        return false; 
+        return false;
       }
-
-      await page.close();
       return competitions;
     } catch (error) {
       logger.error(`Error in setup method of GetCompetitions: ${error}`);
       throw error;
-    } 
+    } finally {
+      logger.error(`CLASS GetCompetitions: Page Closed!!`);
+      await page.close();
+    }
   }
 
   async fetchCompetitions(page, url) {
-    try { 
+    try {
       logger.info(`Checking this Competition ${url}`);
       await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
       await page.waitForSelector(".sc-3lpl8o-5.dznirp", { timeout: 60000 });
-      await page.screenshot({ path: "getCompetitions.png",fullPage: true });
+      await page.screenshot({ path: "getCompetitions.png", fullPage: true });
 
       const competitions = await this.extractCompetitionsData(page);
       return competitions;
@@ -73,7 +73,12 @@ class GetCompetitions {
             // Check if the competition has the active selector or pending
             const completedSpan = Array.from(
               competition.parentElement.querySelectorAll("span")
-            ).find((span) => span.textContent === "Active" || span.textContent === "Pending" || span.textContent === "Completed");
+            ).find(
+              (span) =>
+                span.textContent === "Active" ||
+                span.textContent === "Pending" ||
+                span.textContent === "Completed"
+            );
             return completedSpan;
           })
           .map((competition) => {
@@ -88,10 +93,6 @@ class GetCompetitions {
           });
       });
     });
-  }
-
-  dispose() {
-    // Implement a dispose method if needed for cleanup
   }
 }
 

@@ -42,11 +42,11 @@ class GetClubDetails extends BaseController {
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
       const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-      console.log("ListOfTeamsInClub");
-      console.log(ListOfTeamsInClub);
+      console.log("ListOfTeamsInClub", ListOfTeamsInClub.length);
+
       /* Step 5 */
       // Now assign those teams to the Club ID
-      //     await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
+      await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
 
       /* Step 6 */
       // Get the Game Data for the Teams found
@@ -89,7 +89,7 @@ class GetClubDetails extends BaseController {
   }
 
   async processTeamsGameData(CLUBID) {
-    const ActiveClubTeams = await fetcher(
+    let ActiveClubTeams = await fetcher(
       `clubs/${CLUBID}?${getClubRelations()}`
     );
     //console.log(ActiveClubTeams)
@@ -98,6 +98,7 @@ class GetClubDetails extends BaseController {
       extractGradesVersion2(ActiveClubTeams)
     );
     TeamsGameData.setBrowser(this.browser);
+    ActiveClubTeams=null
     await TeamsGameData.Setup();
   }
 

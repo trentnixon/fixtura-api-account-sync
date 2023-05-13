@@ -198,11 +198,11 @@ class getTeamsGameData {
       logger.error("Error setting up getTeamsGameData:", error);
       throw error;
     } finally {
-      await this.dispose();
+      logger.error(`CLASS getTeamsGameData: Page Closed!!`);
+      await page.close();
     }
   }
 
-  async dispose() {}
 }
 
 module.exports = getTeamsGameData;
