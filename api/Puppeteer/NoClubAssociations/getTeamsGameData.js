@@ -50,82 +50,84 @@ class getTeamsGameData {
 
   
   async ProcessGame(matchList, team, GradeID) {
-    const teamMatches = await Promise.all(
-      matchList.map(async (matchElement, index) => {
-        try {
-          const byeSelector = await matchElement.$(".sc-jrsJCI.gcJhbP");
-          if (byeSelector) {
-            return { status: "bye" };
-          }
-
-          /* ROUND *********** */
-          const round = await ScrapeRound(
-            matchElement,
-            SELECTORS.ROUND.General
-          );
-
-          /* DATE *********** */
-          const date = await ScrapeDate(matchElement, SELECTORS.DATE.General);
-
-          const dateStr = date;
-          const dateObj = moment(dateStr, "dddd, DD MMMM YYYY").toDate();
-
-          /* TYPE *********** */
-          const type = await ScrapeType(matchElement, SELECTORS.TYPE);
-
-          /* TIME *********** */
-          let time = await ScrapeTime(matchElement, SELECTORS.TIME);
-
-          /* Ground *********** */
-          let ground = await ScrapeGround(matchElement, SELECTORS.GROUNDS);
-
-          /* STATUS *********** */
-          let status = await ScrapeStatus(matchElement, SELECTORS.STATUS);
-
-          /* URLS *********** */
-          const urlToScoreCard = await ScrapeGameURL(
-            matchElement,
-            SELECTORS.URL.General
-          );
-          const gameID = urlToScoreCard
-            ? urlToScoreCard.split("/").slice(-1)[0]
-            : null;
-
-          /* *********** */
-          const teamNames = await ScrapeTeams(
-            matchElement,
-            SELECTORS.TEAMS.General
-          );
-
-          return {
-            grade: [GradeID],
-            round,
-            date,
-            dayOne: dateObj,
-            type,
-            time,
-            ground,
-            status,
-            urlToScoreCard,
-            gameID,
-            teams: [],
-            teamHomeID: teamNames[0].id,
-            teamAwayID: teamNames[1].id,
-            teamHome: teamNames[0].name,
-            teamAway: teamNames[1].name,
-          };
-        } catch (error) {
-          logger.error(
-            `Error processing match for team ${team.teamName} (Index ${index}):`
-          );
-          logger.error(error);
-          return null;
+    const teamMatches = [];
+  
+    for (const matchElement of matchList) {
+      try {
+        const byeSelector = await matchElement.$(".sc-jrsJCI.gcJhbP");
+        if (byeSelector) {
+          teamMatches.push({ status: "bye" });
+          continue;
         }
-      })
-    );
-
+  
+        /* ROUND *********** */
+        const round = await ScrapeRound(
+          matchElement,
+          SELECTORS.ROUND.General
+        );
+  
+        /* DATE *********** */
+        const date = await ScrapeDate(matchElement, SELECTORS.DATE.General);
+  
+        const dateStr = date;
+        const dateObj = moment(dateStr, "dddd, DD MMMM YYYY").toDate();
+  
+        /* TYPE *********** */
+        const type = await ScrapeType(matchElement, SELECTORS.TYPE);
+  
+        /* TIME *********** */
+        let time = await ScrapeTime(matchElement, SELECTORS.TIME);
+  
+        /* Ground *********** */
+        let ground = await ScrapeGround(matchElement, SELECTORS.GROUNDS);
+  
+        /* STATUS *********** */
+        let status = await ScrapeStatus(matchElement, SELECTORS.STATUS);
+  
+        /* URLS *********** */
+        const urlToScoreCard = await ScrapeGameURL(
+          matchElement,
+          SELECTORS.URL.General
+        );
+        const gameID = urlToScoreCard
+          ? urlToScoreCard.split("/").slice(-1)[0]
+          : null;
+  
+        /* *********** */
+        const teamNames = await ScrapeTeams(
+          matchElement,
+          SELECTORS.TEAMS.General
+        );
+  
+        teamMatches.push({
+          grade: [GradeID],
+          round,
+          date,
+          dayOne: dateObj,
+          type,
+          time,
+          ground,
+          status,
+          urlToScoreCard,
+          gameID,
+          teams: [],
+          teamHomeID: teamNames[0].id,
+          teamAwayID: teamNames[1].id,
+          teamHome: teamNames[0].name,
+          teamAway: teamNames[1].name,
+        });
+      } catch (error) {
+        logger.error(
+          `Error processing match for team ${team.teamName} (Index ${teamMatches.length}):`
+        );
+        logger.error(error);
+        teamMatches.push(null);
+      }
+    }
+  
     return teamMatches;
   }
+  
 
   findGradeId(array, gradeId) {
     for (const item of array) {
@@ -138,7 +140,7 @@ class getTeamsGameData {
 
   async LoopTeams() {
     let teamIndex = 0;
-    //const uploader = new assignTeamToGameData();
+    const uploader = new assignTeamToGameData();
     try {
       for (const { id, attributes: team } of this.TEAMS) {
         logger.info(`Processing team ${team.teamName} (Index ${teamIndex})...`);
@@ -171,13 +173,14 @@ class getTeamsGameData {
           team,
           gradeIdFromPage
         )
-        matchList.length = 0;
+        matchList = null;
 
         let validMatches = GAMEDATA.filter((match) => match !== null);
-        
-        
-        //await uploader.setup(validMatches);
+      
+        await uploader.setup(validMatches);
+      
         validMatches=null
+      
         teamIndex++;
       }
       return true;
