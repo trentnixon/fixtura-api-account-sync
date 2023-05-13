@@ -1,6 +1,8 @@
 const ClubDetailsController = require("./api/Puppeteer/ClubDetails/GetClubDetails");
 const AssociationDetailsController = require("./api/Puppeteer/AssociationDetails/AssociationDetailsController");
 
+
+/* CLUB */
 async function updateClubDetails(id) {
   try {
     const clubController = new ClubDetailsController();
@@ -11,6 +13,10 @@ async function updateClubDetails(id) {
     throw error;
   } 
 }
+
+
+/* ASSOCIATION */
+
 async function updateAssociationDetails(id) {
   try {
     const associationController = new AssociationDetailsController();

@@ -91,7 +91,7 @@ class AssociationDetailsController extends BaseController {
       console.error('Error during setup:', err);
       await this.dependencies.createDataCollection(accountId, { error: true });
     } finally {
-      await this.dependencies.dispose();
+      await this.dispose(); 
     }
   }
 }
