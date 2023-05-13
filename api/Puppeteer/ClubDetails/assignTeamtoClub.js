@@ -17,13 +17,13 @@ class AssignTeamToClub {
     try {
       logger.info(`Setup started for Club ID: ${CLUBID}`);
       const combinedClubTeams = this.combineClubTeams(ClubTeamsresult);
-      logger.info(`Combined club teams: ${JSON.stringify(combinedClubTeams)}`);
+     // logger.info(`Combined club teams: ${JSON.stringify(combinedClubTeams)}`);
 
       const getGrades = await this.getClub(CLUBID);
-      logger.info(`Club data retrieved: ${JSON.stringify(getGrades)}`);
+     // logger.info(`Club data retrieved: ${JSON.stringify(getGrades)}`);
       
       const TeamStrapiIDS = this.getTeamStrapiIds(getGrades);
-      logger.info(`Team Strapi IDs: ${JSON.stringify(TeamStrapiIDS)}`);
+     // logger.info(`Team Strapi IDs: ${JSON.stringify(TeamStrapiIDS)}`);
 
       const processedTeams = await this.processTeams(
         combinedClubTeams,

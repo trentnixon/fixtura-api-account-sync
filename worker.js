@@ -11,6 +11,12 @@ Lets Refactor the following class, function, or component, adhere to SOLID princ
 // Schedule a task to run every 5 minutes
 cron.schedule("*/1 * * * *", async () => {
   // need to run a call to STRAPI to find an ID to run
+  startTaskRunner()
+ 
+});
+
+
+async function startTaskRunner() {
   try {
 
     const getSync = await fetcher("account/sync");
@@ -30,4 +36,4 @@ cron.schedule("*/1 * * * *", async () => {
   } catch (error) {
     console.error("Error executing the task:", error);
   }
-});
+}
