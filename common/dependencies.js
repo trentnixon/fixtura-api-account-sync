@@ -5,7 +5,6 @@ const fetcher = require("../api/Utils/fetcher");
 
 const qs = require("qs");
 const changeisUpdating = async (ID, isUpdating) => {
-  const currentDate = new Date();
 
   await fetcher(`accounts/${ID}`, `PUT`, {
     data: {
@@ -38,7 +37,7 @@ const getApprovedAssociationsAccounts = () => {
   );
 };
 
-const getCompetitionRelations = () => {
+/* const getCompetitionRelations = () => {
   return qs.stringify(
     {
       pagination: {
@@ -52,7 +51,7 @@ const getCompetitionRelations = () => {
       encodeValuesOnly: true,
     }
   );
-};
+}; */
 
 const getClubRelationsForAssociation = () => {
   return qs.stringify(

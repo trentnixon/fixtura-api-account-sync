@@ -5,7 +5,7 @@
 const BaseController = require("../../../common/BaseController");
 const fetcher = require("../../Utils/fetcher");
 // getters
-const GetCompetitions = require("./getCompetitions"); 
+const GetCompetitions = require("./getCompetitions");
 const GetClubTeams = require("./getClubTeams");
 const getTeamsGameData = require("./getTeamsGameData");
 
@@ -16,15 +16,13 @@ const AssignTeamToClub = require("./assignTeamtoClub");
 const logger = require("../../Utils/logger");
 const qs = require("qs");
 
-class GetClubDetails extends BaseController{
+class GetClubDetails extends BaseController {
   constructor() {
     super(); // Add this line
     this.dependencies = require("../../../common/dependencies");
   }
 
-  
   async processClub(ACCOUNTID) {
-  
     const Account = await fetcher(
       `accounts/${ACCOUNTID}?${getApprovedClubAccounts()}`
     );
@@ -34,7 +32,7 @@ class GetClubDetails extends BaseController{
       /* Step 1 */
       // Get the Comps for this club
       const competitions = await this.processCompetitions(Account);
-      if (!competitions) return false; 
+      if (!competitions) return false;
       /* Step 2 */
       // Assign the selected club to the Comps found
       await this.processAssignClubToCompetition(competitions, CLUBID);
@@ -44,23 +42,16 @@ class GetClubDetails extends BaseController{
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
       const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-      console.log("ListOfTeamsInClub")
-      console.log(ListOfTeamsInClub)
+      console.log("ListOfTeamsInClub");
+      console.log(ListOfTeamsInClub);
       /* Step 5 */
       // Now assign those teams to the Club ID
-      await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
+ //     await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
 
       /* Step 6 */
       // Get the Game Data for the Teams found
-       await this.processTeamsGameData(CLUBID);
+ //     await this.processTeamsGameData(CLUBID);
 
-      /* Step 7 */
-      // Update the UI
-      //await this.dependencies.changeisUpdating(ACCOUNTID, false);
-      /* Step 8 */
-      // Add this data collection
-      //await this.createDataCollection(ACCOUNTID, { error: false });
-      
       return true;
     } catch (error) {
       logger.error(`Error processing club ${Account.id}:`, error);
@@ -71,17 +62,7 @@ class GetClubDetails extends BaseController{
   async reFetchClubData(CLUBID) {
     return await fetcher(`clubs/${CLUBID}?${getClubRelations()}`);
   }
- /*  async createDataCollection(ID, ERR) {
-    //data-collections
-    const currentDate = new Date();
-    await fetcher(`data-collections`, `POST`, {
-      data: {
-        account: [ID],
-        whenWasTheLastCollection: currentDate,
-      },
-    });
-    return true;
-  } */
+ 
   async processAssignClubToCompetition(competitions, CLUBID) {
     const uploader = new assignClubToCompetition();
     await uploader.setup(competitions, CLUBID);
@@ -119,16 +100,24 @@ class GetClubDetails extends BaseController{
     TeamsGameData.setBrowser(this.browser);
     await TeamsGameData.Setup();
   }
-  async setup(accountId) {
-    console.log('TEST 1 . GetClubDetails Setup called');
-    await this.initDependencies(accountId); // Call the initDependencies method from the BaseController
-    const result = await this.processClub(accountId);
-    await this.dependencies.changeisUpdating(accountId, false);
-    await this.dependencies.createDataCollection(accountId, { error: false });
 
-    return result;
+  async setup(accountId) {
+    console.log("TEST 1 . GetClubDetails Setup called");
+    try {
+      await this.initDependencies(accountId); // Call the initDependencies method from the BaseController
+      const result = await this.processClub(accountId);
+      await this.dependencies.changeisUpdating(accountId, false);
+      await this.dependencies.createDataCollection(accountId, { error: false });
+  
+      return result;
+    } catch (err) {
+      console.error('Error during setup:', err);
+      await this.dependencies.createDataCollection(accountId, { error: true });
+    } finally {
+      await this.dependencies.dispose();
+    }
   }
- 
+  
 }
 
 module.exports = GetClubDetails;
@@ -172,7 +161,7 @@ const getClubRelations = () => {
 
 function extractGradesVersion2(activeClubTeams) {
   const ListedTeams = activeClubTeams.attributes.teams?.data;
-  //console.log(ListedTeams); 
+  //console.log(ListedTeams);
   const gradesArray = ListedTeams.map((item) => {
     return item.attributes.grades.data;
   });

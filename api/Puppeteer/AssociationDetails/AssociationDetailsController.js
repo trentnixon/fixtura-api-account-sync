@@ -37,14 +37,14 @@ class AssociationDetailsController extends BaseController {
       let result = await uploader.Setup(competitions, associationId);
       uploader = null;
       logger.debug(`Assigned competitions to club: ${result.success}`);
-      result = null
-     
+      result = null;
+
       const ActiveAssociation = await fetcher(
         `associations/${associationId}?${this.dependencies.getClubRelationsForAssociation()}`
       );
 
       const associationClubs = ActiveAssociation.attributes.clubs.data;
- 
+
       if (associationClubs.length > 0) {
         logger.info("Process Association with Clubs");
 
@@ -80,12 +80,19 @@ class AssociationDetailsController extends BaseController {
   }
 
   async setup(accountId) {
-    await this.initDependencies(accountId);
-    const result = await this.processAssociation(accountId);
-    await this.dependencies.changeisUpdating(accountId, false);
-    await this.dependencies.createDataCollection(accountId, { error: false });
+    try {
+      await this.initDependencies(accountId);
+      const result = await this.processAssociation(accountId);
+      await this.dependencies.changeisUpdating(accountId, false);
+      await this.dependencies.createDataCollection(accountId, { error: false });
 
-    return result;
+      return result;
+    } catch (err) {
+      console.error('Error during setup:', err);
+      await this.dependencies.createDataCollection(accountId, { error: true });
+    } finally {
+      await this.dependencies.dispose();
+    }
   }
 }
 

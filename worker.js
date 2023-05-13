@@ -24,7 +24,7 @@ async function startTaskRunner() {
     console.log("getSync", getSync);
     if(getSync.continue === true)
     {
-        getSync.PATH === "CLUB"
+        getSync.PATH === "CLUB" 
         ? await updateClubDetails(getSync.ID)
         : await updateAssociationDetails(getSync.ID);
       console.log("Task successfully executed");
