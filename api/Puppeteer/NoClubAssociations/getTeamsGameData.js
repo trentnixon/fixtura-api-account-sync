@@ -112,6 +112,7 @@ class getTeamsGameData {
           teamHome: teamNames[0].name,
           teamAway: teamNames[1].name,
         });
+        await this.page.evaluate((el) => el.remove(), matchElement);
       } catch (error) {
         logger.error(
           `Error processing match for team ${team.teamName} (Index ${teamMatches.length}):`
@@ -161,19 +162,16 @@ class getTeamsGameData {
         let matchList = await this.page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
 
         // Process the games on the page
-        let GAMEDATA = await this.ProcessGame(
-          matchList,
-          team,
-          gradeIdFromPage
-        );
-        
+        let GAMEDATA = await this.ProcessGame(matchList, team, gradeIdFromPage);
 
         let validMatches = GAMEDATA.filter((match) => match !== null);
 
         //await assignGamesToStrapi.setup(validMatches);
-
+        // Invoke the garbage collector manually
+        await this.page.evaluate(() => global.gc && global.gc());
+        // Clear the accumulated data
         validMatches = null;
-        GAMEDATA= null;
+        GAMEDATA = null;
         matchList = null;
         teamIndex++;
       }
@@ -215,10 +213,7 @@ module.exports = getTeamsGameData;
 
 const Find_Item = async (matchElement, SELECTOR) => {
   try {
-    const item = await matchElement.$eval(SELECTOR, (el) =>
-      el.textContent.trim()
-    );
-    return item;
+    return await matchElement.$eval(SELECTOR, (el) => el.textContent.trim());
   } catch (error) {
     return false;
   }
@@ -234,10 +229,7 @@ const ScrapeDate = async (matchElement, SELECTOR) => {
 const ScrapeGameURL = async (matchElement, SELECTOR) => {
   // return await Find_Item(matchElement, SELECTOR);
   try {
-    const url = await matchElement.$eval(SELECTOR, (el) =>
-      el.getAttribute("href")
-    );
-    return url;
+    return await matchElement.$eval(SELECTOR, (el) => el.getAttribute("href"));
   } catch (error) {
     logger.error(error);
     return false;
@@ -245,7 +237,7 @@ const ScrapeGameURL = async (matchElement, SELECTOR) => {
 };
 
 const ScrapeTeams = async (matchElement, SELECTOR) => {
-  const teams = await matchElement.$$eval(SELECTOR, (anchors) => {
+  return await matchElement.$$eval(SELECTOR, (anchors) => {
     return anchors.map((a) => {
       const name = a.textContent.trim();
       const url = a.getAttribute("href");
@@ -253,7 +245,6 @@ const ScrapeTeams = async (matchElement, SELECTOR) => {
       return { name, id };
     });
   });
-  return teams;
 };
 
 const ScrapeTime = async (matchElement, SELECTORS) => {
