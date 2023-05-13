@@ -48,10 +48,9 @@ class getTeamsGameData {
     this.browser = browser;
   }
 
-  
   async ProcessGame(matchList, team, GradeID) {
     const teamMatches = [];
-  
+
     for (const matchElement of matchList) {
       try {
         const byeSelector = await matchElement.$(".sc-jrsJCI.gcJhbP");
@@ -59,31 +58,28 @@ class getTeamsGameData {
           teamMatches.push({ status: "bye" });
           continue;
         }
-  
+
         /* ROUND *********** */
-        const round = await ScrapeRound(
-          matchElement,
-          SELECTORS.ROUND.General
-        );
-  
+        const round = await ScrapeRound(matchElement, SELECTORS.ROUND.General);
+
         /* DATE *********** */
         const date = await ScrapeDate(matchElement, SELECTORS.DATE.General);
-  
+
         const dateStr = date;
         const dateObj = moment(dateStr, "dddd, DD MMMM YYYY").toDate();
-  
+
         /* TYPE *********** */
         const type = await ScrapeType(matchElement, SELECTORS.TYPE);
-  
+
         /* TIME *********** */
         let time = await ScrapeTime(matchElement, SELECTORS.TIME);
-  
+
         /* Ground *********** */
         let ground = await ScrapeGround(matchElement, SELECTORS.GROUNDS);
-  
+
         /* STATUS *********** */
         let status = await ScrapeStatus(matchElement, SELECTORS.STATUS);
-  
+
         /* URLS *********** */
         const urlToScoreCard = await ScrapeGameURL(
           matchElement,
@@ -92,13 +88,13 @@ class getTeamsGameData {
         const gameID = urlToScoreCard
           ? urlToScoreCard.split("/").slice(-1)[0]
           : null;
-  
+
         /* *********** */
         const teamNames = await ScrapeTeams(
           matchElement,
           SELECTORS.TEAMS.General
         );
-  
+
         teamMatches.push({
           grade: [GradeID],
           round,
@@ -124,10 +120,9 @@ class getTeamsGameData {
         teamMatches.push(null);
       }
     }
-  
+
     return teamMatches;
   }
-  
 
   findGradeId(array, gradeId) {
     for (const item of array) {
@@ -140,12 +135,12 @@ class getTeamsGameData {
 
   async LoopTeams() {
     let teamIndex = 0;
-    const uploader = new assignTeamToGameData();
+    //const assignGamesToStrapi = new assignTeamToGameData();
     try {
       for (const { id, attributes: team } of this.TEAMS) {
         logger.info(`Processing team ${team.teamName} (Index ${teamIndex})...`);
         logger.info(`on playHQ URL ${team.href}`);
-        
+
         // Navigate to team page
         await this.page.goto(`https://www.playhq.com${team.href}`);
 
@@ -163,24 +158,23 @@ class getTeamsGameData {
 
         let gradeIdFromPage = this.findGradeId(team.grades.data, gradeId);
         // Get the match list
-        let matchList = await this.page.$$(
-          ".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY"
-        );
+        let matchList = await this.page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
 
         // Process the games on the page
-        const GAMEDATA = await this.ProcessGame(
+        let GAMEDATA = await this.ProcessGame(
           matchList,
           team,
           gradeIdFromPage
-        )
-        matchList = null;
+        );
+        
 
         let validMatches = GAMEDATA.filter((match) => match !== null);
-      
-        await uploader.setup(validMatches);
-      
-        validMatches=null
-      
+
+        //await assignGamesToStrapi.setup(validMatches);
+
+        validMatches = null;
+        GAMEDATA= null;
+        matchList = null;
         teamIndex++;
       }
       return true;
@@ -214,8 +208,6 @@ class getTeamsGameData {
 }
 
 module.exports = getTeamsGameData;
-
-
 
 /* *********************************************************** */
 // scrape FUNCS
