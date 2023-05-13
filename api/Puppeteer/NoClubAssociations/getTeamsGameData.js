@@ -173,10 +173,11 @@ class getTeamsGameData {
         )
         matchList.length = 0;
 
-        const validMatches = GAMEDATA.filter((match) => match !== null);
+        let validMatches = GAMEDATA.filter((match) => match !== null);
         
         
         await uploader.setup(validMatches);
+        validMatches=null
         teamIndex++;
       }
       return true;
