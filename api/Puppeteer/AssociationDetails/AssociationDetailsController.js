@@ -71,7 +71,7 @@ class AssociationDetailsController extends BaseController {
     } catch (error) {
       logger.error(`Error processing Association ${Account.id}:`, error);
     } finally {
-      await this.dispose(); // Dispose resources after processing
+      //await this.dispose(); // Dispose resources after processing
     }
 
     return { complete: true };
