@@ -187,11 +187,9 @@ class getTeamsGameData {
 
   async Setup() {
     logger.info("Setting up getTeamsGameData...");
-
+    const page = await this.browser.newPage();
     try {
-      const page = await this.browser.newPage();
       await this.LoopTeams(page);
-
       logger.info("getTeamsGameData setup completed.");
       return true;
     } catch (error) {

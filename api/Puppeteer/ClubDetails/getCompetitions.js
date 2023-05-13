@@ -17,24 +17,25 @@ class GetCompetitions {
     if (!this.browser) {
       throw new Error("Browser instance is not set.");
     }
-
-    try {
-      const page = await this.browser.newPage();
-      page.on("console", (msg) => {
+    const page = await this.browser.newPage();
+    page.on("console", (msg) => {
         console.log("PAGE LOG:", msg.text());
       });
+      
+    try {
       const competitions = await this.fetchCompetitions(page, this.URL);
 
       if (competitions.length === 0) {
         logger.info(`No competitions found for club ${this.URL}`);
         return false;
       }
+      
       return competitions;
     } catch (error) {
       logger.error(`Error in setup method of GetCompetitions: ${error}`);
       throw error;
     } finally {
-      logger.error(`CLASS GetCompetitions: Page Closed!!`);
+      logger.info(`CLASS GetCompetitions: Page Closed!!`);
       await page.close();
     }
   }
