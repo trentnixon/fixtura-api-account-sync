@@ -33,7 +33,7 @@ class AssociationDetailsController extends BaseController {
         return false;
       }
 
-      let uploader = new assignCompetitionsToAwssociation();
+      let uploader = new assignCompetitionsToAssociation();
       let result = await uploader.Setup(competitions, associationId);
       uploader = null;
       logger.debug(`Assigned competitions to club: ${result.success}`);
