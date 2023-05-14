@@ -50,7 +50,7 @@ class GetClubDetails extends BaseController {
 
       /* Step 6 */
       // Get the Game Data for the Teams found
-      //     await this.processTeamsGameData(CLUBID);
+      await this.processTeamsGameData(CLUBID);
 
       return true;
     } catch (error) {

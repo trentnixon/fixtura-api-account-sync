@@ -151,7 +151,7 @@ class getTeamsGameData {
     try {
       for (const { id, attributes: team } of this.TEAMS) {
         logger.info(
-          `Processing team ${team.teamName} id ${id} (Index ${teamIndex})...`
+          `Processing team ${team.teamName} id ${id} (Index ${teamIndex} of ${this.TEAMS.length})...`
         );
         logger.info(`on playHQ URL ${team.href}`);
         // Navigate to team page
@@ -196,7 +196,7 @@ class getTeamsGameData {
       logger.error("Error setting up getTeamsGameData:", error);
       throw error;
     } finally {
-      logger.error(`CLASS getTeamsGameData: Page Closed!!`);
+      logger.info(`CLASS getTeamsGameData: Page Closed!!`);
       await page.close();
     }
   }

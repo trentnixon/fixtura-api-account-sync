@@ -9,9 +9,9 @@ Lets Refactor the following class, function, or component, adhere to SOLID princ
 
 */
 // Schedule a task to run every 5 minutes
-cron.schedule("*/1 * * * *", async () => {
+cron.schedule("*/10 * * * *", async () => {
   // need to run a call to STRAPI to find an ID to run
-  startTaskRunner();
+  //startTaskRunner();
 });
 
 async function startTaskRunner() {
