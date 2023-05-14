@@ -5,7 +5,6 @@ const fetcher = require("../api/Utils/fetcher");
 
 const qs = require("qs");
 const changeisUpdating = async (ID, isUpdating) => {
-
   await fetcher(`accounts/${ID}`, `PUT`, {
     data: {
       isUpdating: isUpdating,
@@ -78,11 +77,16 @@ const getClubRelationsForAssociation = () => {
 };
 module.exports = {
   getPuppeteerInstance: async () => {
-    return await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    return await puppeteer.launch({
+      headless: true,
+      args: ["--disable-setuid-sandbox",
+      "--no-sandbox",
+      "--single-process",
+      "--no-zygote",],
+    });
   },
   changeisUpdating,
   createDataCollection,
   getApprovedAssociationsAccounts,
-  getClubRelationsForAssociation
+  getClubRelationsForAssociation,
 };
-
