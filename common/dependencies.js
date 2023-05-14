@@ -78,7 +78,7 @@ const getClubRelationsForAssociation = () => {
 };
 module.exports = {
   getPuppeteerInstance: async () => {
-    return await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
+    return await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
   },
   changeisUpdating,
   createDataCollection,

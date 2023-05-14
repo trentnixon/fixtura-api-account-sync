@@ -30,6 +30,7 @@ class BaseController {
 
     if (this.browser) {
       await this.browser.close();
+      console.log("CLOSE BROWSER IN BASECONTROLLER")
     }
   }
 }
