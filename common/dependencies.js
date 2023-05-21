@@ -22,14 +22,14 @@ const createDataCollection = async (ID, ERR) => {
       whenWasTheLastCollection: currentDate,
     },
   });
-  console.log("DATACOLLECTIONID")
-  console.log(DATACOLLECTIONID.id)
+/*   console.log("DATACOLLECTIONID")
+  console.log(DATACOLLECTIONID.id) */
   return DATACOLLECTIONID.id;
 };
 
 const updateDataCollection = async (ID, OBJ) => {
-  console.log("updateDataCollection")
-  console.log(ID, OBJ)
+/*   console.log("updateDataCollection")
+  console.log(ID, OBJ) */
   await fetcher(`data-collections/${ID}`, `PUT`, {
     data: OBJ,
   });
