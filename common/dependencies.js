@@ -28,6 +28,8 @@ const createDataCollection = async (ID, ERR) => {
 };
 
 const updateDataCollection = async (ID, OBJ) => {
+  console.log("updateDataCollection")
+  console.log(ID, OBJ)
   await fetcher(`data-collections/${ID}`, `PUT`, {
     data: OBJ,
   });
