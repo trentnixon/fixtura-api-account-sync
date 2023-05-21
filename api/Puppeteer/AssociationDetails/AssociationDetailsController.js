@@ -19,31 +19,49 @@ class AssociationDetailsController extends BaseController {
       `accounts/${accountId}?${this.dependencies.getApprovedAssociationsAccounts()}`
     );
     const associationId = Account.attributes.associations.data[0].id;
+    logger.debug(`What is the Association ID? : ${associationId}`);
+      
 
-    try {
-      let getCompetitionsObj = new getCompetitions(Account);
+    try { 
+      // Get Association Cometitions
+     /*  let getCompetitionsObj = new getCompetitions(Account); 
       getCompetitionsObj.setBrowser(this.browser);
       const competitions = await getCompetitionsObj.setup();
       await getCompetitionsObj.dispose();
       getCompetitionsObj = null;
-      this.disposables.push(getCompetitionsObj);
+      this.disposables.push(getCompetitionsObj); */
+
+      // Log Numb Comps
+      logger.debug(`What are  the number of competitions : ${competitions.length}`);
+    
 
       if (!competitions) {
         logger.debug(`No competitions found for club ${associationId}`);
         return false;
       }
-
-      let uploader = new assignCompetitionsToAssociation();
+      // Assign any new comps to the Association
+      /* let uploader = new assignCompetitionsToAssociation();
       let result = await uploader.Setup(competitions, associationId);
       uploader = null;
       logger.debug(`Assigned competitions to club: ${result.success}`);
-      result = null;
+      result = null; */
 
+      // Fetch New data
       const ActiveAssociation = await fetcher(
         `associations/${associationId}?${this.dependencies.getClubRelationsForAssociation()}`
       );
-
       const associationClubs = ActiveAssociation.attributes.clubs.data;
+
+
+        /*
+          Massive rethink on this.
+          there are to many duplicate runs over the whole thing
+
+          lopok to extract the club urls and check for comps and teams
+          also look to flattern all of the comp urls so we are not fetching the same comp multiple times
+          You may need to look at spliting this section up into smaller chunks as they dont work in harmony 
+
+        */
 
       if (associationClubs.length > 0) {
         logger.info("Process Association with Clubs");
@@ -55,13 +73,15 @@ class AssociationDetailsController extends BaseController {
           const getClubDetailsObj = new GetClubDetails();
           getClubDetailsObj.setBrowser(this.browser);
           await getClubDetailsObj.setup(clubId, clubUrl);
-          this.disposables.push(getClubDetailsObj);
+          this.disposables.push(getClubDetailsObj);  
         }
       } else {
         logger.info("Process Association with NO Clubs");
         const associationComps = ActiveAssociation.attributes.competitions.data;
 
         for (const competition of associationComps) {
+          logger.debug('Process This competition');
+          console.log(competition)
           const noClubDetailsObj = new GetNoClubDetails();
           noClubDetailsObj.setBrowser(this.browser);
           await noClubDetailsObj.setup(competition);
@@ -83,19 +103,18 @@ class AssociationDetailsController extends BaseController {
       await this.initDependencies(accountId);
       logger.info("Puppeteer has Loaded");
       const result = await this.processAssociation(accountId);
-    
       return result;
     } catch (err) {
       logger.error('Error during setup:', err);
       
       await this.dependencies.changeisUpdating(accountId, false);
       logger.info("Set Account to False| ERROR ");
-      await this.dependencies.createDataCollection(accountId, { error: true });
+      //await this.dependencies.createDataCollection(accountId, { error: true });
       logger.info("Create a Data Entry | ERROR");
     } finally {
       await this.dependencies.changeisUpdating(accountId, false);
       logger.info("Set Account to False| Finally ");
-      await this.dependencies.createDataCollection(accountId, { error: true });
+      //await this.dependencies.createDataCollection(accountId, { error: true });
       logger.info("Create a Data Entry | Finally");
       await this.dispose(); 
       logger.info("Dispose of items and Pupeteer | Finally");

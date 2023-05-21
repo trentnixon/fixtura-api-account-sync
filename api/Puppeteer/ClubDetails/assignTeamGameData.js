@@ -1,7 +1,7 @@
 const fetcher = require("../../Utils/fetcher");
 const qs = require("qs");
 
-class assignTeamToGameData {
+class assignTeamToGameData { 
   async Setup(GameData) {
     const promises = [];
    

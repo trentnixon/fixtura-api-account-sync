@@ -1,5 +1,6 @@
-const logger = require("../../Utils/logger");
-const assignTeamToGameData = require("./assignTeamGameData");
+const logger = require("../Utils/logger");
+const BaseController = require("../../common/BaseController");
+//const assignTeamToGameData = require("./assignTeamGameData");
 const moment = require("moment");
 
 const SELECTORS = {
@@ -35,38 +36,26 @@ const SELECTORS = {
   },
 };
 
-class getTeamsGameData {
-  constructor(TEAMS, ActiveGrades) {
-    this.TEAMS = TEAMS.data;
-    this.ActiveGrades = ActiveGrades;
-    this.browser = null;
+class getTeamsGameData extends BaseController {
+  constructor(ACCOUNT, TEAMS) {
+    super(); // Add this line
+    this.TEAMS = TEAMS;
+    this.ACCOUNTID = ACCOUNT.ACCOUNTID;
+    this.ACCOUNTTYPE = ACCOUNT.ACCOUNTTYPE;
+    this.dependencies = require("../../common/dependencies");
   }
 
-  setBrowser(browser) {
-    this.browser = browser;
+   ensureHttp(url, domain = "https://www.playhq.com") {
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    return domain + url;
   }
+  return url;
+}
 
-  async getGradeID(page) {
-    logger.info("Getting grade ID...");
-    try {
-      // Scrape the league name
-      const leagueName = await ScrapeLeagueName(page);
 
-      console.log(this.ActiveGrades)
-      const gradeObj = this.ActiveGrades.find(
-        (grade) => grade.Name === leagueName
-      );
-      logger.info(
-        `gradeObj: ${JSON.stringify(gradeObj)}, leagueName: ${leagueName}`
-      );
-      return gradeObj?.ID !== undefined ? gradeObj.ID : false;
-    } catch (error) {
-      logger.error("Error getting grade ID:", error);
-      throw error;
-    }
-  }
 
-  async ProcessGame(matchList, team, GradeID) {
+
+  async ProcessGame(matchList, GradeID) {
     const teamMatches = await Promise.all(
       matchList.map(async (matchElement, index) => {
         try {
@@ -75,7 +64,7 @@ class getTeamsGameData {
             return { status: "bye" };
           }
 
-          /* ROUND *********** */ 
+          /* ROUND *********** */
           const round = await ScrapeRound(
             matchElement,
             SELECTORS.ROUND.General
@@ -133,7 +122,7 @@ class getTeamsGameData {
           };
         } catch (error) {
           logger.error(
-            `Error processing match for team ${team.teamName} (Index ${index}):`
+            `Error processing match for team ${teamName} (Index ${index}):`
           );
           logger.error(error);
           return null;
@@ -144,63 +133,84 @@ class getTeamsGameData {
     return teamMatches;
   }
 
-  async LoopTeams(page) {
+  async LoopTeams() {
     let teamIndex = 0;
-
-    console.log(this.TEAMS)
-    //const Sample = this.TEAMS[0]
+    let StoreGames = [];
+    const page = await this.browser.newPage();
+  
+    console.log(`this.TEAMS has a length of ${this.TEAMS.length}`);
     try {
-    /*   for (const { id, attributes: team } of this.TEAMS) {
-        logger.info(
-          `Processing team ${team.teamName} id ${id} (Index ${teamIndex} of ${this.TEAMS.length})...`
-        );
-        logger.info(`on playHQ URL ${team.href}`);
-        // Navigate to team page
-        await page.goto(team.href);
-
-        // Wait for the match list to be rendered
-        await page.waitForSelector(
-          ".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY,.sc-bqGHjH.sc-dlMBXb.blmUXq.jAJvWi"
-        );
-        await page.waitForTimeout(1000);
-
-        // Find Team Grade for Gamedata relation
-        const GradeID = await this.getGradeID(page);
- 
-        // Get the match list
-        const matchList = await page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
-
-        // Process the games on the page
-        const GAMEDATA = await this.ProcessGame(matchList, team, GradeID);
-
-        // Filter out any null values (i.e. matches that couldn't be processed)
-        const validMatches = GAMEDATA.filter((match) => match !== null);
-        // Upload the valid matches to the API
-        const uploader = new assignTeamToGameData();
-        await uploader.Setup(validMatches);
-        teamIndex++;
-      } */
-      return true;
+      for (const { teamName, id, href, grade } of this.TEAMS) {
+        try {
+          logger.info(
+            `Processing team ${teamName} id ${id} (Index ${teamIndex} of ${this.TEAMS.length})...`
+          );
+          logger.info(`on playHQ URL ${href}`);
+  
+          // Navigate to team page
+          console.log(this.ensureHttp(href));
+          await page.goto(this.ensureHttp(href));
+  
+          // Wait for the match list to be rendered
+          await page.waitForSelector(
+            ".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY,.sc-bqGHjH.sc-dlMBXb.blmUXq.jAJvWi"
+          );
+          await page.waitForTimeout(1000);
+  
+          // Get the match list
+          const matchList = await page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
+  
+          // Process the games on the page
+          const GAMEDATA = await this.ProcessGame(matchList, grade);
+  
+          // Filter out any null values (i.e. matches that couldn't be processed)
+          const validMatches = GAMEDATA.filter((match) => match !== null);
+  
+          StoreGames.push(...validMatches);
+          teamIndex++;
+        } catch (error) {
+          console.error(`Error processing team ${teamName}:`, error);
+          teamIndex++;
+        }
+      }
+      return StoreGames;
     } catch (error) {
-      console.error(`Error getting team game data:`, error); 
+      console.error(`Error getting team game data:`, error);
+    } finally {
+      logger.info(`CLASS GetCompetitions: Page Closed!!`);
+      await page.close();
     }
   }
+  
 
-  async Setup() {  
-    logger.info("Setting up getTeamsGameData...");
-    console.log("this.ActiveGrades")
-    console.log(this.ActiveGrades)
-    const page = await this.browser.newPage();
+  async setup() {
+    console.log("Get Game Data : Setup called");
+    //console.log("this.TEAMS",  this.TEAMS)
     try {
-      await this.LoopTeams(page);
-      logger.info("getTeamsGameData setup completed.");
-      return true;
-    } catch (error) { 
-      logger.error("Error setting up getTeamsGameData:", error);
-      throw error;
+      await this.initDependencies(this.ACCOUNTID); // Call the initDependencies method from the BaseController
+      const result = await this.LoopTeams();
+      console.log(`Length after scrape ${result.length}`)
+      let filteredArray = result.filter((v, i, a) => a.findIndex(t => (t.gameID === v.gameID)) === i);
+      console.log(`Length after Filter  ${filteredArray.length}`)
+      return filteredArray;
+    } catch (err) {
+      logger.error("Error during setup:", err);
+
+      await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
+      logger.info("Set Account to False| ERROR ");
+      /* await this.dependencies.createDataCollection(this.ACCOUNTID, {
+        error: true,
+      }); */
+      logger.info("Create a Data Entry | ERROR");
     } finally {
-      logger.info(`CLASS getTeamsGameData: Page Closed!!`);
-      await page.close();
+      await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
+      logger.info("Set Account to False| Finally ");
+      /* await this.dependencies.createDataCollection(this.ACCOUNTID, {
+        error: true,
+      }); */
+      logger.info("Create a Data Entry | Finally");
+      await this.dispose();
+      logger.info("Dispose of items and Pupeteer | Finally");
     }
   }
 
@@ -346,3 +356,41 @@ const ScrapeStatus = async (matchElement, SELECTORS) => {
     return statusFinalSelector;
   }
 };
+
+  /*  async OLDsetup() {  
+    logger.info("Setting up getTeamsGameData...");
+    console.log("this.ActiveGrades")
+    console.log(this.ActiveGrades)
+    const page = await this.browser.newPage();
+    try {
+      await this.LoopTeams(page);
+      logger.info("getTeamsGameData setup completed.");
+      return true;
+    } catch (error) { 
+      logger.error("Error setting up getTeamsGameData:", error);
+      throw error;
+    } finally {
+      logger.info(`CLASS getTeamsGameData: Page Closed!!`);
+      await page.close();
+    }
+  } */
+
+/*   async getGradeID(page) {
+    logger.info("Getting grade ID...");
+    try {
+      // Scrape the league name
+      const leagueName = await ScrapeLeagueName(page);
+
+      console.log(this.ActiveGrades);
+      const gradeObj = this.ActiveGrades.find(
+        (grade) => grade.Name === leagueName
+      );
+      logger.info(
+        `gradeObj: ${JSON.stringify(gradeObj)}, leagueName: ${leagueName}`
+      );
+      return gradeObj?.ID !== undefined ? gradeObj.ID : false;
+    } catch (error) {
+      logger.error("Error getting grade ID:", error);
+      throw error;
+    }
+  } */

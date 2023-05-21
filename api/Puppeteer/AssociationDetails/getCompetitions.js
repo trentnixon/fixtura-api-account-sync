@@ -3,14 +3,14 @@
  * DO NOT ADJUST UNLESS ERROR IN CODE
 */
 
-const logger = require("../../Utils/logger");
+const logger = require("../../Utils/logger"); 
 
-class getCompetitions {
+class getCompetitions { 
   constructor(account) {
     this.url = account.attributes.associations.data[0].attributes.href;
     this.browser = null;
   }
-
+ 
   setBrowser(browser) {
     this.browser = browser;
   }
@@ -35,7 +35,7 @@ class getCompetitions {
     } finally {
       await page.close();
     }
-  }
+  } 
 
   async fetchCompetitions(page, url) {
     logger.debug(`Checking competitions for ${url}`);
@@ -46,7 +46,7 @@ class getCompetitions {
     const competitions = await page.evaluate(() => {
       const seasonOrgs = Array.from(
         document.querySelectorAll(".sc-3lpl8o-5.dznirp")
-      );
+      ); 
       return seasonOrgs.flatMap((seasonOrg) => {
         const competitionsList = Array.from(seasonOrg.querySelectorAll("h2"));
         return competitionsList.map((competition) => {
@@ -65,6 +65,7 @@ class getCompetitions {
     return competitions;
   }
 
+  
   async dispose() {
     this.url = null;
     this.browser = null;

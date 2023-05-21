@@ -1,20 +1,22 @@
 const cron = require("node-cron");
-const { updateClubDetails, updateAssociationDetails } = require("./updateTask");
+const { Controller_Club, Controller_Associations } = require("./controller");
 const fetcher = require("./api/Utils/fetcher");
 
+
+
 /*
-AI PROMPT
+AI PROMPT 
 
 Lets Refactor the following class, function, or component, adhere to SOLID principles, robust error handling, and efficient management of large and long-term memory storage for maintainability, scalability, and seamless integration within the system.
 
-*/
+*/ 
 // Schedule a task to run every 5 minutes
 cron.schedule("*/10 * * * *", async () => {
   // need to run a call to STRAPI to find an ID to run
-  //startTaskRunner();
+  startTaskRunner();
 });
 
-async function startTaskRunner() {
+async function startTaskRunner() {  
   try {
     const getSync = await fetcher("account/sync");
     //{ PATH: 'CLUB', ID: 1 }
@@ -22,8 +24,8 @@ async function startTaskRunner() {
     if (getSync.continue === true) {
       // Start tracking memory usage
       getSync.PATH === "CLUB"
-        ? await updateClubDetails(getSync.ID)
-        : await updateAssociationDetails(getSync.ID);
+        ? await Controller_Club(getSync)
+        : await Controller_Associations(getSync);
       console.log("Task successfully executed");
     } else {
       console.log("No Account to Update");
@@ -32,3 +34,4 @@ async function startTaskRunner() {
     console.error("Error executing the task:", error);
   }
 }
+//startTaskRunner()

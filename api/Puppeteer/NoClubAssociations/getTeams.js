@@ -19,7 +19,7 @@ class GetTeams {
 
       for (const item of grades) {
         const teamData = await this.processGrade(item, competition.id);
-        allTeamData.push(...teamData);
+        allTeamData.push(...teamData); 
       }
       logger.info("All team data processed successfully");
       return allTeamData;

@@ -8,13 +8,13 @@
 const logger = require("../../Utils/logger");
 
 class GetCompetitions {
-  constructor(href, browser) {
+  constructor(href, browser) { 
     this.URL = href;
     this.browser = browser;
   }
 
-  async setup() {
-    if (!this.browser) {
+  async setup() { 
+    if (!this.browser) { 
       throw new Error("Browser instance is not set.");
     }
     const page = await this.browser.newPage();
@@ -24,7 +24,7 @@ class GetCompetitions {
       
     try {
       const competitions = await this.fetchCompetitions(page, this.URL);
-
+ 
       if (competitions.length === 0) {
         logger.info(`No competitions found for club ${this.URL}`);
         return false;
@@ -43,9 +43,8 @@ class GetCompetitions {
   async fetchCompetitions(page, url) {
     try {
       logger.info(`Checking this Competition ${url}`);
-      await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-
-      await page.waitForSelector(".sc-3lpl8o-5.dznirp", { timeout: 60000 });
+      await page.goto(url);
+      await page.waitForSelector(".sc-3lpl8o-5.dznirp");
       await page.screenshot({ path: "getCompetitions.png", fullPage: true });
 
       const competitions = await this.extractCompetitionsData(page);

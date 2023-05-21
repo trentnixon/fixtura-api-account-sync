@@ -71,15 +71,22 @@ class GetClubDetails {
 
     const flattenedGradesArray = [].concat(...gradesArray);
 
+    let seenIds = new Set();
     const resultArray = flattenedGradesArray.map((grade) => {
       return {
         Name: grade.attributes.gradeName,
         ID: grade.id,
+        url: grade.attributes.url,
       };
+    }).filter((item) => {
+      const duplicate = seenIds.has(item.ID);
+      seenIds.add(item.ID);
+      return !duplicate;
     });
 
     return resultArray;
   }
+
 
   // HELPER
   async FetchClubsInAssociation(CLUBID) {
@@ -91,35 +98,42 @@ class GetClubDetails {
   async setup(CLUBID, CLUBURL) {
     logger.debug(`Update Club ${CLUBID} on ${CLUBURL}`);
 
-    try { 
+    try {  
+      // 1
+      // I THINK THIS IS ALREADY DONE IN THE FIRST ITEM IN TEH NEW FUNC
       const ListCompetitionsToAssociations = await this.processCompetitions(
         CLUBURL
-      );
+      );  
 
       if (!ListCompetitionsToAssociations) {
         logger.debug(`No competitions found for club ${CLUBID}`);
-        return false;
-      }
-      const AssignListCompetitionsToAssociations =
+        return false; 
+      } 
+      // 2
+       const AssignListCompetitionsToAssociations =
         new assignClubToCompetition();
       await AssignListCompetitionsToAssociations.setup(
         ListCompetitionsToAssociations,
         CLUBID
-      );
+      ); 
 
+      // 3
       const getActiveClubsInAssocaition = await this.FetchClubsInAssociation(
         CLUBID
       );
+      // 4
       const ListOfAssociationTeams = await this.processClubTeams(
-        getActiveClubsInAssocaition
+        getActiveClubsInAssocaition 
       );
-
+ 
+      // 5
       await this.processTeamsToClub(ListOfAssociationTeams, CLUBID);
 
       logger.info(
         `Fecth Active Club Teams on CLUBID : ${CLUBID} : Page ClubDetails.js`
       );
 
+      // 6
       await this.processTeamsGameData(CLUBID);
 
       return true;
@@ -129,10 +143,12 @@ class GetClubDetails {
 
     return { complete: true };
   }
+
+  // what does this do 1
   async processCompetitions(CLUBURL) {
     const getCompetitionsObj = new GetCompetitions(CLUBURL, this.browser);
     return await getCompetitionsObj.setup();
-  }
+  } 
 
   async processClubTeams(getActiveClubsInAssocaition) {
     const ClubTeams = new GetClubTeams(null, this.browser); // pass the browser instance here
@@ -148,13 +164,13 @@ class GetClubDetails {
 
   async processTeamsGameData(CLUBID) {
     const PrcessingClubFromStrapi = await this.FetchClubsInAssociation(CLUBID);
-    const TeamsGameData = new getTeamsGameData(
+    const TeamsGameData = new getTeamsGameData( 
       PrcessingClubFromStrapi.attributes.teams,
       GetClubDetails.extractGradesVersion2(PrcessingClubFromStrapi)  
     );
     TeamsGameData.setBrowser(this.browser);
     await TeamsGameData.Setup();
-  }
+  } 
 }
 
 module.exports = GetClubDetails;

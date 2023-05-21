@@ -45,17 +45,22 @@ class CompetitionQueryBuilder {
   }
 }
 
-class AssignCompetitionsToAssociation {
+class AssignCompetitionsToAssociation { 
   async setup(competitions, clubId) {
     const promises = [];
 
+
+    // club assign comp to something
     for (const competition of competitions) {
+
       const existingCompetitions = await this.checkIfCompetitionExists(
         competition.competitionName,
         "competitions"
       );
 
-      if (existingCompetitions) {
+      if (existingCompetitions && existingCompetitions.length > 0) {
+
+
         competition.club = [clubId];
         competition.competition = [existingCompetitions[0].id];
 

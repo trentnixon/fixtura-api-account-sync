@@ -25,28 +25,30 @@ class GetClubDetails extends BaseController {
   async processClub(ACCOUNTID) {
     const Account = await fetcher(
       `accounts/${ACCOUNTID}?${getApprovedClubAccounts()}`
-    );
+    ); 
     const CLUBID = Account.attributes.clubs.data[0].id;
 
     try {
       /* Step 1 */
       // Get the Comps for this club
-      const competitions = await this.processCompetitions(Account);
-      if (!competitions) return false;
-      /* Step 2 */
+     /*  const competitions = await this.processCompetitions(Account);
+ 
+      console.log("competitions ", competitions) 
+      if (!competitions) return false; */
+      /* Step 2 */ 
       // Assign the selected club to the Comps found
-      await this.processAssignClubToCompetition(competitions, CLUBID);
+      /* await this.processAssignClubToCompetition(competitions, CLUBID); */
       /* Step 3 */
       // Refetch the club from Strapi for the new Data and IDS
-      const ActiveClub = await this.reFetchClubData(CLUBID);
+      /* const ActiveClub = await this.reFetchClubData(CLUBID); */
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
-      const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-      console.log("ListOfTeamsInClub", ListOfTeamsInClub);
-
+   /*    const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
+      console.log("ListOfTeamsInClub", ListOfTeamsInClub); */
+ 
       /* Step 5 */
       // Now assign those teams to the Club ID
-      await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
+      /* await this.processTeamsToClub(CLUBID, ListOfTeamsInClub); */
 
       /* Step 6 */
       // Get the Game Data for the Teams found
@@ -66,19 +68,19 @@ class GetClubDetails extends BaseController {
   async processAssignClubToCompetition(competitions, CLUBID) {
     const uploader = new assignClubToCompetition();
     await uploader.setup(competitions, CLUBID);
-  }
-
+  } 
+  
   async processCompetitions(Account) {
     const getCompetitionsObj = new GetCompetitions(
       Account.attributes.clubs.data[0].attributes.href,
       this.browser
-    );
-    return await getCompetitionsObj.setup();
+    ); 
+    return await getCompetitionsObj.setup(); 
   }
 
   async processClubTeams(ActiveClub) {
     const ClubTeams = new GetClubTeams(null, this.browser); // pass the browser instance here
-    return await ClubTeams.setup(
+    return await ClubTeams.setup( 
       ActiveClub.attributes.club_to_competitions.data
     );
   }
@@ -99,26 +101,27 @@ class GetClubDetails extends BaseController {
     );
     TeamsGameData.setBrowser(this.browser);
     ActiveClubTeams=null
-    await TeamsGameData.Setup();
+    await TeamsGameData.Setup(); 
   }
+
 
   async setup(accountId) {
     console.log("TEST 1 . GetClubDetails Setup called");
-    try {
+    try { 
       await this.initDependencies(accountId); // Call the initDependencies method from the BaseController
       const result = await this.processClub(accountId);
-      return result;
+      return result; 
     } catch (err) {
       logger.error("Error during setup:", err);
 
       await this.dependencies.changeisUpdating(accountId, false);
       logger.info("Set Account to False| ERROR ");
-      await this.dependencies.createDataCollection(accountId, { error: true });
+      // this.dependencies.createDataCollection(accountId, { error: true });
       logger.info("Create a Data Entry | ERROR");
     } finally {
       await this.dependencies.changeisUpdating(accountId, false);
       logger.info("Set Account to False| Finally ");
-      await this.dependencies.createDataCollection(accountId, { error: true });
+      //await this.dependencies.createDataCollection(accountId, { error: true });
       logger.info("Create a Data Entry | Finally");
       await this.dispose();
       logger.info("Dispose of items and Pupeteer | Finally");

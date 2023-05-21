@@ -8,6 +8,7 @@ class assignCompetitionsToAssociation {
 
     const promises = [];
 
+    // association handle comps asdsign
     for (const competition of competitions) {
       if (competition.competitionUrl === undefined) {
         logger.warn("Undefined competition URL encountered");
@@ -17,7 +18,7 @@ class assignCompetitionsToAssociation {
       const isExisting = await this.checkIfCompetitionExists(
         getLastItemInUrl(competition.competitionUrl),
         "competitions"
-      );
+      );  
 
       if (!isExisting) {
         logger.debug(`Adding new competition: ${competition.competitionName}`);

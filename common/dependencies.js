@@ -16,11 +16,20 @@ const changeisUpdating = async (ID, isUpdating) => {
 const createDataCollection = async (ID, ERR) => {
   //data-collections
   const currentDate = new Date();
-  await fetcher(`data-collections`, `POST`, {
+  const DATACOLLECTIONID = await fetcher(`data-collections`, `POST`, {
     data: {
       account: [ID],
       whenWasTheLastCollection: currentDate,
     },
+  });
+  console.log("DATACOLLECTIONID")
+  console.log(DATACOLLECTIONID.id)
+  return DATACOLLECTIONID.id;
+};
+
+const updateDataCollection = async (ID, OBJ) => {
+  await fetcher(`data-collections/${ID}`, `PUT`, {
+    data: OBJ,
   });
   return true;
 };
@@ -79,14 +88,17 @@ module.exports = {
   getPuppeteerInstance: async () => {
     return await puppeteer.launch({
       headless: true,
-      args: ["--disable-setuid-sandbox",
-      "--no-sandbox",
-      "--single-process",
-      "--no-zygote",],
+      args: [
+        "--disable-setuid-sandbox",
+        "--no-sandbox",
+        "--single-process",
+        "--no-zygote",
+      ],
     });
   },
   changeisUpdating,
   createDataCollection,
+  updateDataCollection,
   getApprovedAssociationsAccounts,
   getClubRelationsForAssociation,
 };

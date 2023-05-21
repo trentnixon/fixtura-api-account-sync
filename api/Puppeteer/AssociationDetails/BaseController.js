@@ -16,7 +16,7 @@ class BaseController {
         return await this.run(accountId);
       } finally {
         await this.dependencies.changeisUpdating(accountId, false);
-        await this.dependencies.createDataCollection(accountId, { error: false });
+        //await this.dependencies.createDataCollection(accountId, { error: false });
       }
     }
   

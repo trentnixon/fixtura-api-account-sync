@@ -179,6 +179,9 @@ class getTeamsGameData {
       throw error;
     }
   }
+  
+  /// THIS NEEDS WORK IT IS TO SLOW
+  // FIND A QUICKER WAY/ALT
   async *processTeamMatches() {
     for (const { id, attributes: team } of this.TEAMS) {
       logger.info(`Processing team ${team.teamName}...`);
@@ -215,7 +218,7 @@ class getTeamsGameData {
   }
   
 async setup() {
-  try {
+  try { 
     this.page = await this.browser.newPage();
 
     const uploader = new assignTeamToGameData();
@@ -230,17 +233,6 @@ async setup() {
     throw err;
   }
 }
-
-  /* async setup() {
-    try {
-      this.page = await this.browser.newPage();
-      await this.LoopTeams();
-      return true;
-    } catch (err) {
-      logger.error("Error setting up getTeamsGameData:", err);
-      throw err;
-    }
-  } */
 
   async dispose() {
     if (this.page) {

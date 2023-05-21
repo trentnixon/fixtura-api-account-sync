@@ -19,6 +19,19 @@ class BaseController {
     await this.dependencies.changeisUpdating(accountId, true);
   }
 
+
+
+  async initCreateDataCollection(accountId) {
+    return await this.dependencies.createDataCollection(accountId, true);
+  }
+  async initUpdateDataCollection(accountId, DATA) {
+    await this.dependencies.updateDataCollection(accountId, DATA);
+  }
+
+//
+
+
+
   async dispose() {
     for (const disposable of this.disposables) {
       if (typeof disposable.dispose === "function") {
