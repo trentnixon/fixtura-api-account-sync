@@ -78,7 +78,7 @@ class DataController extends BaseController {
       await this.initUpdateDataCollection(CollectionID, {
         TimeTaken: timeTaken / 1000,
         MemoryUsage: peakMemoryUsage,
-        HasError: hasError
+        hasError: hasError
       });
     } catch (error) {
       console.error(`Error updating data collection: ${error}`);
