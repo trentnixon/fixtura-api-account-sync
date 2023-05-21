@@ -74,6 +74,12 @@ class DataController extends BaseController {
     console.log(`Time taken: ${timeTaken / 1000} seconds`);
 
     try {
+      console.log("CollectionID", CollectionID)
+      console.log({
+        TimeTaken: timeTaken / 1000,
+        MemoryUsage: peakMemoryUsage,
+        HasError: hasError
+      })
       await this.initUpdateDataCollection(CollectionID, {
         TimeTaken: timeTaken / 1000,
         MemoryUsage: peakMemoryUsage,
