@@ -25,10 +25,10 @@ class BaseController {
     return await this.dependencies.createDataCollection(accountId, true);
   }
   async initUpdateDataCollection(accountId, DATA) {
-    /*
-    console.log("accountId", accountId)
+    
+    console.log("initUpdateDataCollection", accountId)
       console.log(DATA)
-    */
+   
     await this.dependencies.updateDataCollection(accountId, DATA);
   }
 

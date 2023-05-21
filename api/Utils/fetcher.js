@@ -33,6 +33,7 @@ async function fetcher(PATH, method = "GET", body = {}, retry = true) {
     return res.data;
   } catch (error) {
     logger.error(`Error in fetcher: ${error}`);
+    console.log(error)
 
     if (retry) {
       logger.info("Retrying fetcher in 2 seconds...");
