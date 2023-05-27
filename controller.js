@@ -62,7 +62,7 @@ class DataController extends BaseController {
       await this.processTeams(dataObj);
       dataObj = await this.dataCenter(this.strapiData);
       await this.processGameData(dataObj);
-    } catch (error) {
+    } catch (error) { 
       console.error(`Error processing data: ${error}`);
       hasError = true;
     }
