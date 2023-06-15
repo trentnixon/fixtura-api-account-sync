@@ -5,7 +5,7 @@
  * Clubs ALL
  *  Associations - has Clubs
  */
-
+// Class/Element Monitoring File
 const logger = require("../Utils/logger");
 const BaseController = require("../../common/BaseController"); 
 
@@ -15,7 +15,7 @@ class GetCompetitions extends BaseController {
     this.URL = href;
     this.ACCOUNTID = ACCOUNT.ACCOUNTID;
     this.ACCOUNTTYPE = ACCOUNT.ACCOUNTTYPE;
-    this.dependencies = require("../../common/dependencies");
+    this.dependencies = require("../../common/dependencies"); 
   }
 
   async testClassSetup() {
@@ -47,14 +47,14 @@ class GetCompetitions extends BaseController {
       } else {
         competitions = await this.fetchCompetitionsInClubs(page, this.URL);
       }  
-
+ 
       if (competitions.length === 0) {
         logger.info(`No competitions found for club ${this.URL}`);
         return false;
       }
       return competitions;
     } catch (error) {
-      logger.error(`Error in setup method of GetCompetitions: ${error}`);
+      logger.error(`Error in setup method of GetCompetitions in Folder ScrapCenter : ${error}`);
       throw error;
     } finally {
       logger.info(`CLASS GetCompetitions: Page Closed!!`);
@@ -63,14 +63,14 @@ class GetCompetitions extends BaseController {
   }
 
   async fetchCompetitionInAssociation(page, url) {
-    logger.debug(`Checking competitions for ${url}`);
+    logger.debug(`Checking competitions in fetchCompetitionInAssociation on URL :  ${url}`);
 
     await page.goto(url);
-    await page.waitForSelector(".sc-3lpl8o-5.dznirp");
+    await page.waitForSelector('[data-testid^="season-org-"]');
 
     const competitions = await page.evaluate(() => {
       const seasonOrgs = Array.from(
-        document.querySelectorAll(".sc-3lpl8o-5.dznirp")
+        document.querySelectorAll('[data-testid^="season-org-"]')
       );
       return seasonOrgs.flatMap((seasonOrg) => {
         const competitionsList = Array.from(seasonOrg.querySelectorAll("h2"));
@@ -94,7 +94,7 @@ class GetCompetitions extends BaseController {
     try {
       logger.info(`Checking this Competition ${url}`);
       await page.goto(url);
-      await page.waitForSelector(".sc-3lpl8o-5.dznirp");
+      document.querySelectorAll('[data-testid^="season-org-"]')
       await page.screenshot({ path: "getCompetitions.png", fullPage: true });
 
       const competitions = await this.extractCompetitionsData(page);
@@ -108,7 +108,7 @@ class GetCompetitions extends BaseController {
   async extractCompetitionsData(page) {
     return await page.evaluate(() => {
       const seasonOrgs = Array.from(
-        document.querySelectorAll(".sc-3lpl8o-5.dznirp")
+        document.querySelectorAll('[data-testid^="season-org-"]')
       );
 
       return seasonOrgs.flatMap((seasonOrg) => {

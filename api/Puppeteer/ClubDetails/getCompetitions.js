@@ -32,9 +32,9 @@ class GetCompetitions {
       
       return competitions;
     } catch (error) {
-      logger.error(`Error in setup method of GetCompetitions: ${error}`);
+      logger.error(`Error in setup method of GetCompetitions in Folder Club Details: ${error}`);
       throw error;
-    } finally {
+    } finally { 
       logger.info(`CLASS GetCompetitions: Page Closed!!`);
       await page.close();
     }
