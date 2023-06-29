@@ -2,8 +2,6 @@ const cron = require("node-cron");
 const { Controller_Club, Controller_Associations } = require("./controller");
 const fetcher = require("./api/Utils/fetcher");
 
-
-
 /*
 AI PROMPT 
 
