@@ -15,6 +15,7 @@ const changeisUpdating = async (ID, isUpdating) => {
 
 const createDataCollection = async (ID, ERR) => {
   //data-collections
+  console.log("createDataCollection ID", ID)
   const currentDate = new Date();
   const DATACOLLECTIONID = await fetcher(`data-collections`, `POST`, {
     data: {
@@ -28,10 +29,10 @@ const createDataCollection = async (ID, ERR) => {
 };
 
 const updateDataCollection = async (ID, OBJ) => {
-    console.log("updateDataCollection")
+    console.log("updateDataCollection", ID)
   console.log(ID, OBJ)
   await fetcher(`data-collections/${ID}`, `PUT`, {
-    data: OBJ,
+    data: OBJ, 
   });
   return true;
 };

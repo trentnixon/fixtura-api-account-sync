@@ -15,7 +15,7 @@ async function dataCenterClubs(fromStrapi) {
   } catch(error) {
     console.error(error);
   }
-}
+} 
 
 const createTeamsArr = (obj) => {
   //console.log(obj)

@@ -46,14 +46,13 @@ class GetTeamsFromLadder extends BaseController {
 
   async getTeamNamesAndUrls(page) {
     try {
-      const teamSelector =
-        "table.d3hddp-2.jyUxWY > tbody > tr > td:nth-child(2) > a";
-  
-      const links = await page.$$(teamSelector);
+      const teamXpath = "/html/body/div/section/main/div/div/div[1]/section/section/div/div/div/div/div[1]/table/tbody/tr/td[2]/a";
+      
+      const links = await page.$x(teamXpath);
       const teams = [];
   
       for (const link of links) {
-        const href = await page.evaluate(el => el.getAttribute('href'), link);
+        const href = await link.evaluate(el => el.getAttribute('href'));
         const teamID = href.split("/").pop();
         console.log(href)
         const splitUrl = href.split('/');
@@ -76,7 +75,7 @@ class GetTeamsFromLadder extends BaseController {
         //console.log("CLUB :: response");
         //console.log(response[0].id);
         
-        const teamName = await page.evaluate(el => el.innerText.trim(), link);
+        const teamName = await link.evaluate(el => el.innerText.trim());
   
         let teamObj = {
           teamName: teamName,
@@ -97,6 +96,7 @@ class GetTeamsFromLadder extends BaseController {
       throw err;
     }
   }
+  
 
 
   async LoopURLS() {

@@ -1,5 +1,3 @@
-
-
 const { dataCenterClubs } = require("./api/DataCenter/evaluateClubs");
 const {
   dataCenterAssociations,
@@ -14,6 +12,7 @@ const getGameData = require("./api/ScrapeCenter/getGameData");
 const assignGameData = require("./api/AssignCenter/assignGameData");
 
 const BaseController = require("./common/BaseController");
+
 function trackMemoryUsage(interval = 20000) {
   let peakMemoryUsage = 0;
 
@@ -42,8 +41,8 @@ class DataController extends BaseController {
 
   async fetchAndUpdateData() {
     let hasError = false;
-    this.memoryTracker = trackMemoryUsage();  // Start memory tracking
-    const startTime = new Date();  // Start time
+    this.memoryTracker = trackMemoryUsage(); // Start memory tracking
+    const startTime = new Date(); // Start time
 
     let dataObj;
     let CollectionID;
@@ -57,30 +56,37 @@ class DataController extends BaseController {
       console.error(`Error initializing data: ${error}`);
       hasError = true;
     }
-    
+
     try {
+      console.log("processCompetitionsprocessCompetitionsprocessCompetitions");
       await this.processCompetitions(dataObj);
+
       dataObj = await this.dataCenter(this.strapiData);
+      console.log("processTeamsprocessTeamsprocessTeamsprocessTeams");
       await this.processTeams(dataObj);
+
       dataObj = await this.dataCenter(this.strapiData);
-      await this.processGameData(dataObj);
-    } catch (error) { 
+      console.log(
+        "processGameDataprocessGameDataprocessGameDataprocessGameData"
+      );
+      await this.processGameData(dataObj); 
+    } catch (error) {
       console.error(`Error processing data: ${error}`);
       hasError = true;
     }
 
-    clearInterval(this.memoryTracker.intervalId);  // Stop memory tracking
+    clearInterval(this.memoryTracker.intervalId); // Stop memory tracking
     const peakMemoryUsage = this.memoryTracker.getPeakUsage();
-    const endTime = new Date();  // End time
-    const timeTaken = endTime - startTime;  // Time taken in milliseconds
+    const endTime = new Date(); // End time
+    const timeTaken = endTime - startTime; // Time taken in milliseconds
     console.log(`Time taken: ${timeTaken / 1000} seconds`);
 
     try {
-      console.log("Update Datacollection")
+      console.log("Update Datacollection");
       await this.initUpdateDataCollection(CollectionID, {
         TimeTaken: timeTaken / 1000,
         MemoryUsage: peakMemoryUsage,
-        hasError: hasError
+        hasError: hasError,
       });
     } catch (error) {
       console.error(`Error updating data collection: ${error}`);
@@ -88,12 +94,12 @@ class DataController extends BaseController {
     }
   }
 
-
   async processCompetitions(dataObj) {
     const getCompetitionsObj = new GetCompetitions(
       dataObj.TYPEOBJ.TYPEURL,
       dataObj.ACCOUNT
     );
+
     const scrapedCompetitions = await getCompetitionsObj.setup();
     const assignScrapedCompetitions = new AssignCompetitions(
       scrapedCompetitions,
@@ -116,6 +122,8 @@ class DataController extends BaseController {
     await assignGameDataObj.setup(filteredArray);
   }
 }
+
+// Init Controller
 
 async function Controller_Club(FromSTRAPI) {
   try {

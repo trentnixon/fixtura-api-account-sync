@@ -88,7 +88,7 @@ class getTeamsGameData extends BaseController {
     for (let index = 0; index < matchList.length; index++) {
       try {
         const matchElement = matchList[index];
-
+ 
         // Bye condition
         const byeSelector = await matchElement.$(".sc-jrsJCI.gcJhbP");
         if (byeSelector) {

@@ -30,11 +30,11 @@ class GetCompetitions extends BaseController {
     }
   }
 
-  async ProcessComps() {
+  async ProcessComps() { 
     
     if (await this.testClassSetup()) return false;
 
-    const page = await this.browser.newPage();
+    const page = await this.browser.newPage(); 
 
     page.on("console", (msg) => {
       console.log("PAGE LOG:", msg.text());
@@ -94,16 +94,23 @@ class GetCompetitions extends BaseController {
     try {
       logger.info(`Checking this Competition ${url}`);
       await page.goto(url);
-      document.querySelectorAll('[data-testid^="season-org-"]')
+      
+      // Use page.evaluate to access the document object in the browser context.
+      await page.evaluate(() => {
+        return document.querySelectorAll('[data-testid^="season-org-"]');
+      });
+  
       await page.screenshot({ path: "getCompetitions.png", fullPage: true });
-
+  
       const competitions = await this.extractCompetitionsData(page);
+  
       return competitions;
     } catch (error) {
       logger.error(`Error in fetchCompetitions method: ${error}`);
       throw error;
     }
   }
+  
 
   async extractCompetitionsData(page) {
     return await page.evaluate(() => {
@@ -150,9 +157,9 @@ class GetCompetitions extends BaseController {
     console.log("this.ACCOUNTID", this.ACCOUNTID)
     try {
       await this.initDependencies(this.ACCOUNTID); // Call the initDependencies method from the BaseController
-      const result = await this.ProcessComps();
+      const result = await this.ProcessComps(); 
       return result;
-    } catch (err) {
+    } catch (err) { 
       logger.error("Error during setup:", err);
 
       await this.dependencies.changeisUpdating(this.ACCOUNTID, false);

@@ -22,7 +22,7 @@ async function startTaskRunner() {
     if (getSync.continue === true) {
       // Start tracking memory usage
       getSync.PATH === "CLUB"
-        ? await Controller_Club(getSync)
+        ? await Controller_Club(getSync) 
         : await Controller_Associations(getSync);
       console.log("Task successfully executed");
     } else {
