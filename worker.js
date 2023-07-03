@@ -12,6 +12,8 @@ Lets Refactor the following class, function, or component, adhere to SOLID princ
 cron.schedule("*/3 * * * *", async () => {
   // need to run a call to STRAPI to find an ID to run
   startTaskRunner();
+}, {
+  timezone: "Australia/Sydney"
 });
  
 async function startTaskRunner() {  
