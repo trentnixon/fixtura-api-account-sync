@@ -197,8 +197,8 @@ class getTeamsGameData extends BaseController {
           const GAMEDATA = await this.ProcessGame(matchList, grade);
 
           const validMatches = GAMEDATA.filter((match) => match !== null);
-          console.log("validMatches");
-          console.log(validMatches);
+         /*  console.log("validMatches");
+          console.log(validMatches); */
 
           StoreGames.push(...validMatches);
           teamIndex++;
