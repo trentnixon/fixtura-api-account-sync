@@ -1,3 +1,4 @@
+const logger = require("../Utils/logger");
 const { getAssociationObj, getDetailedAssociationDetails } = require("./utils");
 
 async function dataCenterAssociations(fromStrapi) {
@@ -18,6 +19,12 @@ async function dataCenterAssociations(fromStrapi) {
     };
   } catch(error) {
     console.error(error);
+    
+    logger.critical("An error occurred in dataCenterAssociations", {
+      file: "evaluateAssociations.js",
+      function: "dataCenterAssociations",
+      error: error,
+    });
   }
 }
 

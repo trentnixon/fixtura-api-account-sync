@@ -164,7 +164,17 @@ class getTeamsGameData extends BaseController {
           `Error processing match  (Index ${index}) in ProcessGame:`,
           error
         );
+        logger.critical("An error occurred in ProcessGame", {
+          file: "getGameData.js",
+          function: "ProcessGame",
+          error: error,
+        });
       }
+      logger.critical("An error occurred in ProcessGame", {
+        file: "getGameData.js",
+        function: "ProcessGame",
+        error: error,
+      });
     }
     return teamMatches.filter((match) => match !== null);
   }
@@ -207,12 +217,22 @@ class getTeamsGameData extends BaseController {
             `Error processing team ${teamName} on getGameData.js in the ScrapeCenter Folder`,
             error
           );
+          logger.critical("An error occurred in LoopGames", {
+            file: "getGameData.js",
+            function: "LoopGames",
+            error: err,
+          });
           teamIndex++;
         }
       }
       return StoreGames;
     } catch (error) {
       logger.error(`Error getting team game data:`, error);
+      logger.critical("An error occurred in LoopGames", {
+        file: "getGameData.js",
+        function: "LoopGames",
+        error: error,
+      });
     } finally {
       logger.info(`CLASS GetCompetitions: Page Closed!!`);
       await page.close();
@@ -232,8 +252,18 @@ class getTeamsGameData extends BaseController {
       return filteredArray;
     } catch (err) {
       logger.error("Error during setup:", err);
+      logger.critical("An error occurred in setup", {
+        file: "getGameData.js",
+        function: "setup",
+        error: err,
+      });
       await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
       logger.info("Set Account to False| ERROR ");
+      logger.critical("An error occurred in setup", {
+        file: "getGameData.js",
+        function: "setup",
+        error: error,
+      });
     } finally {
       await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
       logger.info("Set Account to False| Finally ");

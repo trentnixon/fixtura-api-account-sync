@@ -38,6 +38,11 @@ class GetTeamsFromLadder extends BaseController {
       return teamData;
     } catch (err) {
       logger.error(`Error processing competition URL: ${url}`, error);
+      logger.critical("An error occurred in setup", {
+        file: "getTeamsFromLadder.js",
+        function: "setup",
+        error: err,
+      });
     } finally {
       logger.warn(`Func processCompetition: Page Closed!!`);
       await page.close();
@@ -93,6 +98,11 @@ class GetTeamsFromLadder extends BaseController {
       return teams;
     } catch (err) {
       logger.error("Error occurred while getting team names and URLs:", err);
+      logger.critical("An error occurred in setup", {
+        file: "getTeamsFromLadder.js",
+        function: "setup",
+        error: err,
+      });
       throw err;
     }
   }
@@ -111,6 +121,11 @@ class GetTeamsFromLadder extends BaseController {
       return allTeamData;
     } catch (error) {
       logger.error(`Error getting teams:`, error);
+      logger.critical("An error occurred in setup", {
+        file: "getTeamsFromLadder.js",
+        function: "setup",
+        error: error,
+      });
       //throw error;
     }
   }
@@ -123,7 +138,11 @@ class GetTeamsFromLadder extends BaseController {
       return result;
     } catch (err) {
       logger.error("Error during setup:", err);
-
+      logger.critical("An error occurred in setup", {
+        file: "getTeamsFromLadder.js",
+        function: "setup",
+        error: err,
+      });
       await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
       logger.info("Set Account to False| ERROR ");
       /* await this.dependencies.createDataCollection(this.ACCOUNTID, {

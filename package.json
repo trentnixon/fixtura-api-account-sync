@@ -21,7 +21,8 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "qs": "^6.11.0",
-    "winston": "^3.8.2"
+    "winston": "^3.8.2",
+    "winston-mail": "^2.0.0"
   },
   "devDependencies": {
     "jest": "^29.5.0",

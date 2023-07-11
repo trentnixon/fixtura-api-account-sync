@@ -34,7 +34,11 @@ async function fetcher(PATH, method = "GET", body = {}, retry = true) {
   } catch (error) {
     logger.error(`Error in fetcher: ${error}`);
     console.log(error)
-
+    logger.critical("An error occurred in fetcher", {
+      file: "fecther.js",
+      function: "fetcher",
+      error: error,
+    });
     if (retry) {
       logger.info("Retrying fetcher in 2 seconds...");
       await new Promise((resolve) => setTimeout(resolve, 2000));

@@ -58,6 +58,11 @@ class getFixtureResults {
         `Error getting team game data: teamIndex : ${teamIndex}`,
         error
       );
+      logger.critical("An error occurred in setup", {
+        file: "getFixtureResults.js",
+        function: "setup",
+        error: err,
+      });
     }  finally {
       const disposeResult = await this.dispose();
       //console.log(disposeResult)
@@ -77,6 +82,11 @@ class getFixtureResults {
       return result;
     } catch (error) {
       logger.error("Error in getFixtureScorecard:", error);
+      logger.critical("An error occurred in getFixtureScorecard", {
+        file: "getFixtureResults.js",
+        function: "getFixtureScorecard",
+        error: err,
+      });
       return {};
     } finally {
       await page.close();
@@ -175,6 +185,11 @@ class getFixtureResults {
       return details;
     } catch (error) {
       console.error("Error in getGameDetails:", error);
+      logger.critical("An error occurred in getGameDetails", {
+        file: "getFixtureResults.js",
+        function: "getGameDetails",
+        error: err,
+      });
       return {};
     }
   }

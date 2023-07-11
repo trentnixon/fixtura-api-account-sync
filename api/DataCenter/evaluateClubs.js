@@ -14,6 +14,11 @@ async function dataCenterClubs(fromStrapi) {
     };
   } catch(error) {
     console.error(error);
+    logger.critical("An error occurred in dataCenterClubs", {
+      file: "evaluateClubs.js",
+      function: "dataCenterClubs",
+      error: error,
+    });
   }
 } 
 

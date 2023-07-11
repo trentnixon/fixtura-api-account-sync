@@ -103,6 +103,11 @@ class AssignCompetitionsToAssociation {
       return response;
     } catch (error) {
       logger.error(`Error checking for competition ${competitionName}:`, error);
+      logger.critical("An error occurred in checkIfCompetitionExists", {
+        file: "assignClubToCompetition.js",
+        function: "checkIfCompetitionExists",
+        error: error,
+      });
       return false;
     }
   }
@@ -120,6 +125,11 @@ class AssignCompetitionsToAssociation {
         `Error checking club-to-competitions ${competition.competitionName}:`,
         error
       );
+      logger.critical("An error occurred in checkIfClubToCompIsAlreadyStored", {
+        file: "assignClubToCompetition.js",
+        function: "checkIfClubToCompIsAlreadyStored",
+        error: error,
+      });
       return false;
     }
   }

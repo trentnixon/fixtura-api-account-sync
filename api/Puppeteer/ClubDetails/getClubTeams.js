@@ -30,6 +30,11 @@ class TeamProcessor {
           : null;
       } catch (error) { 
         logger.warn("Element .sc-crzoUp.lebimc.button not found. Proceeding without it.");
+        logger.critical("An error occurred in processTeam", {
+          file: "getClubTeams.js",
+          function: "processTeam",
+          error: error,
+        });
         // Add a return statement or handle the error appropriately
         // return null; // Uncomment this line if you want to stop processing this team
       }
@@ -55,6 +60,11 @@ class TeamProcessor {
       }
     } catch (error) {
       logger.error(`Error processing team: ${competition.data.attributes.url}`, error);
+      logger.critical("An error occurred in processTeam", {
+        file: "getClubTeams.js",
+        function: "processTeam",
+        error: error,
+      });
       return null;
     }
   }
@@ -96,6 +106,11 @@ class GetClubTeams {
       return competitionTeams.filter((team) => team !== null);
     } catch (error) {
       logger.error(`Error processing competition URL: ${competitionUrl}`, error);
+      logger.critical("An error occurred in processCompetition", {
+        file: "getClubTeams.js",
+        function: "processCompetition",
+        error: error,
+      });
       throw error;
     }
   }
@@ -116,6 +131,11 @@ class GetClubTeams {
       return teams;
     } catch (error) {
       logger.error(`Error getting teams:`, error);
+      logger.critical("An error occurred in setup", {
+        file: "getClubTeams.js",
+        function: "setup",
+        error: error,
+      });
       //throw error;
     } finally {
       logger.error(`CLASS GetClubTeams: Page Closed!!`);

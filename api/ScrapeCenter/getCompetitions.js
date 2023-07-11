@@ -55,6 +55,11 @@ class GetCompetitions extends BaseController {
       return competitions;
     } catch (error) {
       logger.error(`Error in setup method of GetCompetitions in Folder ScrapCenter : ${error}`);
+      logger.critical("An error occurred in ProcessComps", {
+        file: "getCompetitions.js",
+        function: "ProcessComps",
+        error: err,
+      });
       throw error;
     } finally {
       logger.info(`CLASS GetCompetitions: Page Closed!!`);
@@ -107,6 +112,11 @@ class GetCompetitions extends BaseController {
       return competitions;
     } catch (error) {
       logger.error(`Error in fetchCompetitions method: ${error}`);
+      logger.critical("An error occurred in fetchCompetitionsInClubs", {
+        file: "getCompetitions.js",
+        function: "fetchCompetitionsInClubs",
+        error: err,
+      });
       throw error;
     }
   }
@@ -161,7 +171,11 @@ class GetCompetitions extends BaseController {
       return result;
     } catch (err) { 
       logger.error("Error during setup:", err);
-
+      logger.critical("An error occurred in setup", {
+        file: "getCompetitions.js",
+        function: "setup",
+        error: err,
+      });
       await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
       logger.info("Set Account to False| ERROR ");
       /* await this.dependencies.createDataCollection(this.ACCOUNTID, {

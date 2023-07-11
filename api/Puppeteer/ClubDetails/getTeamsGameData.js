@@ -62,6 +62,11 @@ class getTeamsGameData {
       return gradeObj?.ID !== undefined ? gradeObj.ID : false;
     } catch (error) {
       logger.error("Error getting grade ID:", error);
+      logger.critical("An error occurred in getGradeID", {
+        file: "getTeamsGameData.js",
+        function: "getGradeID",
+        error: error,
+      });
       throw error;
     }
   }
@@ -135,6 +140,11 @@ class getTeamsGameData {
           logger.error(
             `Error processing match for team ${team.teamName} (Index ${index}):`
           );
+          logger.critical("An error occurred in ProcessGame", {
+            file: "getTeamsGameData.js",
+            function: "ProcessGame",
+            error: error,
+          });
           logger.error(error);
           return null;
         }
@@ -197,6 +207,11 @@ class getTeamsGameData {
       return true;
     } catch (error) { 
       logger.error("Error setting up getTeamsGameData:", error);
+      logger.critical("An error occurred in Setup", {
+        file: "getTeamsGameData.js",
+        function: "Setup",
+        error: error,
+      });
       throw error;
     } finally {
       logger.info(`CLASS getTeamsGameData: Page Closed!!`);
@@ -222,6 +237,11 @@ const ScrapeLeagueName = async (page) => {
     return leagueName;
   } catch (error) {
     console.error("Error scraping league name:", error);
+    logger.critical("An error occurred in ScrapeLeagueName", {
+      file: "getTeamsGameData.js",
+      function: "ScrapeLeagueName",
+      error: error,
+    });
     return false; // Return false when the element is not found
   }
 };
@@ -241,6 +261,11 @@ const Find_Item = async (matchElement, SELECTOR) => {
     }
   } catch (error) {
     logger.error("Error finding item:", error);
+    logger.critical("An error occurred in Find_Item", {
+      file: "getTeamsGameData.js",
+      function: "Find_Item",
+      error: error,
+    });
     return false;
   }
 };
@@ -261,6 +286,11 @@ const ScrapeGameURL = async (matchElement, SELECTOR) => {
     return url;
   } catch (error) {
     logger.error(error);
+    logger.critical("An error occurred in ScrapeGameURL", {
+      file: "getTeamsGameData.js",
+      function: "ScrapeGameURL",
+      error: error,
+    });
     return false;
   }
 };
@@ -278,6 +308,11 @@ const ScrapeTeams = async (matchElement, SELECTOR) => {
     return teams;
   } catch (error) {
     logger.error("Error scraping teams:", error);
+    logger.critical("An error occurred in ScrapeTeams", {
+      file: "getTeamsGameData.js",
+      function: "ScrapeTeams",
+      error: error,
+    });
     return [];
   }
 };

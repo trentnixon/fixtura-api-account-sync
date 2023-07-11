@@ -63,6 +63,11 @@ class assignCompetitionsToAssociation {
       return response.length > 0 ? response : false;
     } catch (error) {
       logger.error(`Error checking for competition ${competitionId}:`, error);
+      logger.critical("An error occurred in checkIfCompetitionExists", {
+        file: "assignCompetitionToAssociation.js",
+        function: "checkIfCompetitionExists",
+        error: error,
+      });
       return false;
     }
   }

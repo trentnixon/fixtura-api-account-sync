@@ -31,6 +31,11 @@ class getCompetitions {
       return competitions;
     } catch (error) {
       logger.error(`Error fetching competitions for Association ${this.url}:`, error);
+      logger.critical("An error occurred in getCompetitions", {
+        file: "getCompetitions.js",
+        function: "getCompetitions",
+        error: error,
+      });
       return false;
     } finally {
       await page.close();

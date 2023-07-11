@@ -28,6 +28,11 @@ async function fetcher(domain, PATH, method = "GET", body = {}) {
   } catch (error) {
     console.log('Fetcher Error : ')
     console.error(error);
+    logger.critical("An error occurred in fetcher", {
+      file: "fectherv2.js",
+      function: "fetcher",
+      error: error,
+    });
   }
 }
 

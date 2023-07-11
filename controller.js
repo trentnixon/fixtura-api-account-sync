@@ -12,6 +12,7 @@ const getGameData = require("./api/ScrapeCenter/getGameData");
 const assignGameData = require("./api/AssignCenter/assignGameData");
 
 const BaseController = require("./common/BaseController");
+const logger = require("./api/Utils/logger");
 
 function trackMemoryUsage(interval = 20000) {
   let peakMemoryUsage = 0;
@@ -55,24 +56,30 @@ class DataController extends BaseController {
     } catch (error) {
       console.error(`Error initializing data: ${error}`);
       hasError = true;
+      
+      logger.critical("An error occurred in fetchAndUpdateData", {
+        file: "controller.js",
+        function: "fetchAndUpdateData",
+        error: error,
+      });
     }
 
     try {
-      console.log("processCompetitionsprocessCompetitionsprocessCompetitions");
+   
       await this.processCompetitions(dataObj);
-
       dataObj = await this.dataCenter(this.strapiData);
-      console.log("processTeamsprocessTeamsprocessTeamsprocessTeams");
       await this.processTeams(dataObj);
-
       dataObj = await this.dataCenter(this.strapiData);
-      console.log(
-        "processGameDataprocessGameDataprocessGameDataprocessGameData"
-      );
+  
       await this.processGameData(dataObj); 
     } catch (error) {
       console.error(`Error processing data: ${error}`);
       hasError = true;
+      logger.critical("An error occurred in fetchAndUpdateData", {
+        file: "controller.js",
+        function: "fetchAndUpdateData",
+        error: error,
+      });
     }
 
     clearInterval(this.memoryTracker.intervalId); // Stop memory tracking
@@ -91,6 +98,11 @@ class DataController extends BaseController {
     } catch (error) {
       console.error(`Error updating data collection: ${error}`);
       // If an error happens while updating the data collection, you might want to handle it differently.
+      logger.critical("An error occurred in fetchAndUpdateData", {
+        file: "controller.js",
+        function: "fetchAndUpdateData",
+        error: error,
+      });
     }
   }
 
@@ -132,7 +144,12 @@ async function Controller_Club(FromSTRAPI) {
     return { Complete: true };
   } catch (error) {
     console.error(`Error getting Club Details: ${error}`);
-    throw error;
+    //throw error;
+    logger.critical("An error occurred in Controller_Club", {
+      file: "controller.js",
+      function: "Controller_Club",
+      error: error,
+    });
   }
 }
 
@@ -146,7 +163,12 @@ async function Controller_Associations(FromSTRAPI) {
     return { Complete: true };
   } catch (error) {
     console.error(`Error getting Association Details: ${error}`);
-    throw error;
+    //throw error;
+    logger.critical("An error occurred in Controller_Associations", {
+      file: "controller.js",
+      function: "Controller_Associations",
+      error: error,
+    });
   }
 }
 

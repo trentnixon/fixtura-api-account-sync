@@ -13,6 +13,7 @@ const AssignTeamsToCompsAndGrades = require("./api/AssignCenter/AssignTeamsToCom
 
 const getGameData = require("./api/ScrapeCenter/getGameData");
 const assignGameData = require("./api/AssignCenter/assignGameData");
+const logger = require("./api/Utils/logger");
 /*
   Notes for next time:
  
@@ -41,6 +42,12 @@ async function Controller_Club(FromSTRAPI) {
   } catch (error) {
     //clearInterval(intervalId);
     console.error(`Error getting Club Details: ${error}`);
+
+    logger.critical("An error occurred in Controller_Club", {
+      file: "updateTask.js",
+      function: "Controller_Club",
+      error: error,
+    });
     throw error;
   }
 }
@@ -56,7 +63,7 @@ async function Controller_Associations(FromSTRAPI) {
     // Step 3 Get Detailed Account data from Strapi
     DATAOBJ = await dataCenterAssociations(FromSTRAPI);
     //console.log(DATAOBJ);
-    await Master_ScrapeTeams(DATAOBJ); 
+    await Master_ScrapeTeams(DATAOBJ);
     //  console.log(TEAMLIST)
     DATAOBJ = await dataCenterAssociations(FromSTRAPI);
     await Master_ScrapeGameData(DATAOBJ);
@@ -69,6 +76,11 @@ async function Controller_Associations(FromSTRAPI) {
   } catch (error) {
     //clearInterval(intervalId);
     console.error(`Error getting Association Details: ${error}`);
+    logger.critical("An error occurred in Controller_Associations", {
+      file: "updateTask.js",
+      function: "Controller_Associations",
+      error: error,
+    });
     throw error;
   }
 }
@@ -86,7 +98,7 @@ async function Master_ScrapeCompetitions(DATAOBJ) {
   );
   const ScrapedCompetitions = await getCompetitionsObj.setup();
   //Step 2 - Assign the Comps to the Account Type
-  console.log(ScrapedCompetitions);
+  //console.log(ScrapedCompetitions);
   const assignScrapedCompetitions = new AssignCompetitions(
     ScrapedCompetitions,
     DATAOBJ
@@ -102,8 +114,6 @@ async function Master_ScrapeTeams(DATAOBJ) {
   const assignTeam = new AssignTeamsToCompsAndGrades();
   await assignTeam.setup(teamList);
 }
-
-
 
 async function Master_ScrapeGameData(DATAOBJ) {
   const scrapeGameData = new getGameData(DATAOBJ.ACCOUNT, DATAOBJ.TEAMS);
@@ -128,7 +138,6 @@ function trackMemoryUsage(interval = 20000) {
 
   return intervalId;
 }
-
 
 /*
 // Club

@@ -25,6 +25,11 @@ class GetTeams {
       return allTeamData;
     } catch (err) {
       logger.error("Error occurred while processing team data:", err);
+      logger.critical("An error occurred in getTeamNamesAndUrls", {
+        file: "getTeams.js",
+        function: "getTeamNamesAndUrls",
+        error: err,
+      });
       throw err;
     } finally {
       await this.dispose();
@@ -68,6 +73,11 @@ class GetTeams {
       return teams;
     } catch (err) {
       logger.error("Error occurred while getting team names and URLs:", err);
+      logger.critical("An error occurred in getTeamNamesAndUrls", {
+        file: "getTeams.js",
+        function: "getTeamNamesAndUrls",
+        error: err,
+      });
       throw err;
     }
   }

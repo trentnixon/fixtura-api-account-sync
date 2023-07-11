@@ -34,6 +34,11 @@ class GetCompetitions {
       logger.error(
         `Error in setup method of GetCompetitions in Folder Club Details: ${error}`
       );
+      logger.critical("An error occurred in setup", {
+        file: "getCompetitions.js",
+        function: "setup",
+        error: error,
+      });
       throw error;
     } finally {
       logger.info(`CLASS GetCompetitions: Page Closed!!`);
@@ -54,6 +59,11 @@ class GetCompetitions {
       return competitions;
     } catch (error) {
       logger.error(`Error in fetchCompetitions method: ${error}`);
+      logger.critical("An error occurred in fetchCompetitions", {
+        file: "getCompetitions.js",
+        function: "fetchCompetitions",
+        error: error,
+      });
       throw error;
     }
   }

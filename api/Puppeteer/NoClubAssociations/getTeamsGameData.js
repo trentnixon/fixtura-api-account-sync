@@ -117,6 +117,11 @@ class getTeamsGameData {
         logger.error(
           `Error processing match for team ${team.teamName} (Index ${teamMatches.length}):`
         );
+        logger.critical("An error occurred in ProcessGame", {
+          file: "getTeamsGameData.js",
+          function: "ProcessGame",
+          error: err,
+        });
         logger.error(error);
         teamMatches.push(null);
       }
@@ -166,7 +171,6 @@ class getTeamsGameData {
 
         let validMatches = GAMEDATA.filter((match) => match !== null);
 
- 
         // Clear the accumulated data
         validMatches = null;
         GAMEDATA = null;
@@ -176,63 +180,69 @@ class getTeamsGameData {
       return true;
     } catch (error) {
       logger.error("Error getting team game data:", error);
+      logger.critical("An error occurred in LoopTeams", {
+        file: "getTeamsGameData.js",
+        function: "LoopTeams",
+        error: err,
+      });
       throw error;
     }
   }
-  
+
   /// THIS NEEDS WORK IT IS TO SLOW
   // FIND A QUICKER WAY/ALT
   async *processTeamMatches() {
     for (const { id, attributes: team } of this.TEAMS) {
       logger.info(`Processing team ${team.teamName}...`);
       logger.info(`on playHQ URL ${team.href}`);
-  
+
       // Navigate to team page
       await this.page.goto(`https://www.playhq.com${team.href}`);
-  
+
       // Wait for the match list to be rendered
       await this.page.waitForSelector(
         ".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY,.sc-bqGHjH.sc-dlMBXb.blmUXq.jAJvWi"
       );
       await this.page.waitForTimeout(1000);
-  
+
       const gradeIdSelector = "a.sc-crzoUp.lebimc.button";
       const gradeId = await this.page.$eval(gradeIdSelector, (element) => {
         const href = element.getAttribute("href");
         return href.split("/").pop();
       });
-  
+
       let gradeIdFromPage = this.findGradeId(team.grades.data, gradeId);
       // Get the match list
       let matchList = await this.page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
-  
+
       // Process the games on the page
-      let GAMEDATA = await this.ProcessGame(
-        matchList,
-        team,
-        gradeIdFromPage
-      );
-  
+      let GAMEDATA = await this.ProcessGame(matchList, team, gradeIdFromPage);
+
       yield GAMEDATA;
     }
   }
-  
-async setup() {
-  try { 
-    this.page = await this.browser.newPage();
 
-    const uploader = new assignTeamToGameData();
-    for await (const teamMatches of this.processTeamMatches()) {
-      const validMatches = teamMatches.filter((match) => match !== null);
-      await uploader.setup(validMatches);
+  async setup() {
+    try {
+      this.page = await this.browser.newPage();
+
+      const uploader = new assignTeamToGameData();
+      for await (const teamMatches of this.processTeamMatches()) {
+        const validMatches = teamMatches.filter((match) => match !== null);
+        await uploader.setup(validMatches);
+      }
+
+      return true;
+    } catch (err) {
+      logger.error("Error setting up getTeamsGameData:", err);
+      logger.critical("An error occurred in setup", {
+        file: "getTeamsGameData.js",
+        function: "setup",
+        error: err,
+      });
+      throw err;
     }
-
-    return true;
-  } catch (err) {
-    logger.error("Error setting up getTeamsGameData:", err);
-    throw err;
   }
-}
 
   async dispose() {
     if (this.page) {
@@ -256,6 +266,11 @@ const Find_Item = async (matchElement, SELECTOR) => {
   try {
     return await matchElement.$eval(SELECTOR, (el) => el.textContent.trim());
   } catch (error) {
+    logger.critical("An error occurred in Find_Item", {
+      file: "getTeamsGameData.js",
+      function: "Find_Item",
+      error: error,
+    });
     return false;
   }
 };
@@ -273,6 +288,11 @@ const ScrapeGameURL = async (matchElement, SELECTOR) => {
     return await matchElement.$eval(SELECTOR, (el) => el.getAttribute("href"));
   } catch (error) {
     logger.error(error);
+    logger.critical("An error occurred in ScrapeGameURL", {
+      file: "getTeamsGameData.js",
+      function: "ScrapeGameURL",
+      error: error,
+    });
     return false;
   }
 };

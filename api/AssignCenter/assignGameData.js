@@ -59,6 +59,12 @@ class assignGameData {
       return response.length === 0 ? false : response[0].id;
     } catch (error) {
       logger.error(`Error checking for competition ${gameID}:`, error);
+
+      logger.critical("An error occurred in checkIfGameExists", {
+        file: "assignGameData.js",
+        function: "checkIfGameExists",
+        error: error,
+      });
       return false;
     }
   }
@@ -83,6 +89,11 @@ class assignGameData {
         : [response[0].id, response[1].id];
     } catch (error) {
       logger.error(`Error checking teamIDs ${teamIDs}:`, error);
+      logger.critical("An error occurred in getTeamsIds", {
+        file: "assignGameData.js",
+        function: "getTeamsIds",
+        error: error,
+      });
       return [false, false];
     }
   }
@@ -93,6 +104,11 @@ class assignGameData {
       await fetcher("game-meta-datas", "POST", { data: game });
     } catch (error) {
       logger.error(`Error storing game ${game.gameID}:`, error);
+      logger.critical("An error occurred in storeGameData", {
+        file: "assignGameData.js",
+        function: "storeGameData",
+        error: error,
+      });
     }
   }
 
@@ -102,6 +118,11 @@ class assignGameData {
       await fetcher(`game-meta-datas/${gameId}`, "PUT", { data: game });
     } catch (error) {
       logger.error(`Error updating game ${game.gameID}:`, error);
+      logger.critical("An error occurred in updateGameData", {
+        file: "assignGameData.js",
+        function: "updateGameData",
+        error: error,
+      });
     }
   }
 }

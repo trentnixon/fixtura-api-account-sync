@@ -71,6 +71,11 @@ class GetAssociationLadder {
       return true;
     } catch (err) {
       logger.error("Error in setup:", err);
+      logger.critical("An error occurred in setup", {
+        file: "getAssoicationLadder.js",
+        function: "setup",
+        error: err,
+      });
     } finally {
       await page.close();
     }
@@ -122,6 +127,11 @@ class GetAssociationLadder {
       return teams;
     } catch (error) {
       logger.error("Error scraping ladder data:", error);
+      logger.critical("An error occurred in scrapeLadderData", {
+        file: "getAssoicationLadder.js",
+        function: "scrapeLadderData",
+        error: error,
+      });
       return [];
     }
   }

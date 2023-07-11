@@ -27,6 +27,11 @@ class AssignTeamsToCompsAndGrades {
         }
       } catch (error) {
         logger.error(`Error processing team ${team.teamName}:`, error);
+        logger.critical("An error occurred in AssignTeamsToCompsAndGrades", {
+          file: "AssignTeamsToCompsAndGrades.js",
+          function: "AssignTeamsToCompsAndGrades",
+          error: error,
+        });
         allSucceeded = false;
       }
     }
@@ -59,6 +64,11 @@ class AssignTeamsToCompsAndGrades {
       return response;
     } catch (error) {
       logger.error(`Error checking for Team ${team.teamName}:`, error);
+      logger.critical("An error occurred in checkIfTeamExists", {
+        file: "AssignTeamsToCompsAndGrades.js",
+        function: "checkIfTeamExists",
+        error: error,
+      });
       throw error;
     }
   }
@@ -69,6 +79,11 @@ class AssignTeamsToCompsAndGrades {
       return { success: true };
     } catch (error) {
       logger.error(`Error storing team:`, error);
+      logger.critical("An error occurred in createTeam", {
+        file: "AssignTeamsToCompsAndGrades.js",
+        function: "createTeam",
+        error: error,
+      });
       return { success: false };
     }
   }
@@ -79,6 +94,11 @@ class AssignTeamsToCompsAndGrades {
       return { success: true };
     } catch (error) {
       logger.error(`Error updating team:`, error);
+      logger.critical("An error occurred in updateTeam", {
+        file: "AssignTeamsToCompsAndGrades.js",
+        function: "updateTeam",
+        error: error,
+      });
       return { success: false };
     }
   }

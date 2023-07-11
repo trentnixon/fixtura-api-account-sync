@@ -86,6 +86,11 @@ class getAssociationCompetitions {
             `Error processing association ${association.attributes.Name}:`,
             error
           );
+          logger.critical("An error occurred in getAssoiactionCompetition", {
+            file: "getAssoiactionCompetition.js",
+            function: "getAssoiactionCompetition",
+            error: error,
+          });
           continue;
         }
       }

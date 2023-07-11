@@ -1,5 +1,6 @@
 const fetch = require("node-fetch");
 const dotenv = require("dotenv");
+const logger = require("./logger");
 dotenv.config();
 
 async function fetcher(domain, PATH, method = "GET", body = {}) {
@@ -27,6 +28,12 @@ async function fetcher(domain, PATH, method = "GET", body = {}) {
     return res.data;
   } catch (error) {
     console.log('Fetcher Error : ')
+    
+    logger.critical("An error occurred in fetcher", {
+      file: "APIFetcher.js",
+      function: "fetcher",
+      error: error,
+    });
     console.error(error);
   }
 }

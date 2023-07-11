@@ -1,6 +1,7 @@
 const cron = require("node-cron");
 const { Controller_Club, Controller_Associations } = require("./controller");
 const fetcher = require("./api/Utils/fetcher");
+const logger = require("./api/Utils/logger");
 
 /*
 AI PROMPT 
@@ -36,6 +37,11 @@ async function startTaskRunner() {
     }
   } catch (error) {
     console.error("Error executing the task:", error);
+    logger.critical("An error occurred on Init", {
+      file: "worker.js",
+      function: "startTaskRunner",
+      error: new Error("Oops!"),
+    });
   }
 }
-//startTaskRunner();
+startTaskRunner();

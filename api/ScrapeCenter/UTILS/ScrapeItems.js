@@ -15,6 +15,11 @@ const Find_Item = async (matchElement, SELECTOR) => {
     }
   } catch (error) {
     logger.error("Error finding item:", SELECTOR, error);
+    logger.critical("An error occurred in Find_Item", {
+      file: "ScrapeItems.js",
+      function: "Find_Item",
+      error: error,
+    });
     return false;
   }
 };
@@ -40,6 +45,11 @@ const Find_Item = async (matchElement, SELECTOR) => {
     } catch (error) {
       logger.error(`Error scraping game URL with selector ${SELECTOR}`);
       logger.error(error);
+      logger.critical("An error occurred in ScrapeTeams", {
+        file: "ScrapeItems.js",
+        function: "ScrapeTeams",
+        error: error,
+      });
       return null; // or any other default value
     }
   };
@@ -57,6 +67,11 @@ const Find_Item = async (matchElement, SELECTOR) => {
       return teams;
     } catch (error) {
       logger.error("Error scraping teams:", error);
+      logger.critical("An error occurred in ScrapeTeams", {
+        file: "ScrapeItems.js",
+        function: "ScrapeTeams",
+        error: error,
+      });
       return [];
     }
   };

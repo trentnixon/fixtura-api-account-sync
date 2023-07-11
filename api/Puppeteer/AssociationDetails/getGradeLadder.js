@@ -29,6 +29,11 @@ class getGradeLadders {
       return true;
     } catch (error) {
       logger.error("Error during setup:", error);
+      logger.critical("An error occurred in getGradeLadder", {
+        file: "getGradeLadder.js",
+        function: "getGradeLadder",
+        error: error,
+      });
       return false;
     }
   }
@@ -59,6 +64,11 @@ class getGradeLadders {
       return true;
     } catch (error) {
       logger.error("Error getting team game data:", error);
+      logger.critical("An error occurred in LoopTeams", {
+        file: "getGradeLadder.js",
+        function: "LoopTeams",
+        error: error,
+      });
       return false;
     }
   }
@@ -68,6 +78,11 @@ class getGradeLadders {
       return await fetcher(`grades/${ID}`, "PUT", { data: { ladder: Ladder } });
     } catch (error) {
       logger.error("Error putting new ladder:", error);
+      logger.critical("An error occurred in putNewLadder", {
+        file: "getGradeLadder.js",
+        function: "putNewLadder",
+        error: error,
+      });
       return false;
     }
   }
@@ -120,6 +135,11 @@ class getGradeLadders {
       console.log(error.message);
       console.log("Error stack trace:");
       console.log(error.stack);
+      logger.critical("An error occurred in ScrapeLadderData", {
+        file: "getGradeLadder.js",
+        function: "ScrapeLadderData",
+        error: error,
+      });
       return [];
     }
   }
