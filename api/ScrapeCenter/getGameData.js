@@ -170,11 +170,6 @@ class getTeamsGameData extends BaseController {
           error: error,
         });
       }
-      logger.critical("An error occurred in ProcessGame", {
-        file: "getGameData.js",
-        function: "ProcessGame",
-        error: error,
-      });
     }
     return teamMatches.filter((match) => match !== null);
   }
@@ -220,7 +215,7 @@ class getTeamsGameData extends BaseController {
           logger.critical("An error occurred in LoopGames", {
             file: "getGameData.js",
             function: "LoopGames",
-            error: err,
+            error: error,
           });
           teamIndex++;
         }
@@ -259,11 +254,6 @@ class getTeamsGameData extends BaseController {
       });
       await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
       logger.info("Set Account to False| ERROR ");
-      logger.critical("An error occurred in setup", {
-        file: "getGameData.js",
-        function: "setup",
-        error: error,
-      });
     } finally {
       await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
       logger.info("Set Account to False| Finally ");
