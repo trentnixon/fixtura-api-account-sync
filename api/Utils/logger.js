@@ -51,7 +51,7 @@ const logger = createLogger({
         )
       ),
     }),
-    new Mail({
+    /* new Mail({
       level: "critical",
       to: "trentnixon@gmail.com",
       from: "accountScrape-error-notify@fixtura.com.au",
@@ -75,7 +75,7 @@ const logger = createLogger({
           error: ${info.error}
         `;
       },
-    }),
+    }), */
   ],
 });
 
