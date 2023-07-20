@@ -21,11 +21,22 @@ cron.schedule(
   }
 );
 
+cron.schedule(
+  "*/1 * * * *",
+  async () => {
+    // need to run a call to STRAPI to find an ID to run
+    accountInit();
+  },
+  {
+    timezone: "Australia/Sydney",
+  }
+);
+
 async function startTaskRunner() {
   try {
     const getSync = await fetcher("account/sync");
     //{ PATH: 'CLUB', ID: 1 }
-    console.log("getSync", getSync);
+    console.log("start TaskRunner Return Value", getSync);
     if (getSync.continue === true) {
       // Start tracking memory usage
       getSync.PATH === "CLUB"
@@ -44,4 +55,29 @@ async function startTaskRunner() {
     });
   }
 }
-startTaskRunner();
+//startTaskRunner();
+async function accountInit() {
+  try {
+    const getSync = await fetcher("account/AccountInit");
+    //{ PATH: 'CLUB', ID: 1 }
+    console.log("account Init Return Value", getSync.ID);
+    if (getSync.continue === true) {
+      // Start tracking memory usage
+      getSync.PATH === "CLUB"
+        ? await Controller_Club(getSync)
+        : await Controller_Associations(getSync);
+      console.log("Task successfully executed");
+
+      await fetcher(`accounts/${getSync.ID}`, "PUT",{data:{ isSetup: true }});
+    } else {
+      console.log("No Account to Update");
+    }
+  } catch (error) {
+    console.error("Error executing the task:", error);
+    logger.critical("An error occurred on Init", {
+      file: "worker.js",
+      function: "startTaskRunner",
+      error: new Error("Oops!"),
+    });
+  }
+}
