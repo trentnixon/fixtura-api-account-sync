@@ -55,7 +55,7 @@ async function startTaskRunner() {
     });
   }
 }
-//startTaskRunner();
+startTaskRunner();
 async function accountInit() {
   try {
     const getSync = await fetcher("account/AccountInit");
