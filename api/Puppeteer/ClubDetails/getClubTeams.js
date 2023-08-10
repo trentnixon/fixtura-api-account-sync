@@ -15,7 +15,7 @@ class TeamProcessor {
       const age = await teamElement.$eval("span:nth-child(4)", (el) => el.textContent);
       const hrefElement = await teamElement.$("a");
       const href = hrefElement ? await hrefElement.evaluate((el) => el.href) : null;
-      logger.warn(`"Processing Team" ${teamName}`);
+      logger.info(`"Processing Team" ${teamName}`);
       //console.log("the error is on this href", href)
       if (href) {
         const newPage = await this.browser.newPage();
@@ -29,7 +29,7 @@ class TeamProcessor {
           ? await gradeLinkElement.evaluate((el) => el.href)
           : null;
       } catch (error) { 
-        logger.warn("Element .sc-crzoUp.lebimc.button not found. Proceeding without it.");
+        logger.error("Element .sc-crzoUp.lebimc.button not found. Proceeding without it.");
         logger.critical("An error occurred in processTeam", {
           file: "getClubTeams.js",
           function: "processTeam",

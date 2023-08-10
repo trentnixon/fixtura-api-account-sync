@@ -44,7 +44,7 @@ class GetTeamsFromLadder extends BaseController {
         error: err,
       });
     } finally {
-      logger.warn(`Func processCompetition: Page Closed!!`);
+      logger.info(`Func processCompetition: Page Closed!!`);
       await page.close();
     }
   }

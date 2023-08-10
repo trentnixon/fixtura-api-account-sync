@@ -12,7 +12,7 @@ class assignGameData {
     for (const game of filteredArray) {
     
       if (!game.teamHomeID) {
-        logger.warn(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
+        logger.error(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
         continue;
       } 
 

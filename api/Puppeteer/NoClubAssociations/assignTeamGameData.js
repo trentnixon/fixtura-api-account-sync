@@ -12,7 +12,7 @@ class assignTeamToGameData {
  async setup(gameData) {
   for (const game of gameData) {
     if (!game.teamHomeID) {
-      logger.warn(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
+      logger.error(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
       continue;
     }
 
@@ -109,7 +109,7 @@ module.exports = assignTeamToGameData;
 /* async setup(gameData) {
     const promises = gameData.map(async (game) => {
       if (!game.teamHomeID) {
-        logger.warn(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
+        logger.error(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
         return;
       }
 

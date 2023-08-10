@@ -11,7 +11,7 @@ class assignCompetitionsToAssociation {
     // association handle comps asdsign
     for (const competition of competitions) {
       if (competition.competitionUrl === undefined) {
-        logger.warn("Undefined competition URL encountered");
+        logger.error("Undefined competition URL encountered");
         continue;
       }
 

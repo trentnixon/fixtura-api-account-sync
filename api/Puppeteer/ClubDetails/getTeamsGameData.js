@@ -256,7 +256,7 @@ const Find_Item = async (matchElement, SELECTOR) => {
       return item;
     } else {
       // Handle the case when the selector is not found
-      logger.warn(`Selector "${SELECTOR}" not found.`);
+      logger.error(`Selector "${SELECTOR}" not found.`);
       return false;
     }
   } catch (error) {

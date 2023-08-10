@@ -59,7 +59,7 @@ class AssignCompetitions {
 
     for (const competition of this.competitions) {
       if (competition.competitionUrl === undefined) {
-        logger.warn("Undefined competition URL encountered");
+        logger.error("Undefined competition URL encountered");
         continue;
       }
 

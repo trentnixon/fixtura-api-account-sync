@@ -10,7 +10,7 @@ const Find_Item = async (matchElement, SELECTOR) => {
       return item;
     } else {
       // Handle the case when the selector is not found
-      logger.warn(`Selector "${SELECTOR}" not found.`);
+      logger.error(`Selector "${SELECTOR}" not found.`);
       return false;
     }
   } catch (error) {
@@ -39,7 +39,7 @@ const Find_Item = async (matchElement, SELECTOR) => {
         const url = await urlElement.evaluate((el) => el.getAttribute("href"));
         return url;
       } else {
-        logger.warn(`No element found for selector ${SELECTOR}`);
+        logger.error(`No element found for selector ${SELECTOR}`);
         return null; // or any other default value
       }
     } catch (error) {

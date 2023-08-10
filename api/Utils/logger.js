@@ -1,6 +1,6 @@
 const winston = require("winston");
 const { createLogger, format, transports } = winston;
-const Mail = require("winston-mail").Mail;
+const SlackTransport = require('./SlackTransport');
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -9,12 +9,12 @@ const levels = {
   error: 1,
   warn: 2,
   info: 3,
-  verbose: 4,
+  verbose: 4, 
   debug: 5,
   silly: 6,
 };
 
-winston.addColors({
+winston.addColors({ 
   critical: "red",
   error: "red",
   warn: "yellow",
@@ -31,7 +31,7 @@ const logger = createLogger({
     format.timestamp({
       format: "YYYY-MM-DD HH:mm:ss",
     }),
-    format.errors({ stack: true }),
+    format.errors({ stack: true }), 
     format.json()
   ),
   transports: [
@@ -42,6 +42,16 @@ const logger = createLogger({
     new transports.File({
       filename: "combined.log",
     }),
+    new SlackTransport({
+      token: process.env.SlackToken,
+      channel: '#data-account-error',
+      level: 'error', // Only log 'error' level messages
+    }),
+    new SlackTransport({
+      token: process.env.SlackToken,
+      channel: '#data-account',
+      level: 'warn', // Only log 'error' level messages
+    }),
     new transports.Console({
       level: "debug",
       format: format.combine(
@@ -50,32 +60,7 @@ const logger = createLogger({
           (info) => `${info.timestamp} ${info.level}: ${info.message}`
         )
       ),
-    }),
-    /* new Mail({
-      level: "critical",
-      to: "trentnixon@gmail.com",
-      from: "accountScrape-error-notify@fixtura.com.au",
-      subject: "Fixtura Critical Error Occurred",
-      host: "smtp.sendgrid.net",
-      port: 587,
-      username: "apikey",
-      password: process.env.SENDGRID_API_KEY,
-      ssl: false,
-      formatter: (info) => {
-        return `
-          Time: ${info.timestamp}
-          Level: ${info.level}
-          Message: ${info.message}
-          
-          Additional Information!
-          Web Service: Account User Scrape.
-          Folder: ScrapeAccountSync
-          File:${info.file}
-          Function: ${info.function}
-          error: ${info.error}
-        `;
-      },
-    }), */
+    })
   ],
 });
 

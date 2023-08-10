@@ -24,7 +24,7 @@ class getCompetitions {
       const competitions = await this.fetchCompetitions(page, this.url);
 
       if (competitions.length === 0) {
-        logger.warn(`No competitions found for Association ${this.url}`);
+        logger.error(`No competitions found for Association ${this.url}`);
         return false;
       }
 
