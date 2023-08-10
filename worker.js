@@ -65,9 +65,10 @@ async function accountInit() {
   try {
     const getSync = await fetcher("account/AccountInit");
     //{ PATH: 'CLUB', ID: 1 }
-    console.log("account Init Return Value", getSync.ID);
-    logger.warn(`INIT accountInit Started ${getSync.ID} ...`);
+  
     if (getSync.continue === true) {
+      console.log("account Init Return Value", getSync.ID);
+      logger.warn(`INIT accountInit Started ${getSync.ID} ...`);
       // Start tracking memory usage
       getSync.PATH === "CLUB"
         ? await Controller_Club(getSync)
