@@ -59,7 +59,7 @@ async function startTaskRunner() {
     });
   }
 }
-//startTaskRunner();
+startTaskRunner();
 
 async function accountInit() {
   try {
@@ -76,7 +76,7 @@ async function accountInit() {
       console.log("Task successfully executed");
 
       await fetcher(`accounts/${getSync.ID}`, "PUT", {
-        data: { isSetup: true },
+        data: { isSetup: true }, 
       });
       logger.warn(` accountInit Completed ${getSync.ID} ...`);
     } else {
