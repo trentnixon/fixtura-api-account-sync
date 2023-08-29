@@ -59,7 +59,8 @@ async function startTaskRunner() {
     });
   }
 }
-startTaskRunner();
+
+//startTaskRunner();
 
 async function accountInit() {
   try {

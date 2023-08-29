@@ -50,7 +50,7 @@ class DataController extends BaseController {
     try {
       dataObj = await this.dataCenter(this.strapiData);
       CollectionID = await this.initCreateDataCollection(
-        dataObj.ACCOUNT.ACCOUNTID
+        dataObj.ACCOUNT.ACCOUNTID 
       );
       console.log("CollectionID", CollectionID);
     } catch (error) {
