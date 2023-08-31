@@ -14,6 +14,7 @@ cron.schedule(
   "*/3 * * * 3-7",
   async () => {
     // need to run a call to STRAPI to find an ID to run
+    console.log("Run Account Cron Checker")
     startTaskRunner();
   },
   {
@@ -60,7 +61,7 @@ async function startTaskRunner() {
   }
 }
 
-startTaskRunner();
+//startTaskRunner();
 
 async function accountInit() {
   try {
