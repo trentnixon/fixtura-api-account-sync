@@ -11,7 +11,7 @@ Lets Refactor the following class, function, or component, adhere to SOLID princ
 */
 // Schedule a task to run every 5 minutes
 cron.schedule(
-  "*/3 * * * 3-7",
+  "3 * * * 3,4,5,6,7",
   async () => {
     // need to run a call to STRAPI to find an ID to run
     console.log("Run Account Cron Checker")
