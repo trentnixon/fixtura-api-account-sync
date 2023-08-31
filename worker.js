@@ -11,7 +11,7 @@ Lets Refactor the following class, function, or component, adhere to SOLID princ
 */
 // Schedule a task to run every 5 minutes
 cron.schedule(
-  "3 * * * 3,4,5,6,7",
+  "*/3 * * * 3,4,5,6,7",
   async () => {
     // need to run a call to STRAPI to find an ID to run
     console.log("Run Account Cron Checker")
@@ -48,7 +48,7 @@ async function startTaskRunner() {
       console.log("Task successfully executed");
       logger.warn(`... startTaskRunner Completed ${getSync.ID}`);
     } else {
-      console.log("No Account to Update");
+      console.log("startTaskRunner Check! No Account to Update");
     }
   } catch (error) {
     console.error("Error executing the task:", error);
@@ -82,7 +82,7 @@ async function accountInit() {
       });
       logger.warn(` accountInit Completed ${getSync.ID} ...`);
     } else {
-      console.log("No Account to Update");
+      console.log("accountInit Check! No Account to Update");
     }
   } catch (error) {
     console.error("Error executing the taskin accountInit :", error);
