@@ -66,7 +66,7 @@ async function startTaskRunner() {
 async function accountInit() {
   try {
     const getSync = await fetcher("account/AccountInit");
-    //{ PATH: 'CLUB', ID: 1 }
+    //{ PATH: 'CLUB', ID: 1 } 
   
     if (getSync.continue === true) {
       console.log("account Init Return Value", getSync.ID);

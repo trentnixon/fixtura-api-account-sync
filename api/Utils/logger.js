@@ -42,7 +42,7 @@ const logger = createLogger({
     new transports.File({
       filename: "combined.log",
     }),
-    new SlackTransport({
+   /*  new SlackTransport({
       token: process.env.SlackToken,
       channel: '#data-account-error',
       level: 'error', // Only log 'error' level messages
@@ -51,7 +51,7 @@ const logger = createLogger({
       token: process.env.SlackToken,
       channel: '#data-account',
       level: 'warn', // Only log 'error' level messages
-    }),
+    }), */
     new transports.Console({
       level: "debug",
       format: format.combine(

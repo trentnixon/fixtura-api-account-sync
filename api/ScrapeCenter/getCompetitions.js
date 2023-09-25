@@ -46,7 +46,7 @@ class GetCompetitions extends BaseController {
         competitions = await this.fetchCompetitionInAssociation(page, this.URL);
       } else {
         competitions = await this.fetchCompetitionsInClubs(page, this.URL);
-      }  
+      }   
  
       if (competitions.length === 0) {
         logger.info(`No competitions found for club ${this.URL}`);
@@ -143,6 +143,7 @@ class GetCompetitions extends BaseController {
             ).find(
               (span) =>
                 span.textContent === "Active" ||
+                span.textContent === "Upcoming" ||
                 span.textContent === "Pending" ||
                 span.textContent === "Completed"
             );
