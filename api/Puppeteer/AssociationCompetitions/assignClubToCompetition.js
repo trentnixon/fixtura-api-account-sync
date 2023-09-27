@@ -45,7 +45,7 @@ class CompetitionQueryBuilder {
   }
 }
 
-class AssignCompetitionsToAssociation { 
+class assignClubToCompetition { 
   async setup(competitions, clubId) {
     const promises = [];
 
@@ -53,6 +53,7 @@ class AssignCompetitionsToAssociation {
     // club assign comp to something
     for (const competition of competitions) {
 
+        console.log("AssignCompetitionsToAssociation", competition)
       const existingCompetitions = await this.checkIfCompetitionExists(
         competition.competitionName,
         "competitions"
@@ -68,11 +69,11 @@ class AssignCompetitionsToAssociation {
           competition
         );
 
-        if (!isStored) {
+        if (!isStored) { 
           promises.push(
             fetcher("club-to-competitions", "POST", { data: competition })
-          );
-        } else {
+          );  
+        } else { 
           logger.info(`${competition.competitionName} is already in Strapi`);
           return {
             success: true,
@@ -135,4 +136,4 @@ class AssignCompetitionsToAssociation {
   }
 }
 
-module.exports = AssignCompetitionsToAssociation;
+module.exports = assignClubToCompetition;

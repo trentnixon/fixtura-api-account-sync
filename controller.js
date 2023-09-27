@@ -45,14 +45,18 @@ class DataController extends BaseController {
     this.memoryTracker = trackMemoryUsage(); // Start memory tracking
     const startTime = new Date(); // Start time
 
+    //** This section deals with Data Collection and Status Updating */
     let dataObj;
     let CollectionID;
     try {
-      dataObj = await this.dataCenter(this.strapiData);
+      // Create DataOBJ for Account Type
+      dataObj = await this.dataCenter(this.strapiData); 
+
       CollectionID = await this.initCreateDataCollection( 
-        dataObj.ACCOUNT.ACCOUNTID 
+        dataObj.ACCOUNT.ACCOUNTID  
       );
-      console.log("CollectionID", CollectionID);
+      
+      //console.log("CollectionID", CollectionID);
     } catch (error) {
       console.error(`Error initializing data: ${error}`);
       hasError = true;
@@ -64,13 +68,17 @@ class DataController extends BaseController {
       });
     }
 
-    try {
-   
-      await this.processCompetitions(dataObj);
+    /** Now lets fetch the Data about this account */
+    try { 
+     // Scrap and process the Competition Data
+      await this.processAndAssignCompetitions(dataObj);   
+      // Get an Updated DataOBJ for Account Type
+      dataObj = await this.dataCenter(this.strapiData); 
+      // Scrap the Teams Data
+      await this.processTeams(dataObj); 
+       // Get an Updated DataOBJ for Account Type
       dataObj = await this.dataCenter(this.strapiData);
-      await this.processTeams(dataObj);
-      dataObj = await this.dataCenter(this.strapiData);
-  
+      // Process Game Data
       await this.processGameData(dataObj); 
     } catch (error) {
       console.error(`Error processing data: ${error}`);
@@ -82,6 +90,7 @@ class DataController extends BaseController {
       });
     }
 
+    //** Lets now clean up the memory */
     clearInterval(this.memoryTracker.intervalId); // Stop memory tracking
     const peakMemoryUsage = this.memoryTracker.getPeakUsage();
     const endTime = new Date(); // End time
@@ -106,23 +115,33 @@ class DataController extends BaseController {
     }
   }
 
-  async processCompetitions(dataObj) {
+  /****************************** */
+  /** HELPER FUNCS  */
+  /****************************** */
+  async processAndAssignCompetitions(dataObj) {
     const getCompetitionsObj = new GetCompetitions(
       dataObj.TYPEOBJ.TYPEURL,
       dataObj.ACCOUNT
-    );
+    );  
 
     const scrapedCompetitions = await getCompetitionsObj.setup();
-    const assignScrapedCompetitions = new AssignCompetitions(
-      scrapedCompetitions,
-      dataObj
+
+   /*   console.log("scrapedCompetitionsscrapedCompetitionsscrapedCompetitionsscrapedCompetitions")
+     console.log(scrapedCompetitions)
+     throw new Error('STOP HERE'); */
+    
+    const assignScrapedCompetitions = new AssignCompetitions( 
+      scrapedCompetitions, 
+      dataObj 
     );
-    await assignScrapedCompetitions.setup();
+    await assignScrapedCompetitions.setup(); 
   }
 
   async processTeams(dataObj) {
+  //console.log(dataObj)
     const clubTeams = new GetTeamsFromLadder(dataObj.ACCOUNT, dataObj.Grades);
     const teamList = await clubTeams.setup();
+ 
     const assignTeam = new AssignTeamsToCompsAndGrades();
     await assignTeam.setup(teamList);
   }
@@ -140,7 +159,7 @@ class DataController extends BaseController {
 async function Controller_Club(FromSTRAPI) {
   try {
     const dataController = new DataController(dataCenterClubs, FromSTRAPI);
-    await dataController.fetchAndUpdateData();
+    await dataController.fetchAndUpdateData();  
     return { Complete: true };
   } catch (error) {
     console.error(`Error getting Club Details: ${error}`);

@@ -7,7 +7,6 @@ const fetcher = require("../Utils/fetcher");
 const logger = require("../Utils/logger");
 const qs = require("qs");
 
-
 class AssignCompetitions {
   constructor(competitions, DATAOBJ) {
     this.competitions = competitions;
@@ -54,7 +53,7 @@ class AssignCompetitions {
 
   async setup() {
     console.log("this.competitions = ", this.competitions?.length);
-  
+
     const promises = [];
 
     for (const competition of this.competitions) {
@@ -66,14 +65,14 @@ class AssignCompetitions {
       const isExisting = await this.checkIfCompetitionExists(
         getLastItemInUrl(competition.competitionUrl),
         "competitions"
-      ); 
+      );
 
       if (isExisting && isExisting.length > 0) {
         if (this.DATAOBJ.ACCOUNT.ACCOUNTTYPE === "CLUB") {
           // Process Club Competitions
           competition.club = [this.DATAOBJ.TYPEOBJ.TYPEID];
           competition.competition = [isExisting[0].id];
-         
+
           const isStored = await this.checkIfClubToCompIsAlreadyStored(
             competition
           );
@@ -85,20 +84,25 @@ class AssignCompetitions {
           } else {
             logger.info(`${competition.competitionName} is already in Strapi`);
           }
+          console.log(competition);
+          console.log(`competitions/${isExisting[0].id}`);
         } else {
           // Process Association Competitions
           logger.debug(
             `Updating existing competition: ${competition.competitionName}`
           );
           competition.association = [this.DATAOBJ.TYPEOBJ.TYPEID];
-          promises.push(
-            fetcher(`competitions/${isExisting[0].id}`, "PUT", {
-              data: competition,
-            })
-          );
         }
+
+        promises.push(
+          fetcher(`competitions/${isExisting[0].id}`, "PUT", {
+            data: competition,
+          })
+        );
       } else {
-        logger.info(`${competition.competitionName} is not a competition. Should be added in next General Run`);
+        logger.info(
+          `${competition.competitionName} is not a competition. Should be added in next General Run`
+        );
 
         // UPDATE: not sure i need this, as comps are added in the general func which runs once a week
 
@@ -115,7 +119,7 @@ class AssignCompetitions {
     }
 
     await Promise.all(promises);
-
+    /*  throw new Error("STOP HERE"); */
     return {
       success: true,
     };
@@ -136,6 +140,8 @@ class AssignCompetitions {
     );
 
     try {
+      console.log("competitionId, resourcePath");
+      console.log(competitionId, resourcePath);
       const response = await fetcher(`${resourcePath}?${query}`);
       return response.length > 0 ? response : false;
     } catch (error) {

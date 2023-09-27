@@ -15,7 +15,7 @@ const changeisUpdating = async (ID, isUpdating) => {
 
 const createDataCollection = async (ID, ERR) => {
   //data-collections
-  console.log("createDataCollection ID", ID)
+  console.log("createDataCollection ID", ID);
   const currentDate = new Date();
   const DATACOLLECTIONID = await fetcher(`data-collections`, `POST`, {
     data: {
@@ -29,10 +29,10 @@ const createDataCollection = async (ID, ERR) => {
 };
 
 const updateDataCollection = async (ID, OBJ) => {
-    console.log("updateDataCollection", ID)
-  console.log(ID, OBJ)
+  console.log("updateDataCollection", ID);
+  console.log(ID, OBJ);
   await fetcher(`data-collections/${ID}`, `PUT`, {
-    data: OBJ, 
+    data: OBJ,
   });
   return true;
 };
@@ -87,6 +87,7 @@ const getClubRelationsForAssociation = () => {
     }
   );
 };
+
 module.exports = {
   getPuppeteerInstance: async () => {
     return await puppeteer.launch({
@@ -96,6 +97,7 @@ module.exports = {
         "--no-sandbox",
         "--single-process",
         "--no-zygote",
+        "--disable-web-security",
       ],
     });
   },

@@ -3,7 +3,7 @@ const GetCompetitions = require("../ClubDetails/getCompetitions");
 const GetClubTeams = require("../ClubDetails/getClubTeams");
 const getTeamsGameData = require("../ClubDetails/getTeamsGameData");
 const assignClubToCompetition = require("../AssociationCompetitions/assignClubToCompetition");
-const AssignTeamToClub = require("../ClubDetails/assignTeamtoClub");
+const AssignTeamToClub = require("../ClubDetails/assignTeamtoClub"); 
 const logger = require("../../Utils/logger");
 const qs = require("qs");
 

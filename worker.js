@@ -29,7 +29,7 @@ cron.schedule(
     accountInit();
   },
   {
-    timezone: "Australia/Sydney",
+    timezone: "Australia/Sydney", 
   }
 );
 
@@ -58,11 +58,11 @@ async function startTaskRunner() {
       function: "startTaskRunner",
       error: new Error("Oops!"),
     });
-  }
+  } 
 }
 
-//startTaskRunner();
-
+startTaskRunner();
+//accountInit()
 async function accountInit() {
   try {
     const getSync = await fetcher("account/AccountInit");
@@ -92,5 +92,5 @@ async function accountInit() {
       function: "startTaskRunner",
       error: new Error("Oops!"),
     });
-  }
+  } 
 }

@@ -11,7 +11,7 @@ const getTeamsGameData = require("./getTeamsGameData");
 
 // setters
 const assignClubToCompetition = require("../AssociationCompetitions/assignClubToCompetition");
-const AssignTeamToClub = require("./assignTeamtoClub");
+const AssignTeamToClub = require("./assignTeamtoClub"); 
 // utils
 const logger = require("../../Utils/logger");
 const qs = require("qs");
@@ -31,28 +31,28 @@ class GetClubDetails extends BaseController {
     try {
       /* Step 1 */
       // Get the Comps for this club
-     /*  const competitions = await this.processCompetitions(Account);
+      const competitions = await this.processCompetitions(Account);
  
       console.log("competitions ", competitions) 
-      if (!competitions) return false; */
+      if (!competitions) return false;
       /* Step 2 */ 
       // Assign the selected club to the Comps found
-      /* await this.processAssignClubToCompetition(competitions, CLUBID); */
+      await this.processAssignClubToCompetition(competitions, CLUBID);
       /* Step 3 */
       // Refetch the club from Strapi for the new Data and IDS
-      /* const ActiveClub = await this.reFetchClubData(CLUBID); */
+      const ActiveClub = await this.reFetchClubData(CLUBID);
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
-   /*    const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-      console.log("ListOfTeamsInClub", ListOfTeamsInClub); */
+      const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
+      console.log("ListOfTeamsInClub", ListOfTeamsInClub);
  
       /* Step 5 */
       // Now assign those teams to the Club ID
-      /* await this.processTeamsToClub(CLUBID, ListOfTeamsInClub); */
+      await this.processTeamsToClub(CLUBID, ListOfTeamsInClub);
 
       /* Step 6 */
       // Get the Game Data for the Teams found
-      await this.processTeamsGameData(CLUBID);
+      await this.processTeamsGameData(CLUBID); 
 
       return true;
     } catch (error) {

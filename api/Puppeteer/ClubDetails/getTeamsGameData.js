@@ -160,7 +160,7 @@ class getTeamsGameData {
     console.log(this.TEAMS)
     //const Sample = this.TEAMS[0]
     try {
-    /*   for (const { id, attributes: team } of this.TEAMS) {
+      for (const { id, attributes: team } of this.TEAMS) {
         logger.info(
           `Processing team ${team.teamName} id ${id} (Index ${teamIndex} of ${this.TEAMS.length})...`
         );
@@ -189,7 +189,7 @@ class getTeamsGameData {
         const uploader = new assignTeamToGameData();
         await uploader.Setup(validMatches);
         teamIndex++;
-      } */
+      }
       return true;
     } catch (error) {
       console.error(`Error getting team game data:`, error); 

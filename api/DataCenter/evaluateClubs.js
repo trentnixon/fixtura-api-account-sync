@@ -4,15 +4,19 @@ async function dataCenterClubs(fromStrapi) {
   try {
     const clubObj = await getClubObj(fromStrapi.ID);
     const details = await getDetailedClubDetails(clubObj.TYPEID);
-    console.log(details)
+    /* console.log("dataCenterClubs");
+    console.log(details); */
     return {
       TYPEOBJ: clubObj,
       ACCOUNT: { ACCOUNTID: fromStrapi.ID, ACCOUNTTYPE: fromStrapi.PATH },
-      DETAILS:details.attributes,
+      DETAILS: details.attributes,
       TEAMS: createTeamsArr(details.attributes.teams.data),
-      Grades: createArrGrades(details.attributes.club_to_competitions.data, clubObj.TYPEID),
+      Grades: createArrGrades(
+        details.attributes.club_to_competitions.data,
+        clubObj.TYPEID
+      ),
     };
-  } catch(error) {
+  } catch (error) {
     console.error(error);
     logger.critical("An error occurred in dataCenterClubs", {
       file: "evaluateClubs.js",
@@ -20,7 +24,7 @@ async function dataCenterClubs(fromStrapi) {
       error: error,
     });
   }
-} 
+}
 
 const createTeamsArr = (obj) => {
   //console.log(obj)
@@ -41,16 +45,19 @@ const createTeamsArr = (obj) => {
 const createArrGrades = (details, clubId) => {
   let arr = [];
   details.forEach((deets) => {
-    deets.attributes.competition.data.attributes.grades.data.forEach((comps) => {
-      arr.push({
-        club: [clubId],
-        compID: deets.attributes.competition.data.id,
-        compName: deets.attributes.competition.data.attributes.competitionName,
-        id: comps.id,
-        gradeName: comps.attributes.gradeName,
-        url: comps.attributes.url,
-      });
-    });
+    deets.attributes.competition.data.attributes.grades.data.forEach(
+      (comps) => {
+        arr.push({
+          club: [clubId],
+          compID: deets.attributes.competition.data.id,
+          compName:
+            deets.attributes.competition.data.attributes.competitionName,
+          id: comps.id,
+          gradeName: comps.attributes.gradeName,
+          url: comps.attributes.url,
+        });
+      }
+    );
   });
   return arr;
 };
