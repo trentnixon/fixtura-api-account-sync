@@ -13,7 +13,14 @@ class AssignCompetitions {
     this.DATAOBJ = DATAOBJ;
   }
 
+
   async checkIfClubToCompIsAlreadyStored(competition) {
+    console.log(
+      "CHECK FILTERS === ",
+      competition.competitionUrl,
+      competition.club,
+      competition.competition
+    );
     const query = qs.stringify(
       {
         filters: {
@@ -35,6 +42,7 @@ class AssignCompetitions {
 
     try {
       const response = await fetcher(`club-to-competitions?${query}`);
+      console.log("CHECK RES=== ", response); 
       return response.length === 0 ? false : true;
     } catch (error) {
       logger.error(
@@ -73,9 +81,11 @@ class AssignCompetitions {
           competition.club = [this.DATAOBJ.TYPEOBJ.TYPEID];
           competition.competition = [isExisting[0].id];
 
+          console.log("Check competition: ", competition);
           const isStored = await this.checkIfClubToCompIsAlreadyStored(
             competition
           );
+          console.log("Check competition RESULTS: ", isStored);
 
           if (!isStored) {
             promises.push(
@@ -119,7 +129,7 @@ class AssignCompetitions {
     }
 
     await Promise.all(promises);
-    /*  throw new Error("STOP HERE"); */
+    //throw new Error("STOP HERE");
     return {
       success: true,
     };

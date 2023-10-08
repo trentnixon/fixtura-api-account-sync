@@ -14,13 +14,13 @@ class AssignTeamsToCompsAndGrades {
     for (const team of teams) {
       try {
         const existingTeams = await this.checkIfTeamExists(team, "teams");
-
+ 
         if (existingTeams.length === 0) {
           const result = await this.createTeam(team);
           allSucceeded = allSucceeded && result.success;
           logger.info(`Creating team ${team.teamName}`);
         } else {
-          logger.info("Team already exists", existingTeams[0].id);
+          logger.info(`${team.teamName} already exists`);
           const result = await this.updateTeam(existingTeams[0].id, team);
           allSucceeded = allSucceeded && result.success;
           logger.info(`Updating team ${team.teamName}`);
