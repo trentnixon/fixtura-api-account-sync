@@ -61,7 +61,7 @@ async function startTaskRunner() {
   } 
 }
 
-startTaskRunner(); 
+//startTaskRunner();  
 //accountInit()
 async function accountInit() {
   try {
