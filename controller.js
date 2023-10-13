@@ -71,9 +71,9 @@ class DataController extends BaseController {
     /** Now lets fetch the Data about this account */
     try {
       // Scrap and process the Competition Data
-      await this.processAndAssignCompetitions(dataObj);
+/*       await this.processAndAssignCompetitions(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData);
+      dataObj = await this.dataCenter(this.strapiData); */
       
         /*  console.log("dataObjdataObjdataObjdataObjdataObjdataObjdataObj");
             console.log(dataObj);
@@ -81,15 +81,14 @@ class DataController extends BaseController {
         */
 
 
-      // Scrap the Teams Data
+     /*  // Scrap the Teams Data
       await this.processTeams(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData);
+      dataObj = await this.dataCenter(this.strapiData); */
 
 
-     /*  // Process Game Data
-      await this.processGameData(dataObj); */
-    
+      // Process Game Data
+      await this.processGameData(dataObj);
     
     } catch (error) {
       console.error(`Error processing data: ${error}`);
