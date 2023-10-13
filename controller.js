@@ -81,10 +81,10 @@ class DataController extends BaseController {
         */
 
 
-  /*     // Scrap the Teams Data
+      // Scrap the Teams Data
       await this.processTeams(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData); */
+      dataObj = await this.dataCenter(this.strapiData);
 
 
      /*  // Process Game Data
