@@ -234,7 +234,7 @@ class getTeamsGameData extends BaseController {
     }
   }
 
-  async setup() {
+  async setup() { 
     console.log("Get Game Data : Setup called");
     try {
       await this.initDependencies(this.ACCOUNTID);

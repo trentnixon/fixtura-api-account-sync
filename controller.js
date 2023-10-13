@@ -71,20 +71,14 @@ class DataController extends BaseController {
     /** Now lets fetch the Data about this account */
     try {
       // Scrap and process the Competition Data
-/*       await this.processAndAssignCompetitions(dataObj);
+      await this.processAndAssignCompetitions(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData); */
+      dataObj = await this.dataCenter(this.strapiData);
       
-        /*  console.log("dataObjdataObjdataObjdataObjdataObjdataObjdataObj");
-            console.log(dataObj);
-            throw new Error("STOP HERE"); 
-        */
-
-
-     /*  // Scrap the Teams Data
+      // Scrap the Teams Data
       await this.processTeams(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData); */
+      dataObj = await this.dataCenter(this.strapiData);
 
 
       // Process Game Data
@@ -169,7 +163,7 @@ console.log(filteredTeams);
     const scrapeGameData = new getGameData(dataObj.ACCOUNT, dataObj.TEAMS);
     const filteredArray = await scrapeGameData.setup();
     const assignGameDataObj = new assignGameData();
-    await assignGameDataObj.setup(filteredArray);
+    await assignGameDataObj.setup(filteredArray); 
   }
 }
 
