@@ -210,6 +210,46 @@ class GetCompetitions extends BaseController {
     });
 }
 
+
+  async setup() {
+    console.log("TEST 1 . GetClubDetails Setup called"); 
+    console.log("this.ACCOUNTID", this.ACCOUNTID);
+
+    try {
+      await this.initDependencies(this.ACCOUNTID); // Call the initDependencies method from the BaseController
+      const result = await this.ProcessComps();
+      return result;
+    } catch (err) {
+      logger.error("Error during setup:", err);
+      logger.critical("An error occurred in setup", {
+        file: "getCompetitions.js",
+        function: "setup",
+        error: err,
+      });
+      await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
+      logger.info("Set Account to False| ERROR ");
+      /* await this.dependencies.createDataCollection(this.ACCOUNTID, {
+        error: true,
+      }); */
+      logger.info("Create a Data Entry | ERROR");
+    } finally {
+      await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
+      logger.info("Set Account to False| Finally ");
+      /*  await this.dependencies.createDataCollection(this.ACCOUNTID, {
+        error: true,
+      }); */
+      logger.info("Create a Data Entry | Finally");
+      await this.dispose();
+      logger.info("Dispose of items and Pupeteer | Finally");
+    }
+  }
+}
+
+module.exports = GetCompetitions;
+
+
+
+
 /** Old version, dont delete yert as this one has the filtering, the one above is missing it. we may need to reinclude it later */
   /* async extractCompetitionsData(page) {
   return await page.evaluate(() => {
@@ -258,39 +298,3 @@ class GetCompetitions extends BaseController {
       });
   });
 } */
-
-  async setup() {
-    console.log("TEST 1 . GetClubDetails Setup called");
-    console.log("this.ACCOUNTID", this.ACCOUNTID);
-
-    try {
-      await this.initDependencies(this.ACCOUNTID); // Call the initDependencies method from the BaseController
-      const result = await this.ProcessComps();
-      return result;
-    } catch (err) {
-      logger.error("Error during setup:", err);
-      logger.critical("An error occurred in setup", {
-        file: "getCompetitions.js",
-        function: "setup",
-        error: err,
-      });
-      await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
-      logger.info("Set Account to False| ERROR ");
-      /* await this.dependencies.createDataCollection(this.ACCOUNTID, {
-        error: true,
-      }); */
-      logger.info("Create a Data Entry | ERROR");
-    } finally {
-      await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
-      logger.info("Set Account to False| Finally ");
-      /*  await this.dependencies.createDataCollection(this.ACCOUNTID, {
-        error: true,
-      }); */
-      logger.info("Create a Data Entry | Finally");
-      await this.dispose();
-      logger.info("Dispose of items and Pupeteer | Finally");
-    }
-  }
-}
-
-module.exports = GetCompetitions;

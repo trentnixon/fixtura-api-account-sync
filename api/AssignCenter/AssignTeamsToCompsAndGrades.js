@@ -14,7 +14,7 @@ class AssignTeamsToCompsAndGrades {
     for (const team of teams) {
       try {
         const existingTeams = await this.checkIfTeamExists(team, "teams");
- 
+  
         if (existingTeams.length === 0) {
           const result = await this.createTeam(team);
           allSucceeded = allSucceeded && result.success;

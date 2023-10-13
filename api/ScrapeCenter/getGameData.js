@@ -190,7 +190,7 @@ class getTeamsGameData extends BaseController {
           logger.info(`on playHQ URL ${href}`);
 
           // Navigate to team page
-          console.log(`Search on URL : ${this.ensureHttp(href)}`);
+          console.log(`Search on URL : ${this.ensureHttp(href)}`); 
           await page.goto(this.ensureHttp(href));
           await page.waitForTimeout(1000);
 

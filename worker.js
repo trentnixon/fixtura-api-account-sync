@@ -61,8 +61,8 @@ async function startTaskRunner() {
   } 
 }
 
-//startTaskRunner();  
-//accountInit()
+startTaskRunner();  
+accountInit()
 async function accountInit() {
   try {
     const getSync = await fetcher("account/AccountInit");

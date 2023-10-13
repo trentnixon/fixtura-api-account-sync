@@ -71,15 +71,26 @@ class DataController extends BaseController {
     /** Now lets fetch the Data about this account */
     try {
       // Scrap and process the Competition Data
-      await this.processAndAssignCompetitions(dataObj);
+    /*   await this.processAndAssignCompetitions(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData);
+      dataObj = await this.dataCenter(this.strapiData); */
+      
+        /*  console.log("dataObjdataObjdataObjdataObjdataObjdataObjdataObj");
+            console.log(dataObj);
+            throw new Error("STOP HERE"); 
+        */
+
+
       // Scrap the Teams Data
-      await this.processTeams(dataObj);
+    /*   await this.processTeams(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData);
+      dataObj = await this.dataCenter(this.strapiData); */
+
+
       // Process Game Data
       await this.processGameData(dataObj);
+    
+    
     } catch (error) {
       console.error(`Error processing data: ${error}`);
       hasError = true;
@@ -126,7 +137,7 @@ class DataController extends BaseController {
 
     const scrapedCompetitions = await getCompetitionsObj.setup();
 
-    /*  console.log("scrapedCompetitionsscrapedCompetitionsscrapedCompetitionsscrapedCompetitions")
+    /*   console.log("scrapedCompetitionsscrapedCompetitionsscrapedCompetitionsscrapedCompetitions")
      console.log(scrapedCompetitions)
      throw new Error('STOP HERE');  */
 
@@ -139,11 +150,11 @@ class DataController extends BaseController {
 
   async processTeams(dataObj) {
     //console.log(dataObj.Grades);
-    
+
     const clubTeams = new GetTeamsFromLadder(dataObj.ACCOUNT, dataObj.Grades);
     const teamList = await clubTeams.setup();
 
-/*     console.log("teamList");
+    /*     console.log("teamList");
     //console.log(teamList);
     const filteredTeams = teamList.filter(team => team.teamName.includes('Runaway Bay Seagulls'));
 
