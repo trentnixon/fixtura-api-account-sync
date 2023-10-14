@@ -70,20 +70,26 @@ class DataController extends BaseController {
 
     /** Now lets fetch the Data about this account */
     try {
+      console.log("STAT ACCOUNT SET UP");
+
+      console.log(dataObj)
+       /* throw new Error("STOP HERE BEFORE processGameData"); */
       // Scrap and process the Competition Data
       await this.processAndAssignCompetitions(dataObj);
       // Get an Updated DataOBJ for Account Type
       dataObj = await this.dataCenter(this.strapiData);
-      
+
       // Scrap the Teams Data
       await this.processTeams(dataObj);
       // Get an Updated DataOBJ for Account Type
       dataObj = await this.dataCenter(this.strapiData);
+      //console.log(dataObj);
+      /*  throw new Error("STOP HERE BEFORE processGameData"); */
+      // Process Game Data 
+      await this.processGameData(dataObj); 
 
 
-      // Process Game Data
-      await this.processGameData(dataObj);
-    
+
     } catch (error) {
       console.error(`Error processing data: ${error}`);
       hasError = true;
@@ -147,24 +153,33 @@ class DataController extends BaseController {
     const clubTeams = new GetTeamsFromLadder(dataObj.ACCOUNT, dataObj.Grades);
     const teamList = await clubTeams.setup();
 
-    /*     console.log("teamList");
-    //console.log(teamList);
-    const filteredTeams = teamList.filter(team => team.teamName.includes('Runaway Bay Seagulls'));
-
-console.log(filteredTeams);
-    throw new Error("STOP HERE"); */
-
+   /*  
+      console.log("teamList");
+      throw new Error("STOP HERE");
+    */
     const assignTeam = new AssignTeamsToCompsAndGrades();
     await assignTeam.setup(teamList);
-    /* throw new Error("STOP HERE"); */
   }
+
 
   async processGameData(dataObj) {
     const scrapeGameData = new getGameData(dataObj.ACCOUNT, dataObj.TEAMS);
-    const filteredArray = await scrapeGameData.setup();
-    const assignGameDataObj = new assignGameData();
-    await assignGameDataObj.setup(filteredArray); 
-  }
+
+    // Suppose each batch fetches data for 10 teams (this number can be adjusted)
+    const batchSize = 10;
+    const totalBatches = Math.ceil(dataObj.TEAMS.length / batchSize);
+
+    for (let i = 0; i < totalBatches; i++) {
+        const currentBatchTeams = dataObj.TEAMS.slice(i * batchSize, (i + 1) * batchSize);
+        
+        // Scrape data for the current batch
+        const filteredArray = await scrapeGameData.setupBatch(currentBatchTeams); 
+
+        // Assign game data for the current batch
+        const assignGameDataObj = new assignGameData();
+        await assignGameDataObj.setup(filteredArray); 
+    }
+}
 }
 
 // Init Controller
@@ -205,3 +220,10 @@ async function Controller_Associations(FromSTRAPI) {
 }
 
 module.exports = { Controller_Club, Controller_Associations };
+
+ /*  async processGameData(dataObj) {
+    const scrapeGameData = new getGameData(dataObj.ACCOUNT, dataObj.TEAMS);
+    const filteredArray = await scrapeGameData.setup();
+    const assignGameDataObj = new assignGameData();
+    await assignGameDataObj.setup(filteredArray); 
+  } */

@@ -4,41 +4,42 @@
  */
 
 const fetcher = require("../Utils/fetcher");
-const logger = require("../Utils/logger");
+const logger = require("../Utils/logger"); 
 const qs = require("qs");
 
 class assignGameData {
-  async setup(filteredArray) {
-    for (const game of filteredArray) {
-    
-      if (!game.teamHomeID) {
-        logger.error(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
-        continue;
-      } 
 
-      const existingGameId = await this.checkIfGameExists(
-        game.gameID,
-        "game-meta-datas"
-      );
+  
+  async setup(filteredArray, batchSize = 100) {
+    const totalBatches = Math.ceil(filteredArray.length / batchSize);
 
-      const [homeTeamID, awayTeamID] = await this.getTeamsIds([
-        game.teamHomeID,
-        game.teamAwayID,
-      ]);
-      homeTeamID && game.teams.push(homeTeamID);
-      awayTeamID && game.teams.push(awayTeamID);
+    for (let i = 0; i < totalBatches; i++) {
+        const currentBatch = filteredArray.slice(i * batchSize, (i + 1) * batchSize);
+        
+        for (const game of currentBatch) {
+            if (!game.teamHomeID) {
+                logger.error(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
+                continue;
+            } 
 
-      if (existingGameId) {
-        await this.updateGameData(existingGameId, game);
-      } else {
-        await this.storeGameData(game);
-      }
+            const existingGameId = await this.checkIfGameExists(game.gameID, "game-meta-datas");
+
+            const [homeTeamID, awayTeamID] = await this.getTeamsIds([game.teamHomeID, game.teamAwayID]);
+            homeTeamID && game.teams.push(homeTeamID);
+            awayTeamID && game.teams.push(awayTeamID);
+
+            if (existingGameId) {
+                await this.updateGameData(existingGameId, game);
+            } else {
+                await this.storeGameData(game);
+            }
+        }
     }
 
     return {
-      success: true,
+        success: true,
     };
-  }
+}
 
   async checkIfGameExists(gameID, resourcePath) {
     const query = qs.stringify(

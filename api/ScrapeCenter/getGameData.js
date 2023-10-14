@@ -174,7 +174,104 @@ class getTeamsGameData extends BaseController {
     return teamMatches.filter((match) => match !== null);
   }
 
-  async LoopGames() {
+  async LoopGamesBatch(teamsBatch) {
+    let teamIndex = 0;
+    let StoreGames = [];
+    const page = await this.browser.newPage();
+    const xPATH = "/html/body/div/section/main/div/div/div[1]/section/section/div/ul/li";
+
+    try {
+        for (const { teamName, id, href, grade } of teamsBatch) {
+            try {
+                logger.info(
+                    `Processing team ${teamName} id ${id} (Index ${teamIndex} of ${teamsBatch.length})...`
+                );
+                logger.info(`on playHQ URL ${href}`);
+
+                // Navigate to team page
+                console.log(`Search on URL : ${this.ensureHttp(href)}`);
+                await page.goto(this.ensureHttp(href));
+                await page.waitForTimeout(1000);
+
+                // Get the match list
+                const matchList = await this.getMatchList(page, xPATH);
+                console.log("matchList:", matchList.length);
+
+                // Process the games on the page
+                const GAMEDATA = await this.ProcessGame(matchList, grade);
+
+                const validMatches = GAMEDATA.filter((match) => match !== null);
+
+                StoreGames.push(...validMatches);
+                teamIndex++;
+            } catch (error) {
+                logger.error(
+                    `Error processing team ${teamName} on getGameData.js in the ScrapeCenter Folder`,
+                    error
+                );
+                logger.critical("An error occurred in LoopGames", {
+                    file: "getGameData.js",
+                    function: "LoopGames",
+                    error: error,
+                });
+                teamIndex++;
+            }
+        }
+        return StoreGames;
+    } catch (error) {
+        logger.error(`Error getting team game data:`, error);
+        logger.critical("An error occurred in LoopGames", {
+            file: "getGameData.js",
+            function: "LoopGames",
+            error: error,
+        });
+    } finally {
+        logger.info(`CLASS GetCompetitions: Page Closed!!`);
+        await page.close();
+    }
+}
+
+
+  async setupBatch(teamsBatch) { 
+    console.log("Get Game Data : Setup Batch called");
+    try {
+      await this.initDependencies(this.ACCOUNTID);
+      const result = await this.LoopGamesBatch(teamsBatch);
+      console.log(`Length after scrape ${result.length}`);
+      
+      // NOTE: If there are no duplicates expected within a single batch, you can remove the filtering
+      let filteredArray = result.filter(
+        (v, i, a) => a.findIndex((t) => t.gameID === v.gameID) === i
+      );
+      console.log(`Length after Filter  ${filteredArray.length}`);
+      return filteredArray;
+    } catch (err) {
+      logger.error("Error during setupBatch:", err);
+      logger.critical("An error occurred in setupBatch", {
+        file: "getGameData.js",
+        function: "setupBatch",
+        error: err,
+      });
+      await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
+      logger.info("Set Account to False| ERROR ");
+    } finally {
+      await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
+      logger.info("Set Account to False| Finally ");
+      await this.dispose();
+      logger.info("Dispose of items and Pupeteer | Finally");
+    }
+}
+
+}
+
+module.exports = getTeamsGameData;
+
+
+
+/** this is olfd code 14 Oct remove after 30 days if no longer used */
+
+
+ /*  async LoopGames() {
     let teamIndex = 0;
     let StoreGames = [];
     const page = await this.browser.newPage();
@@ -202,8 +299,6 @@ class getTeamsGameData extends BaseController {
           const GAMEDATA = await this.ProcessGame(matchList, grade);
 
           const validMatches = GAMEDATA.filter((match) => match !== null);
-         /*  console.log("validMatches");
-          console.log(validMatches); */
 
           StoreGames.push(...validMatches);
           teamIndex++;
@@ -232,9 +327,9 @@ class getTeamsGameData extends BaseController {
       logger.info(`CLASS GetCompetitions: Page Closed!!`);
       await page.close();
     }
-  }
-
-  async setup() { 
+  } */
+ 
+  /* async setup() { 
     console.log("Get Game Data : Setup called");
     try {
       await this.initDependencies(this.ACCOUNTID);
@@ -260,12 +355,7 @@ class getTeamsGameData extends BaseController {
       await this.dispose();
       logger.info("Dispose of items and Pupeteer | Finally");
     }
-  }
-}
-
-module.exports = getTeamsGameData;
-
-
+  } */
  /* //TYPE
         let type = await ScrapeType(matchElement, Constants.SELECTORS.TYPE);
         type = this.checkString(type);

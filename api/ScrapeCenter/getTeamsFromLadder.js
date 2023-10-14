@@ -107,7 +107,7 @@ class GetTeamsFromLadder extends BaseController {
     }
   }
   
-
+ 
 
   async LoopURLS() {
     try {
