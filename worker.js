@@ -60,8 +60,9 @@ async function startTaskRunner() {
     });
   } 
 }
-
+// this can stay open as it only runs a test for updates
 startTaskRunner();  
+ 
 //accountInit()
 async function accountInit() {
   try {

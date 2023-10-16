@@ -91,13 +91,12 @@ const getClubRelationsForAssociation = () => {
 module.exports = {
   getPuppeteerInstance: async () => {
     return await puppeteer.launch({
-      headless: true,
+      headless: 'new',
       args: [
         "--disable-setuid-sandbox",
         "--no-sandbox",
         "--single-process",
         "--no-zygote",
-        "--disable-web-security",
       ],
     });
   },

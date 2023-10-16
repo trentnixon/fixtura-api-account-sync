@@ -18,7 +18,7 @@
     "moment": "^2.29.4",
     "node-cron": "^3.0.2",
     "node-fetch": "^2.6.1",
-    "puppeteer": "^18.1.0",
+    "puppeteer": "^21.3.8",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "qs": "^6.11.0",
