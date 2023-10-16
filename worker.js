@@ -40,7 +40,7 @@ async function startTaskRunner() {
     console.log("start TaskRunner Return Value", getSync);
     ;
     if (getSync.continue === true) {
-      logger.warn(`INIT startTaskRunner Started ${getSync.ID} ...`)
+      logger.warn(`INIT startTaskRunner Started ${getSync.ID} ...`) 
       // Start tracking memory usage
       getSync.PATH === "CLUB"
         ? await Controller_Club(getSync)
@@ -61,7 +61,7 @@ async function startTaskRunner() {
   } 
 }
 
-//startTaskRunner();  
+startTaskRunner();  
 //accountInit()
 async function accountInit() {
   try {
