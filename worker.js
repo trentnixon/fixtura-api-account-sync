@@ -62,8 +62,7 @@ async function startTaskRunner() {
 }
 // this can stay open as it only runs a test for updates
 startTaskRunner();  
- 
-//accountInit()
+ accountInit()
 async function accountInit() {
   try {
     const getSync = await fetcher("account/AccountInit");
