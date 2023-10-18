@@ -91,7 +91,7 @@ const getClubRelationsForAssociation = () => {
 module.exports = {
   getPuppeteerInstance: async () => {
     return await puppeteer.launch({
-      headless: 'new',
+      headless: process.env.NODE_ENV === 'development' ? false : 'new',
       args: [
         "--disable-setuid-sandbox",
         "--no-sandbox",
