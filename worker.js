@@ -56,18 +56,38 @@ accountInitQueue.process(async (job) => {
         } else {
             await Controller_Associations(getSync);
         }
+
+        // Update the account's setup status
+        await fetcher(`accounts/${getSync.ID}`, "PUT", {
+            data: { isSetup: true },
+        });
+        
+        logger.info(`Successfully processed accountInit for ID: ${getSync.ID}`);
+
     } catch (error) {
+        logger.error(`Error processing accountInit for ID: ${getSync.ID}`, {
+            error: error.message,
+            stack: error.stack
+        });
         throw error;
     }
 });
+
 accountInitQueue.on('failed', errorHandler('accountInit'));
 
 cron.schedule("*/1 * * * *", async () => {
-    const getSync = await fetcher("account/AccountInit");
-    if (getSync && getSync.continue) {
-        accountInitQueue.add(getSync);
-    } else {
-        console.log("No accountInit jobs to queue.");
+    try {
+        const getSync = await fetcher("account/AccountInit");
+        if (getSync && getSync.continue) {
+            accountInitQueue.add(getSync);
+        } else {
+            console.log("No accountInit jobs to queue.");
+        }
+    } catch (error) {
+        logger.error("Error in accountInit cron job", {
+            error: error.message,
+            stack: error.stack
+        });
     }
 }, { timezone: "Australia/Sydney" });
 
@@ -75,25 +95,35 @@ cron.schedule("*/1 * * * *", async () => {
 // TaskRunner Queue
 const taskRunnerQueue = new Queue(QUEUE_CONFIG[ENVIRONMENT].taskRunner, process.env.REDISCLOUD_URL);
 taskRunnerQueue.process(async (job) => {
-    console.log("Running taskRunnerQueue",job.data.getSync)
+    const getSync = job.data.getSync;
     try {
-        const getSync = job.data.getSync
         if (getSync.PATH === "CLUB") {
             await Controller_Club(getSync);
         } else {
             await Controller_Associations(getSync);
         }
+        logger.info(`Successfully processed taskRunner for ID: ${getSync.ID}`);
     } catch (error) {
+        logger.error(`Error processing taskRunner for ID: ${getSync.ID}`, {
+            error: error.message,
+            stack: error.stack
+        });
         throw error;
     }
 });
+
 taskRunnerQueue.on('failed', errorHandler('taskRunner'));
 
-
 cron.schedule("0 0 * * *", async () => {
-    //console.log("Checking if there's any task for taskRunnerQueue");
-    const idsList = await fetcher("account/sync"); // Assume this endpoint returns an array of IDs
-    idsList.forEach(ITEM => taskRunnerQueue.add({getSync:ITEM}));
+    try {
+        const idsList = await fetcher("account/sync");
+        idsList.forEach(ITEM => taskRunnerQueue.add({getSync:ITEM}));
+    } catch (error) {
+        logger.error("Error in taskRunner cron job", {
+            error: error.message,
+            stack: error.stack
+        });
+    }
 }, {
     timezone: "Australia/Sydney",
 });
