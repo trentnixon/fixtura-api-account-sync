@@ -144,7 +144,7 @@ async function testTaskRunnerQueue() {
 }
 
 // Call it directly for testing
-//testTaskRunnerQueue();
+testTaskRunnerQueue();
 
 
 

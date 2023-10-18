@@ -25,13 +25,13 @@ class assignGameData {
             const existingGameId = await this.checkIfGameExists(game.gameID, "game-meta-datas");
 
             const [homeTeamID, awayTeamID] = await this.getTeamsIds([game.teamHomeID, game.teamAwayID]);
-            homeTeamID && game.teams.push(homeTeamID);
+            homeTeamID && game.teams.push(homeTeamID); 
             awayTeamID && game.teams.push(awayTeamID);
 
             if (existingGameId) {
                 await this.updateGameData(existingGameId, game);
             } else {
-                await this.storeGameData(game);
+                await this.storeGameData(game); 
             }
         }
     }
@@ -70,7 +70,8 @@ class assignGameData {
     }
   }
 
-  async getTeamsIds(teamIDs) {
+ 
+   /* async getTeamsIds(teamIDs) {
     const query = qs.stringify(
       {
         filters: {
@@ -97,7 +98,42 @@ class assignGameData {
       });
       return [false, false];
     }
-  }
+  } */
+
+  async  getTeamsIds(teamIDs) {
+    const query = qs.stringify(
+      {
+        filters: {
+          teamID: {
+            $in: teamIDs,
+          },
+        },
+      },
+      {
+        encodeValuesOnly: true,
+      }
+    );
+
+    try {
+      const response = await fetcher(`teams?${query}`);
+
+      if (response.length === 0) {
+        return [false, false];
+      }
+
+      // Map through the response to extract IDs
+      return response.map(team => team.id);
+
+    } catch (error) {
+      logger.error(`Error checking teamIDs ${teamIDs}:`, error);
+      logger.critical("An error occurred in getTeamsIds", {
+        file: "assignGameData.js",
+        function: "getTeamsIds",
+        error: error,
+      });
+      return [false, false];
+    }
+}
 
   async storeGameData(game) {
     logger.info(`Storing game ${game.gameID}`);
