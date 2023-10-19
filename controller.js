@@ -68,27 +68,27 @@ class DataController extends BaseController {
       });
     }
 
-    /** Now lets fetch the Data about this account */
+    /** Now lets fetch the Data about this account */ 
     try {
       console.log("STAT ACCOUNT SET UP");
 
-      console.log(dataObj)
+    /*   console.log(dataObj)
+      throw new Error("STOP HERE"); */
+
        /* throw new Error("STOP HERE BEFORE processGameData"); */
       // Scrap and process the Competition Data
       await this.processAndAssignCompetitions(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData);
+      dataObj = await this.dataCenter(this.strapiData); 
 
       // Scrap the Teams Data
-      await this.processTeams(dataObj);
+      await this.processTeams(dataObj);  
       // Get an Updated DataOBJ for Account Type
       dataObj = await this.dataCenter(this.strapiData);
       //console.log(dataObj);
       /*  throw new Error("STOP HERE BEFORE processGameData"); */
       // Process Game Data 
       await this.processGameData(dataObj); 
-
-  
 
     } catch (error) {
       console.error(`Error processing data: ${error}`);
@@ -153,10 +153,10 @@ class DataController extends BaseController {
     const clubTeams = new GetTeamsFromLadder(dataObj.ACCOUNT, dataObj.Grades);
     const teamList = await clubTeams.setup();
 
-   /*  
-      console.log("teamList");
-      throw new Error("STOP HERE");
-    */
+     
+ /*      console.log("teamList");
+      throw new Error("STOP HERE"); */
+   
     const assignTeam = new AssignTeamsToCompsAndGrades();
     await assignTeam.setup(teamList);
   }

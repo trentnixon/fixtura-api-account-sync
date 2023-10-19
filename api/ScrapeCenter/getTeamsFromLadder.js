@@ -116,7 +116,7 @@ class GetTeamsFromLadder extends BaseController {
       for (const item of this.URLS) {
         const teamData = await this.processGrade(item);
         allTeamData.push(...teamData);
-      }
+      } 
       logger.info("All team data processed successfully");
       return allTeamData;
     } catch (error) {
