@@ -129,7 +129,7 @@ cron.schedule("0 0 * * *", async () => {
 });
 
 
-
+ 
 
 async function testTaskRunnerQueue() {
     console.log("Manually triggering taskRunnerQueue for testing...");
@@ -144,7 +144,7 @@ async function testTaskRunnerQueue() {
 }
 
 // Call it directly for testing
-//testTaskRunnerQueue();
+testTaskRunnerQueue();
 
 
 
