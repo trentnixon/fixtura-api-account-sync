@@ -121,7 +121,7 @@ taskRunnerQueue.process(async (job) => {
       stack: error.stack,
     });
     throw error;
-  } 
+  }
 });
 
 taskRunnerQueue.on("failed", errorHandler("taskRunner"));
@@ -145,19 +145,22 @@ cron.schedule(
 );
 
 async function testTaskRunnerQueue() {
-  console.log("Manually triggering taskRunnerQueue for testing...");
+  console.log(`Manually triggering taskRunnerQueue for testing in ${ENVIRONMENT} MODE...`);
   const idsList = await fetcher("account/sync"); // Fetch IDs as you do in the cron
-  const CHECKID = 233;
-  const CHECKTYPE = "ASSOCIATION";
-  if (idsList && idsList.length) {
-    console.log(`Received ${idsList.length} IDs for manual test.`);
-    //console.log(idsList)
+
+  if (ENVIRONMENT === "development") {
+    const LOCALTEST = { PATH: "ASSOCIATION", ID: 233, continue: true };
     taskRunnerQueue.add({
-      getSync: { PATH: CHECKTYPE, ID: CHECKID, continue: true },
+      getSync: LOCALTEST,
     });
-    //idsList.forEach(ITEM => taskRunnerQueue.add({getSync:ITEM}));
   } else {
-    console.log("No tasks available for manual testing.");
+    if (idsList && idsList.length) {
+      console.log(`Received ${idsList.length} IDs for manual test.`);
+      //console.log(idsList)
+      idsList.forEach(ITEM => taskRunnerQueue.add({getSync:ITEM}));
+    } else {
+      console.log("No tasks available for manual testing.");
+    }
   }
 }
 
