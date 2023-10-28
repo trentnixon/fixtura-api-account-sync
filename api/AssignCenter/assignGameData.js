@@ -31,7 +31,7 @@ class assignGameData {
             if (existingGameId) {
                 await this.updateGameData(existingGameId, game);
             } else {
-                await this.storeGameData(game); 
+                await this.storeGameData(game);  
             }
         }
     }

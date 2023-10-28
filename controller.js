@@ -72,11 +72,12 @@ class DataController extends BaseController {
     try {
       console.log("STAT ACCOUNT SET UP");
 
-    /*   console.log(dataObj)
-      throw new Error("STOP HERE"); */
+          /*    
+            console.log(dataObj)
+            throw new Error("STOP HERE BEFORE processGameData"); 
+          */
 
-       /* throw new Error("STOP HERE BEFORE processGameData"); */
-      // Scrap and process the Competition Data
+       // Scrap and process the Competition Data
       await this.processAndAssignCompetitions(dataObj);
       // Get an Updated DataOBJ for Account Type
       dataObj = await this.dataCenter(this.strapiData); 
@@ -163,21 +164,31 @@ class DataController extends BaseController {
 
 
   async processGameData(dataObj) {
-    const scrapeGameData = new getGameData(dataObj.ACCOUNT, dataObj.TEAMS);
+ 
+    /*  const TestTeamsOBJ=[{
+      teamName: 'Whanganui Renegades T20',
+      id: 6882,
+      href: '/new-zealand-cricket/org/whanganui-renegades-cricket-club/1226a03c/cricket-whanganui-premier-cricket-summer-202324/teams/whanganui-renegades-t20/a9f24d9e',
+      grade: 7846
+    }] */
+    const useTeamsOBJ =  dataObj.TEAMS
+   
+    const scrapeGameData = new getGameData(dataObj.ACCOUNT,useTeamsOBJ );
 
     // Suppose each batch fetches data for 10 teams (this number can be adjusted)
     const batchSize = 10;
-    const totalBatches = Math.ceil(dataObj.TEAMS.length / batchSize);
+    const totalBatches = Math.ceil(useTeamsOBJ.length / batchSize);
 
     for (let i = 0; i < totalBatches; i++) {
-        const currentBatchTeams = dataObj.TEAMS.slice(i * batchSize, (i + 1) * batchSize);
+        const currentBatchTeams = useTeamsOBJ.slice(i * batchSize, (i + 1) * batchSize);
         
         // Scrape data for the current batch
         const filteredArray = await scrapeGameData.setupBatch(currentBatchTeams); 
-
+        //console.log(filteredArray)
         // Assign game data for the current batch
+        
         const assignGameDataObj = new assignGameData();
-        await assignGameDataObj.setup(filteredArray); 
+        await assignGameDataObj.setup(filteredArray);  
     }
 }
 }
@@ -207,7 +218,7 @@ async function Controller_Associations(FromSTRAPI) {
       FromSTRAPI
     );
     await dataController.fetchAndUpdateData();
-    return { Complete: true };
+    return { Complete: true }; 
   } catch (error) {
     console.error(`Error getting Association Details: ${error}`);
     //throw error;
