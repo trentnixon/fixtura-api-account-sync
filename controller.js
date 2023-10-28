@@ -186,7 +186,6 @@ class DataController extends BaseController {
         const filteredArray = await scrapeGameData.setupBatch(currentBatchTeams); 
         //console.log(filteredArray)
         // Assign game data for the current batch
-        
         const assignGameDataObj = new assignGameData();
         await assignGameDataObj.setup(filteredArray);  
     }

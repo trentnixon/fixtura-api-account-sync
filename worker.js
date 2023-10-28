@@ -149,10 +149,10 @@ async function testTaskRunnerQueue() {
   const idsList = await fetcher("account/sync"); // Fetch IDs as you do in the cron
 
   if (ENVIRONMENT === "development") {
-    const LOCALTEST = { PATH: "ASSOCIATION", ID: 233, continue: true };
+    /* const LOCALTEST = { PATH: "CLUB", ID: 230, continue: true };
     taskRunnerQueue.add({
       getSync: LOCALTEST,
-    });
+    }); */
   } else {
     if (idsList && idsList.length) {
       console.log(`Received ${idsList.length} IDs for manual test.`);

@@ -51,17 +51,17 @@ async function processIndividualMatch(matchElement, GradeID, teamMatches, index)
     let dateObj = moment(date, "dddd, DD MMMM YYYY").toDate();
     let countChildren = await ScrapeChildren(matchElement, Constants.SELECTORS.CHILDREN);
     
-    console.log("index", index);
-    console.log(`Date has ${countChildren} Divs in it. xPath is ${Constants.SELECTORS.CHILDREN}`);
+    //console.log("index", index);
+    //console.log(`Date has ${countChildren} Divs in it. xPath is ${Constants.SELECTORS.CHILDREN}`);
     
     // Skip processing this match if it appears to be a 'bye', but don't return from the function
     if (countChildren === 0) {
-      console.log(`This game has ${countChildren} Children, it must be a BYE`);
+      //console.log(`This game has ${countChildren} Children, it must be a BYE`);
       return;  // Continue to the next match in the main loop
     }
   
     for (let gameIndex = 1; gameIndex <= countChildren - 1; gameIndex++) {
-      console.log("gameIndex", gameIndex, "countChildren", countChildren);
+      //console.log("gameIndex", gameIndex, "countChildren", countChildren);
       let baseXpath = `li[data-testid='games-on-date'] > div:nth-child(${gameIndex + 1})`;
      
       await processGameDetails(matchElement, baseXpath, teamMatches, GradeID, { round, date, dateObj });
@@ -75,7 +75,7 @@ async function isByeMatch(matchElement) {
 }
 
 async function processGameDetails(matchElement, baseXpath, teamMatches, GradeID, matchInfo) {
-    console.log("baseXpath", baseXpath)
+    //console.log("baseXpath", baseXpath)
     let { type, time, ground } = await scrapeTypeTimeGround(matchElement, baseXpath);
     let status = checkString(await ScrapeStatus(matchElement, `${baseXpath} ${Constants.SELECTORS.STATUS.STATUS}`));
     let urlToScoreCard = checkString(await ScrapeGameURL(matchElement, `${baseXpath} ${Constants.SELECTORS.URL.General}`)); 
