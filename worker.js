@@ -149,10 +149,10 @@ async function testTaskRunnerQueue() {
   const idsList = await fetcher("account/sync"); // Fetch IDs as you do in the cron
 
   if (ENVIRONMENT === "development") {
-    /* const LOCALTEST = { PATH: "CLUB", ID: 230, continue: true };
+    const LOCALTEST = { PATH: "Association", ID: 234, continue: true };
     taskRunnerQueue.add({
       getSync: LOCALTEST,
-    }); */
+    });
   } else {
     if (idsList && idsList.length) {
       console.log(`Received ${idsList.length} IDs for manual test.`);
@@ -165,7 +165,11 @@ async function testTaskRunnerQueue() {
 }
 
 // Call it directly for testing
-testTaskRunnerQueue();
+//testTaskRunnerQueue(); 
+
+
+
+
 
 /* cron.schedule("1 * * * *", async () => {
     console.log("Checking if there's any task for taskRunnerQueue");

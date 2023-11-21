@@ -19,4 +19,4 @@ if (process.env.NODE_ENV === 'production') {
   config.cacheDirectory = join(__dirname, '.cache', 'puppeteer');
 }
 
-module.exports = config;
+module.exports = config;  
