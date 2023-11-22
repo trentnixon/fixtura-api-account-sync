@@ -127,7 +127,7 @@ taskRunnerQueue.process(async (job) => {
 taskRunnerQueue.on("failed", errorHandler("taskRunner"));
 
 cron.schedule(
-  "*/5 * * * *",
+  "*/30 * * * *",
   async () => {
     try {
       const idsList = await fetcher("account/sync");
