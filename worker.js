@@ -149,7 +149,7 @@ async function testTaskRunnerQueue() {
   const idsList = await fetcher("account/sync"); // Fetch IDs as you do in the cron
 
   if (ENVIRONMENT === "development") {
-    const LOCALTEST = { PATH: "Association", ID: 234, continue: true };
+    const LOCALTEST = { PATH: "Club", ID: 242, continue: true };
     taskRunnerQueue.add({
       getSync: LOCALTEST,
     });
@@ -166,93 +166,3 @@ async function testTaskRunnerQueue() {
 
 // Call it directly for testing
 //testTaskRunnerQueue(); 
-
-
-
-
-
-/* cron.schedule("1 * * * *", async () => {
-    console.log("Checking if there's any task for taskRunnerQueue");
-    const getSync = await fetcher("account/sync");
-    console.log(getSync)
-    if (getSync && getSync.continue === true) {
-        console.log("Adding task to taskRunnerQueue");
-        taskRunnerQueue.add(getSync);
-    } else {
-        console.log("No task to add for taskRunner at the moment.");
-    }
-}, {
-    timezone: "Australia/Sydney",
-}); */
-
-/* async function startTaskRunner() {
-    console.log("startTaskRunnerstartTaskRunnerstartTaskRunner")
-  try {
-    const getSync = await fetcher("account/sync");
-
-    if (getSync.continue === true) {
-    
-      getSync.PATH === "CLUB"
-        ? await Controller_Club(getSync)
-        : await Controller_Associations(getSync);
-   
-    } else {
-      console.log("startTaskRunner Check! No Account to Update");
-    }
-  } catch (error) {
-    console.error("Error executing the task:", error);
-    logger.error(`An error occurred on startTaskRunner ${error}`);
-    logger.critical("An error occurred on startTaskRunner", {
-      file: "worker.js",
-      function: "startTaskRunner",
-      error: error,
-    });
-  }
-} */
-
-/* async function accountInit() {
-    console.log("accountInitaccountInitaccountInit")
-  try {
-    const getSync = await fetcher("account/AccountInit");
-    if (getSync.continue === true) {
-      console.log("account Init Return Value", getSync.ID);
-      logger.warn(`INIT accountInit Started ${getSync.ID} ...`);
-      getSync.PATH === "CLUB"
-        ? await Controller_Club(getSync)
-        : await Controller_Associations(getSync);
-      console.log("Task successfully executed");
-      await fetcher(`accounts/${getSync.ID}`, "PUT", {
-        data: { isSetup: true },
-      });
-      logger.warn(`accountInit Completed ${getSync.ID} ...`);
-    } else {
-      console.log("accountInit Check! No Account to Update");
-    }
-  } catch (error) {
-    console.error("Error executing the task in accountInit:", error);
-    logger.critical("An error occurred on accountInit", {
-      file: "worker.js",
-      function: "accountInit",
-      error: error,
-    });
-  }
-} */
-/* accountInitQueue.process(async (job) => {
-  try {
-    await accountInit();
-    console.log("Account init task successfully executed");
-  } catch (error) {
-    console.error("Error executing the accountInit task:", error);
-    logger.error(`An error occurred on accountInit ${error}`);
-  }
-}); */
-
-/* if(process.env.NODE_ENV === "development") {
-  taskRunnerQueueName = "taskRunnerDev";
-  accountInitQueueName = "accountInitDev";
-} else if (process.env.NODE_ENV === "production") {
-  taskRunnerQueueName = "taskRunner";
-  accountInitQueueName = "accountInit";
-} else {
-  throw new Error("Undefined Node Environment");
-} */

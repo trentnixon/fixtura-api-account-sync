@@ -40,7 +40,7 @@ class DataController extends BaseController {
     this.memoryTracker = null;
   }
 
-  async fetchAndUpdateData() {
+  async fetchAndUpdateData() { 
     let hasError = false;
     this.memoryTracker = trackMemoryUsage(); // Start memory tracking
     const startTime = new Date(); // Start time
@@ -165,15 +165,19 @@ class DataController extends BaseController {
 
   async processGameData(dataObj) {
  
+    // Test a Single Team
     /*  const TestTeamsOBJ=[{
-      teamName: 'Whanganui Renegades T20',
-      id: 6882,
-      href: '/new-zealand-cricket/org/whanganui-renegades-cricket-club/1226a03c/cricket-whanganui-premier-cricket-summer-202324/teams/whanganui-renegades-t20/a9f24d9e',
-      grade: 7846
-    }] */
+      teamName: 'Lynbrook',
+      id: 9271,
+      href: '/cricket-australia/org/lynbrook-cricket-club/8b217653/ddca-senior-competition-summer-202324/teams/lynbrook/54d2bc10',
+      grade: 5706
+    }]  */
+    //const useTeamsOBJ = TestTeamsOBJ
+
+    // Use ALl Teams
     const useTeamsOBJ =  dataObj.TEAMS
-   
-    const scrapeGameData = new getGameData(dataObj.ACCOUNT,useTeamsOBJ );
+
+    const scrapeGameData = new getGameData(dataObj.ACCOUNT,useTeamsOBJ);
 
     // Suppose each batch fetches data for 10 teams (this number can be adjusted)
     const batchSize = 10;

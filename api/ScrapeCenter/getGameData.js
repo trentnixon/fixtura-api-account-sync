@@ -11,7 +11,7 @@ class getTeamsGameData extends BaseController {
     this.ACCOUNTTYPE = ACCOUNT.ACCOUNTTYPE;
     this.dependencies = require("../../common/dependencies");
   }
-
+ 
   async LoopGamesBatch(teamsBatch) {
     let StoreGames = [];
     const page = await this.browser.newPage();
@@ -35,8 +35,9 @@ class getTeamsGameData extends BaseController {
       await page.waitForTimeout(1000);
   
       const matchList = await getMatchList(page, xPATH);
-      console.log("matchList:", matchList.length);
+      //console.log("matchList:", matchList.length);
   
+     
       const gameData = await ProcessGameModule(matchList, grade);
       StoreGames.push(...gameData.filter((match) => match !== null));
     } catch (error) {
@@ -51,10 +52,13 @@ class getTeamsGameData extends BaseController {
   
 
   async setupBatch(teamsBatch) {
-
+    console.log(teamsBatch)
+   
     try {
       await this.initDependencies(this.ACCOUNTID);
       const result = await this.LoopGamesBatch(teamsBatch);
+      //console.log(result)
+
       return this.filterDuplicates(result);
     } catch (err) {
       logger.error("Error during setupBatch:", err);
