@@ -111,7 +111,7 @@ const taskRunnerQueue = new Queue(
 taskRunnerQueue.process(async (job) => {
   const getSync = job.data.getSync;
   console.log(getSync)
- /*  try {
+  try {
     if (getSync.PATH === "CLUB") {
       await Controller_Club(getSync);
     } else {
@@ -124,7 +124,7 @@ taskRunnerQueue.process(async (job) => {
       stack: error.stack,
     });
     throw error;
-  } */
+  }
 });
 
 taskRunnerQueue.on("failed", errorHandler("taskRunner"));
