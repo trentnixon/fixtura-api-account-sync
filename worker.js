@@ -133,13 +133,22 @@ cron.schedule(
   async () => {
     try {
       const idsList = await fetcher("account/sync");
-      idsList.forEach((ITEM) => taskRunnerQueue.add({ getSync: ITEM }));
+      console.log("idsList", idsList);
+      if (idsList.continue) {
+        idsList.accountsToProcess.forEach((ITEM) =>
+          taskRunnerQueue.add({ getSync: ITEM })
+        );
+      } else {
+        console.log("Nothing to process");
+      }
     } catch (error) {
       logger.error("Error in sync cron job", {
         error: error.message,
         stack: error.stack,
       });
       console.log(error.message);
+      console.log(error.stack);
+      console.log(error);
     }
   },
   {
@@ -174,11 +183,12 @@ async function testTaskRunnerQueue() {
 
 const testThis = async () => {
   try {
- 
     const idsList = await fetcher("account/sync");
     console.log("idsList", idsList);
     if (idsList.continue) {
-      idsList.accountsToProcess.forEach((ITEM) => taskRunnerQueue.add({ getSync: ITEM }));
+      idsList.accountsToProcess.forEach((ITEM) =>
+        taskRunnerQueue.add({ getSync: ITEM })
+      );
     } else {
       console.log("Nothing to process");
     }
