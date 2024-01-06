@@ -177,12 +177,16 @@ const testThis = async()=>{
   try {
     console.log("try this")
     const idsList = await fetcher("account/sync");
+    console.log("idsList", idsList)
     idsList.forEach((ITEM) => taskRunnerQueue.add({ getSync: ITEM }));
   } catch (error) {
     logger.error("Error in sync cron job", {
       error: error.message,
       stack: error.stack,
     });
+    console.log(error.message)
+    console.log(error.stack)
+    console.log(error)
   }
 }
 
