@@ -82,13 +82,15 @@ accountInitQueue.process(async (job) => {
 accountInitQueue.on("failed", errorHandler("accountInit"));
 
 cron.schedule(
-  "*/1 * * * *",
+  "*/55 * * * *",
   async () => {
+    
+    // Need to add a checker in here to see if the the ID is already in redis!
     try {
       const getSync = await fetcher("account/AccountInit");
       if (getSync && getSync.continue) {
         accountInitQueue.add(getSync);
-      } else {
+      } else { 
         console.log("No accountInit jobs to queue.");
       }
     } catch (error) {
@@ -108,7 +110,8 @@ const taskRunnerQueue = new Queue(
 );
 taskRunnerQueue.process(async (job) => {
   const getSync = job.data.getSync;
-  try {
+  console.log(getSync)
+ /*  try {
     if (getSync.PATH === "CLUB") {
       await Controller_Club(getSync);
     } else {
@@ -121,13 +124,13 @@ taskRunnerQueue.process(async (job) => {
       stack: error.stack,
     });
     throw error;
-  }
+  } */
 });
 
 taskRunnerQueue.on("failed", errorHandler("taskRunner"));
 
 cron.schedule(
-  "*/30 * * * *",
+  "*/1 * * * *",
   async () => {
     try {
       const idsList = await fetcher("account/sync");
