@@ -173,7 +173,7 @@ async function testTaskRunnerQueue() {
 // Call it directly for testing
 //testTaskRunnerQueue(); 
 
-/* const testThis = async()=>{
+const testThis = async()=>{
   try {
     console.log("try this")
     const idsList = await fetcher("account/sync");
@@ -186,4 +186,4 @@ async function testTaskRunnerQueue() {
   }
 }
 
-testThis() */
+testThis()
