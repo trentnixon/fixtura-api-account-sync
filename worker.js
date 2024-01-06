@@ -82,7 +82,7 @@ accountInitQueue.process(async (job) => {
 accountInitQueue.on("failed", errorHandler("accountInit"));
 
 cron.schedule(
-  "*/55 * * * *",
+  "*/1 * * * *",
   async () => {
     // Need to add a checker in here to see if the the ID is already in redis!
     try {
@@ -102,6 +102,9 @@ cron.schedule(
   { timezone: "Australia/Sydney" }
 );
 
+/// END accountInitQueue
+
+// START TaskRunner
 // TaskRunner Queue
 const taskRunnerQueue = new Queue(
   QUEUE_CONFIG[ENVIRONMENT].taskRunner,
@@ -109,7 +112,7 @@ const taskRunnerQueue = new Queue(
 );
 taskRunnerQueue.process(async (job) => {
   const getSync = job.data.getSync;
-  console.log(getSync);
+  console.log("getSync", getSync);
   try {
     if (getSync.PATH === "CLUB") {
       await Controller_Club(getSync);
@@ -128,16 +131,35 @@ taskRunnerQueue.process(async (job) => {
 
 taskRunnerQueue.on("failed", errorHandler("taskRunner"));
 
+async function isJobInQueue(queue, jobId) {
+  const jobs = await queue.getJobs(["waiting", "active"]);
+  return jobs.some((job) => job.data.getSync && job.data.getSync.ID === jobId);
+}
+
+async function addJobToQueue(queue, jobData) {
+  const jobId = jobData.getSync.ID;
+  const jobIdExists = await isJobInQueue(queue, jobId);
+
+  if (!jobIdExists) {
+    await queue.add(jobData);
+    console.log(`Job added to queue for ID: ${jobId}`);
+  } else {
+    console.log(`Job for ID: ${jobId} already exists in the queue.`);
+  }
+}
+
 cron.schedule(
-  "*/1 * * * *",
+  "*/30 * * * *",
   async () => {
     try {
       const idsList = await fetcher("account/sync");
       console.log("idsList", idsList);
       if (idsList.continue) {
-        idsList.accountsToProcess.forEach((ITEM) =>
-          taskRunnerQueue.add({ getSync: ITEM })
-        );
+        idsList.accountsToProcess.forEach((ITEM) => {
+          //taskRunnerQueue.add({ getSync: ITEM })
+          console.log("ITEM", ITEM);
+          addJobToQueue(taskRunnerQueue, { getSync: ITEM });
+        });
       } else {
         console.log("Nothing to process");
       }
@@ -153,7 +175,9 @@ cron.schedule(
   }
 );
 
-async function testTaskRunnerQueue() {
+/// END taskRunnerQueue
+
+/* async function testTaskRunnerQueue() {
   console.log(
     `Manually triggering taskRunnerQueue for testing in ${ENVIRONMENT} MODE...`
   );
@@ -173,7 +197,7 @@ async function testTaskRunnerQueue() {
       console.log("No tasks available for manual testing.");
     }
   }
-}
+} */
 
 // Call it directly for testing
 //testTaskRunnerQueue();
