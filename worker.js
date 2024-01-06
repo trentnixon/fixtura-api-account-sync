@@ -111,7 +111,7 @@ const taskRunnerQueue = new Queue(
 taskRunnerQueue.process(async (job) => {
   const getSync = job.data.getSync;
   console.log(getSync)
-  try {
+  /* try {
     if (getSync.PATH === "CLUB") {
       await Controller_Club(getSync);
     } else {
@@ -124,10 +124,11 @@ taskRunnerQueue.process(async (job) => {
       stack: error.stack,
     });
     throw error;
-  }
+  } */
 });
 
 taskRunnerQueue.on("failed", errorHandler("taskRunner"));
+
 
 cron.schedule(
   "*/1 * * * *",
@@ -136,7 +137,7 @@ cron.schedule(
       const idsList = await fetcher("account/sync");
       idsList.forEach((ITEM) => taskRunnerQueue.add({ getSync: ITEM }));
     } catch (error) {
-      logger.error("Error in taskRunner cron job", {
+      logger.error("Error in sync cron job", {
         error: error.message,
         stack: error.stack,
       });
@@ -169,3 +170,18 @@ async function testTaskRunnerQueue() {
 
 // Call it directly for testing
 //testTaskRunnerQueue(); 
+
+const testThis = async()=>{
+  try {
+    console.log("try this")
+    const idsList = await fetcher("account/sync");
+    idsList.forEach((ITEM) => taskRunnerQueue.add({ getSync: ITEM }));
+  } catch (error) {
+    logger.error("Error in sync cron job", {
+      error: error.message,
+      stack: error.stack,
+    });
+  }
+}
+
+testThis()
