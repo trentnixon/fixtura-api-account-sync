@@ -84,13 +84,12 @@ accountInitQueue.on("failed", errorHandler("accountInit"));
 cron.schedule(
   "*/55 * * * *",
   async () => {
-    
     // Need to add a checker in here to see if the the ID is already in redis!
     try {
       const getSync = await fetcher("account/AccountInit");
       if (getSync && getSync.continue) {
         accountInitQueue.add(getSync);
-      } else { 
+      } else {
         console.log("No accountInit jobs to queue.");
       }
     } catch (error) {
@@ -103,14 +102,14 @@ cron.schedule(
   { timezone: "Australia/Sydney" }
 );
 
-// TaskRunner Queue 
+// TaskRunner Queue
 const taskRunnerQueue = new Queue(
   QUEUE_CONFIG[ENVIRONMENT].taskRunner,
   process.env.REDISCLOUD_URL
 );
 taskRunnerQueue.process(async (job) => {
   const getSync = job.data.getSync;
-  console.log(getSync)
+  console.log(getSync);
   /* try {
     if (getSync.PATH === "CLUB") {
       await Controller_Club(getSync);
@@ -129,7 +128,6 @@ taskRunnerQueue.process(async (job) => {
 
 taskRunnerQueue.on("failed", errorHandler("taskRunner"));
 
-
 cron.schedule(
   "*/1 * * * *",
   async () => {
@@ -141,8 +139,7 @@ cron.schedule(
         error: error.message,
         stack: error.stack,
       });
-      console.log(error.message)
-
+      console.log(error.message);
     }
   },
   {
@@ -151,7 +148,9 @@ cron.schedule(
 );
 
 async function testTaskRunnerQueue() {
-  console.log(`Manually triggering taskRunnerQueue for testing in ${ENVIRONMENT} MODE...`);
+  console.log(
+    `Manually triggering taskRunnerQueue for testing in ${ENVIRONMENT} MODE...`
+  );
   const idsList = await fetcher("account/sync"); // Fetch IDs as you do in the cron
 
   if (ENVIRONMENT === "development") {
@@ -163,7 +162,7 @@ async function testTaskRunnerQueue() {
     if (idsList && idsList.length) {
       console.log(`Received ${idsList.length} IDs for manual test.`);
       //console.log(idsList)
-      idsList.forEach(ITEM => taskRunnerQueue.add({getSync:ITEM}));
+      idsList.forEach((ITEM) => taskRunnerQueue.add({ getSync: ITEM }));
     } else {
       console.log("No tasks available for manual testing.");
     }
@@ -171,23 +170,27 @@ async function testTaskRunnerQueue() {
 }
 
 // Call it directly for testing
-//testTaskRunnerQueue(); 
+//testTaskRunnerQueue();
 
-const testThis = async()=>{
+const testThis = async () => {
   try {
-    console.log("try this")
+ 
     const idsList = await fetcher("account/sync");
-    console.log("idsList", idsList)
-    idsList.forEach((ITEM) => taskRunnerQueue.add({ getSync: ITEM }));
+    console.log("idsList", idsList);
+    if (idsList.continue) {
+      idsList.accountsToProcess.forEach((ITEM) => taskRunnerQueue.add({ getSync: ITEM }));
+    } else {
+      console.log("Nothing to process");
+    }
   } catch (error) {
     logger.error("Error in sync cron job", {
       error: error.message,
       stack: error.stack,
     });
-    console.log(error.message)
-    console.log(error.stack)
-    console.log(error)
+    console.log(error.message);
+    console.log(error.stack);
+    console.log(error);
   }
-}
+};
 
-testThis()
+testThis();
