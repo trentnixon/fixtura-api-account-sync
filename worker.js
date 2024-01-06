@@ -141,6 +141,8 @@ cron.schedule(
         error: error.message,
         stack: error.stack,
       });
+      console.log(error.message)
+
     }
   },
   {
@@ -171,7 +173,7 @@ async function testTaskRunnerQueue() {
 // Call it directly for testing
 //testTaskRunnerQueue(); 
 
-const testThis = async()=>{
+/* const testThis = async()=>{
   try {
     console.log("try this")
     const idsList = await fetcher("account/sync");
@@ -184,4 +186,4 @@ const testThis = async()=>{
   }
 }
 
-testThis()
+testThis() */
