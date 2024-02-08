@@ -1,4 +1,4 @@
-const TaskProcessor = require("./TaskProcessor");
+const TaskProcessor = require("./taskProcessor");
 const logger = require("../utils/logger");
 
 const { Controller_Club } = require("../controller/controller");
