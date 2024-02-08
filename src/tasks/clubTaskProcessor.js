@@ -11,11 +11,16 @@ class ClubTaskProcessor extends TaskProcessor {
       await Controller_Club(job.data);
 
       // Update the account's setup status
-      console.log("ClubTaskProcessor COMPLETED Set isSet up to TRUE", job.data.getSync)
+      console.log(
+        "ClubTaskProcessor COMPLETED Set isSet up to TRUE",
+        job.data.getSync
+      );
       await fetcher(`accounts/${job.data.getSync.ID}`, "PUT", {
-        data: { isSetup: true }, 
+        data: { isSetup: true },
       });
-      logger.info(`Successfully processed accountInit for ID: ${job.data.getSync.ID}`);
+      logger.info(
+        `Successfully processed accountInit for ID: ${job.data.getSync.ID}`
+      );
     } catch (error) {
       logger.error(
         `Error processing club task for ID: ${job.data.getSync.ID}: ${error.message}`,
