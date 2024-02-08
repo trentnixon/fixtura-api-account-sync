@@ -1,6 +1,6 @@
 const logger = require("../../../src/utils/logger");
 const GameDataFetcher = require("./GameDataFetcher");
-const ProcessingTracker = require("../../services/ProcessingTracker");
+const ProcessingTracker = require("../../services/processingTracker");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
 
 class GetTeamsGameData {

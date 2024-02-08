@@ -1,7 +1,7 @@
 const logger = require("../../src/utils/logger");
 const AssignCompetitions = require("../assignCenter/assignCompetitions");
 const GetCompetitions = require("../scrapeCenter/Competitions/getCompetitions");
-const ProcessingTracker = require("../services/ProcessingTracker");
+const ProcessingTracker = require("../services/processingTracker");
 
 /**
  * The CompetitionProcessor class is responsible for processing competition data.

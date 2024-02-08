@@ -1,7 +1,7 @@
 const logger = require("../../src/utils/logger");
 const AssignTeamsToCompsAndGrades = require("../assignCenter/assignTeamsToComps");
 const GetTeamsFromLadder = require("../scrapeCenter/Ladder/getTeamsFromLadder");
-const ProcessingTracker = require("../services/ProcessingTracker");
+const ProcessingTracker = require("../services/processingTracker");
 
 /**
  * TeamProcessor class handles the overall process of fetching and assigning team data.

@@ -4,7 +4,7 @@ const CompetitionProcessor = require("../processors/competitionProcessor");
 const TeamProcessor = require("../processors/teamProcessor");
 const GameDataProcessor = require("../processors/gameDataProcessor");
 const CRUDOperations = require("../services/CRUDoperations");
-const ProcessingTracker = require("../services/ProcessingTracker");
+const ProcessingTracker = require("../services/processingTracker");
 
 const errorHandler = require("../utils/errorHandler");
 const logger = require("../../src/utils/logger");

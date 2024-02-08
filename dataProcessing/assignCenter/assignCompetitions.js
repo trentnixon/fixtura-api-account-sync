@@ -2,7 +2,7 @@ const CompetitionUtils = require("./competition/CompetitionUtils");
 const CompetitionHandler = require("./competition/CompetitionHandler");
 const CompetitionCRUD = require("./competition/CompetitionCRUD");
 const logger = require("../../src/utils/logger");
-const ProcessingTracker = require("../services/ProcessingTracker");
+const ProcessingTracker = require("../services/processingTracker");
 
 /**
  * Processes and assigns competition data.

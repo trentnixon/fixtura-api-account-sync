@@ -2,7 +2,7 @@ const logger = require("../../../src/utils/logger");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
 const AssociationCompetitionsFetcher = require("./AssociationCompetitionsFetcher");
 const CRUDOperations = require("../../services/CRUDoperations");
-const ProcessingTracker = require("../../services/ProcessingTracker");
+const ProcessingTracker = require("../../services/processingTracker");
 
 /**
  * Handles scraping of competition data from websites.

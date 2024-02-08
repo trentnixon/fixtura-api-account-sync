@@ -1,7 +1,7 @@
 const logger = require("../../src/utils/logger");
 const assignGameData = require("../assignCenter/assignGameData");
 const getTeamsGameData = require("../scrapeCenter/GameData/getGameData");
-const ProcessingTracker = require("../services/ProcessingTracker");
+const ProcessingTracker = require("../services/processingTracker");
 
 /**
  * GameDataProcessor class handles the overall process of fetching and assigning game data.

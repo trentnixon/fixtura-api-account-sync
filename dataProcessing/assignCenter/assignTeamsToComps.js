@@ -1,4 +1,4 @@
-const ProcessingTracker = require("../services/ProcessingTracker");
+const ProcessingTracker = require("../services/processingTracker");
 const logger = require("../../src/utils/logger");
 const TeamCRUD = require("./teams/TeamCRUD");
 

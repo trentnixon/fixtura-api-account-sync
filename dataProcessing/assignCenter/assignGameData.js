@@ -1,4 +1,4 @@
-const ProcessingTracker = require("../services/ProcessingTracker");
+const ProcessingTracker = require("../services/processingTracker");
 const GameCRUD = require("./games/GameCrud");
 const logger = require("../../src/utils/logger");
 
