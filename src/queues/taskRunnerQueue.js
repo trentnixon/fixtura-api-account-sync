@@ -10,7 +10,7 @@ const taskRunnerQueue = new Queue(
   QUEUE_CONFIG[ENVIRONMENT].taskRunner,
   process.env.REDISCLOUD_URL // or your Redis configuration
 );
-
+ 
 taskRunnerQueue.process(async (job) => {
   try {
     const { PATH, ID } = job.data.getSync; // Ensure this matches the structure of your job data

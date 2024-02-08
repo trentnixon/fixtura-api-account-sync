@@ -4,7 +4,7 @@ const CRUDOperations = require("../../services/CRUDoperations");
 const ProcessingTracker = require("../../services/processingTracker");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
 
-/**
+/** 
  * The GetTeams class handles scraping of team data from websites.
  * Supports different modes for clubs and associations and includes duplicate removal logic.
  */
@@ -23,8 +23,9 @@ class GetTeams {
   }
 
   async initPage() {
-    await this.puppeteerManager.launchBrowser();
-    return this.puppeteerManager.browser.newPage();
+    return await this.puppeteerManager.createPageInNewContext(); 
+    /* await this.puppeteerManager.launchBrowser();
+    return this.puppeteerManager.browser.newPage(); */
   }
 
   async fetchTeamData(page, fetcherInfo) {

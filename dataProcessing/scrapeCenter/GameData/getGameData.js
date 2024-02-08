@@ -2,7 +2,7 @@ const logger = require("../../../src/utils/logger");
 const GameDataFetcher = require("./GameDataFetcher");
 const ProcessingTracker = require("../../services/processingTracker");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
-
+ 
 class GetTeamsGameData {
   constructor(dataObj) {
     this.teams = dataObj.TEAMS;
@@ -15,8 +15,9 @@ class GetTeamsGameData {
 
   // Initialize Puppeteer and create a new page
   async initPage() {
-    await this.puppeteerManager.launchBrowser();
-    return this.puppeteerManager.browser.newPage();
+    return await this.puppeteerManager.createPageInNewContext(); 
+    /* await this.puppeteerManager.launchBrowser();
+    return this.puppeteerManager.browser.newPage(); */
   }
 
   async processGamesBatch(page, teamsBatch) {

@@ -20,8 +20,9 @@ class GetCompetitions {
 
   // Initialize Puppeteer and create a new page 
   async initPage() {
-    await this.puppeteerManager.launchBrowser();
-    return this.puppeteerManager.browser.newPage();
+    return await this.puppeteerManager.createPageInNewContext(); 
+   /*  await this.puppeteerManager.launchBrowser();
+    return this.puppeteerManager.browser.newPage(); */ 
   }
 
   // Fetch competitions for associations
@@ -64,7 +65,7 @@ class GetCompetitions {
   // Main method to setup competition scraping
   async setup() {
     try {
-      const page = await this.initPage();
+      const page = await this.initPage(); 
       let competitions = [];
 
       if (this.ACCOUNTTYPE === "ASSOCIATION") {
