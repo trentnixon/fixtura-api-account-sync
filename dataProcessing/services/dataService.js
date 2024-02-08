@@ -5,7 +5,7 @@ const {
   getAssociationObj,
   getDetailedAssociationDetails,
 } = require("../utils/ProcessorUtils");
-const CRUDOperations = require("./CRUDOperations");
+const CRUDOperations = require("./CRUDoperations");
  
 class DataService {
   constructor() {

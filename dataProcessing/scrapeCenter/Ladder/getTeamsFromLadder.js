@@ -1,6 +1,6 @@
 const logger = require("../../../src/utils/logger");
 const TeamFetcher = require("./TeamFetcher");
-const CRUDOperations = require("../../services/CRUDOperations");
+const CRUDOperations = require("../../services/CRUDoperations");
 const ProcessingTracker = require("../../services/ProcessingTracker");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
 

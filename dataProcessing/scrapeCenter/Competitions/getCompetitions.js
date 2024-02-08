@@ -1,7 +1,7 @@
 const logger = require("../../../src/utils/logger");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
 const AssociationCompetitionsFetcher = require("./AssociationCompetitionsFetcher");
-const CRUDOperations = require("../../services/CRUDOperations");
+const CRUDOperations = require("../../services/CRUDoperations");
 const ProcessingTracker = require("../../services/ProcessingTracker");
 
 /**

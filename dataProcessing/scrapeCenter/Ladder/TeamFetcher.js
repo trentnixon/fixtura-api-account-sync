@@ -1,5 +1,5 @@
 const logger = require("../../../src/utils/logger");
-const CRUDOperations = require("../../services/CRUDOperations");
+const CRUDOperations = require("../../services/CRUDoperations");
 
 /**
  * TeamFetcher class is responsible for fetching team data from a given URL.

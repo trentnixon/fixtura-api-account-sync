@@ -1,5 +1,5 @@
 const logger = require("../../src/utils/logger");
-const CRUDOperations = require("./CRUDOperations");
+const CRUDOperations = require("./CRUDoperations");
 
 class ProcessingTracker {
   static instance = null;
