@@ -150,8 +150,7 @@ class AssignCompetitions {
     );
 
     try {
-      console.log("competitionId, resourcePath");
-      console.log(competitionId, resourcePath);
+  
       const response = await fetcher(`${resourcePath}?${query}`);
       return response.length > 0 ? response : false;
     } catch (error) {

@@ -23,7 +23,7 @@ class GetTeamsFromLadder extends BaseController {
     const page = await this.browser.newPage();
     const url = grade.url;
     try {
-      logger.info(`Navigating to ${url}/ladder`);
+      logger.info(`Navigating to ${url}/ladder`); 
       await page.goto(`${url}/ladder`);
 
       const teams = await this.getTeamNamesAndUrls(page); 
@@ -59,7 +59,7 @@ class GetTeamsFromLadder extends BaseController {
       for (const link of links) {
         const href = await link.evaluate(el => el.getAttribute('href'));
         const teamID = href.split("/").pop();
-        console.log(href)
+        //console.log(href)
         const splitUrl = href.split('/');
         const STRAPIID = splitUrl[4];
         
@@ -112,7 +112,7 @@ class GetTeamsFromLadder extends BaseController {
   async LoopURLS() {
     try {
       const allTeamData = [];
-
+ 
       for (const item of this.URLS) {
         const teamData = await this.processGrade(item);
         allTeamData.push(...teamData);
@@ -131,7 +131,7 @@ class GetTeamsFromLadder extends BaseController {
   }
 
   async setup() {
-    console.log("Fetch Teams");
+    //console.log("Fetch Teams");
     try {
       await this.initDependencies(this.ACCOUNTID); // Call the initDependencies method from the BaseController
       const result = await this.LoopURLS();

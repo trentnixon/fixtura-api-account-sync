@@ -21,7 +21,7 @@ class getTeamsGameData extends BaseController {
       const { teamName, id, href, grade } = teamsBatch[teamIndex];
       logger.info(`Processing team ${teamName} id ${id} (Index ${teamIndex} of ${teamsBatch.length})...`);
       await this.processTeam(page, href, grade, StoreGames, xPATH);
-    }
+    } 
 
     await page.close();
     logger.info(`CLASS GetCompetitions: Page Closed!!`);

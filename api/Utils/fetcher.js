@@ -19,7 +19,7 @@ async function fetcher(PATH, method = "GET", body = {}, retry = true) {
   }
 
   try {
-    logger.info(`Fetching data from ${process.env.FIXTURA_API}${PATH}`);
+    //logger.info(`Fetching data from ${process.env.FIXTURA_API}${PATH}`);
     const response = await fetch(`${process.env.FIXTURA_API}${PATH}`, options);
     const res = await response.json();
 
@@ -29,7 +29,7 @@ async function fetcher(PATH, method = "GET", body = {}, retry = true) {
       throw new Error(`Failed to fetch data from ${PATH}. Error: `);
     }
 
-    logger.info(`Data fetched successfully from ${PATH}`);
+    //logger.info(`Data fetched successfully from ${PATH}`);
     return res.data;
   } catch (error) {
     logger.error(`Error in fetcher: ${error}`);

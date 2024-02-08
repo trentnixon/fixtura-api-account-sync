@@ -8,6 +8,8 @@
     "worker": "nodemon worker.js",
     "start": "node index.js",
     "dev": "set NODE_ENV=development && set PORT=7000 && nodemon worker.js",
+    "updated": "set NODE_ENV=development && set PORT=7000 && nodemon worker_version3.js",
+    
     "LOGS": "heroku logs --tail"
   },
   "author": "",

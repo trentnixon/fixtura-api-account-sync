@@ -24,7 +24,7 @@ class getAssociationCompetitions {
 
   async fetchAssociations(pageNumber) {
     const query = createQuery(pageNumber);
-    return await fetcher(`associations?${query}`);
+    return await fetcher(`associations?${query}`); 
   }
 
   async processAssociation(page, association) {

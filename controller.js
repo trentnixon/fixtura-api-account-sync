@@ -1,4 +1,4 @@
-const { dataCenterClubs } = require("./api/DataCenter/evaluateClubs");
+const { dataCenterClubs } = require("./api/DataCenter/evaluateClubs"); 
 const {
   dataCenterAssociations,
 } = require("./api/DataCenter/evaluateAssociations");
@@ -26,7 +26,7 @@ function trackMemoryUsage(interval = 20000) {
       .map(([key, value]) => `${key}: ${(value / 1024 / 1024).toFixed(2)} MB`)
       .join(", ");
 
-    console.log(`Memory Usage: ${memoryUsageInfo}`);
+    console.log(`Memory Usage: ${memoryUsageInfo}`); 
   }, interval);
 
   return { intervalId, getPeakUsage: () => peakMemoryUsage };
@@ -153,12 +153,12 @@ class DataController extends BaseController {
 
     const clubTeams = new GetTeamsFromLadder(dataObj.ACCOUNT, dataObj.Grades);
     const teamList = await clubTeams.setup();
-
+  
      
  /*      console.log("teamList");
       throw new Error("STOP HERE"); */
    
-    const assignTeam = new AssignTeamsToCompsAndGrades();
+    const assignTeam = new AssignTeamsToCompsAndGrades(); 
     await assignTeam.setup(teamList);
   }
 
@@ -234,10 +234,3 @@ async function Controller_Associations(FromSTRAPI) {
 }
 
 module.exports = { Controller_Club, Controller_Associations };
-
- /*  async processGameData(dataObj) {
-    const scrapeGameData = new getGameData(dataObj.ACCOUNT, dataObj.TEAMS);
-    const filteredArray = await scrapeGameData.setup();
-    const assignGameDataObj = new assignGameData();
-    await assignGameDataObj.setup(filteredArray); 
-  } */

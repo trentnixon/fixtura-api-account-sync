@@ -33,7 +33,6 @@ class GetClubDetails extends BaseController {
       // Get the Comps for this club
       const competitions = await this.processCompetitions(Account);
  
-      console.log("competitions ", competitions) 
       if (!competitions) return false;
       /* Step 2 */ 
       // Assign the selected club to the Comps found

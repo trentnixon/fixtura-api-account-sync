@@ -15,7 +15,7 @@ async function dataCenterClubs(fromStrapi) {
         details.attributes.club_to_competitions.data,
         clubObj.TYPEID
       ),
-    };
+    }; 
   } catch (error) {
     console.error(error);
     logger.critical("An error occurred in dataCenterClubs", {

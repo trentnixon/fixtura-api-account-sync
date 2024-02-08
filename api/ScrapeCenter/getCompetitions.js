@@ -123,7 +123,7 @@ class GetCompetitions extends BaseController {
 
       // Optionally handle or ignore page errors
       page.on("pageerror", (err) => {
-        console.log("Page error: " + err.toString());
+        console.log("getCompetitions ::: Page error: " + err.toString());
         if (err instanceof EvalError) {
           console.log("Caught EvalError: " + err.toString());
         }
@@ -246,55 +246,3 @@ class GetCompetitions extends BaseController {
 }
 
 module.exports = GetCompetitions;
-
-
-
-
-/** Old version, dont delete yert as this one has the filtering, the one above is missing it. we may need to reinclude it later */
-  /* async extractCompetitionsData(page) {
-  return await page.evaluate(() => {
-      const extractYearFromLink = (url) => {
-          // You need to implement this function based on how the year is structured in your URL.
-          // Here's a generic example assuming the year is a 4-digit number in the URL
-          const match = url.match(/\d{4}/);
-          return match ? parseInt(match[0], 10) : null;
-      };
-
-      const seasonOrgs = Array.from(document.querySelectorAll('[data-testid^="season-org-"]'));
-
-      return seasonOrgs.flatMap((seasonOrg) => {
-          const orgName = seasonOrg.querySelector("div > div > span.organisation-name").textContent;
-          const competitionsList = Array.from(seasonOrg.querySelectorAll("h2"));
-
-          return competitionsList
-              .filter((competition) => {
-                  const completedSpan = Array.from(competition.parentElement.querySelectorAll("span")).find(
-                      (span) =>
-                          span.textContent === "Active" ||
-                          span.textContent === "Upcoming" ||
-                          span.textContent === "Pending" ||
-                          span.textContent === "Completed"
-                  );
-                  return completedSpan;
-              })
-              .map((competition) => {
-                  const competitionLinks = Array.from(competition.parentElement.querySelectorAll("a"));
-                  
-                  // Logic to pick the link for the latest year
-                  const latestLink = competitionLinks.reduce((latest, link) => {
-                      const year = extractYearFromLink(link.href);
-                      return year && year > extractYearFromLink(latest.href) ? link : latest;
-                  }, competitionLinks[0]); // Assuming there's at least one link
-                  
-                  const competitionName = competition.textContent;
-                  const competitionUrl = latestLink.href;
-
-                  return {
-                      competitionName,
-                      competitionUrl,
-                      orgName,
-                  };
-              });
-      });
-  });
-} */

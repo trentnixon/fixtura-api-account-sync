@@ -19,7 +19,7 @@ function checkString(value, defaultValue = "") {
   return value;
 }
 
-async function ProcessGameModule(matchList, GradeID) {
+async function ProcessGameModule(matchList, GradeID) { 
   let teamMatches = [];
 
   for (let index = 0; index < matchList.length; index++) {
@@ -35,7 +35,7 @@ async function ProcessGameModule(matchList, GradeID) {
       });
     }
   }
-  return teamMatches.filter((match) => match !== null);
+  return teamMatches.filter((match) => match !== null); 
 }
 
 async function processIndividualMatch(matchElement, GradeID, teamMatches, index) {
@@ -45,7 +45,7 @@ async function processIndividualMatch(matchElement, GradeID, teamMatches, index)
       teamMatches.push({ status: "bye" });
       return;  // Continue to the next match in the main loop
     }
-  
+   
     let round = checkString(await ScrapeRound(matchElement, Constants.SELECTORS.ROUND.General));
     let date = checkString(await ScrapeDate(matchElement, Constants.SELECTORS.DATE.General));
     let dateObj = moment(date, "dddd, DD MMMM YYYY").toDate();

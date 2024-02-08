@@ -34,7 +34,7 @@ class assignGameData {
                 await this.storeGameData(game);  
             }
         }
-    }
+    } 
 
     return {
         success: true,
@@ -69,36 +69,6 @@ class assignGameData {
       return false;
     }
   }
-
- 
-   /* async getTeamsIds(teamIDs) {
-    const query = qs.stringify(
-      {
-        filters: {
-          teamID: {
-            $in: teamIDs,
-          },
-        },
-      },
-      {
-        encodeValuesOnly: true,
-      }
-    );
-    try {
-      const response = await fetcher(`teams?${query}`);
-      return response.length === 0
-        ? [false, false]
-        : [response[0].id, response[1].id];
-    } catch (error) {
-      logger.error(`Error checking teamIDs ${teamIDs}:`, error);
-      logger.critical("An error occurred in getTeamsIds", {
-        file: "assignGameData.js",
-        function: "getTeamsIds",
-        error: error,
-      });
-      return [false, false];
-    }
-  } */
 
   async  getTeamsIds(teamIDs) {
     const query = qs.stringify(
