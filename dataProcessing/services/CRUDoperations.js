@@ -4,7 +4,7 @@ const fetcher = require("../../src/utils/fetcher");
 const logger = require("../../src/utils/logger");
 const queryHelpers = require("../utils/queryHelpers");
 const qs = require("qs");
-
+ 
 class CRUDOperations {
   constructor() {}
 
