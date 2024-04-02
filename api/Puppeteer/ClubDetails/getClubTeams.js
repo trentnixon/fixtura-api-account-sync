@@ -106,6 +106,7 @@ class GetClubTeams {
       return competitionTeams.filter((team) => team !== null);
     } catch (error) {
       logger.error(`Error processing competition URL: ${competitionUrl}`, error);
+      console.log(error)
       logger.critical("An error occurred in processCompetition", {
         file: "getClubTeams.js",
         function: "processCompetition",

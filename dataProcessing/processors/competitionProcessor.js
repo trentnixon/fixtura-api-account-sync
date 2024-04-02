@@ -23,11 +23,13 @@ class CompetitionProcessor {
   async process() {
     try {
       // Scrape competitions data
+    
       const getCompetitionsObj = new GetCompetitions(
         this.dataObj.TYPEOBJ,
         this.dataObj.ACCOUNT
       );
       const scrapedCompetitions = await getCompetitionsObj.setup();
+        //console.log("scrapedCompetitions", scrapedCompetitions)
 
       // Validate scraped data
       if (!scrapedCompetitions) {

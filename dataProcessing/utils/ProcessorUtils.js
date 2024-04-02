@@ -87,7 +87,6 @@ const getAssociationObj = async (ID) => {
           "competitions.club_to_competitions",
           "competitions.club_to_competitions.competition",
           "competitions.teams",
-          "competitions.teams",
           "competitions.teams.grades",
            
         ],

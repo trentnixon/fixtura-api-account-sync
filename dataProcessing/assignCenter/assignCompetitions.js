@@ -24,8 +24,12 @@ class AssignCompetitions {
       try {
         await this.processCompetition(competition);
       } catch (error) {
-        logger.error(`Error processing competition ${competition.competitionName}:`, error);
+        logger.error(
+          `Error processing competition ${competition.competitionName}:`
+        );
+        console.log(error);
       }
+      
     }
     return { success: true };
   }
@@ -33,12 +37,18 @@ class AssignCompetitions {
   // Processes a single competition
   async processCompetition(competition) {
     const competitionId = competition.competitionId; // Using ID directly from competition object
-    const existingCompetition = await this.competitionCRUD.checkIfCompetitionExists(competitionId, "competitions");
-
+    const existingCompetition =
+      await this.competitionCRUD.checkIfCompetitionExists(
+        competitionId,
+        "competitions"
+      );
+    console.log("competition", competition);
     if (existingCompetition) {
       this.processingTracker.itemUpdated("competitions");
-      await this.competitionHandler.handleExistingCompetition(competition, existingCompetition[0].id);
-      
+      await this.competitionHandler.handleExistingCompetition(
+        competition,
+        existingCompetition[0].id
+      );
     } else {
       this.processingTracker.itemNew("competitions");
       await this.competitionHandler.handleNewCompetition(competition);

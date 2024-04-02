@@ -10,17 +10,17 @@ const taskRunnerQueue = new Queue(
   QUEUE_CONFIG[ENVIRONMENT].taskRunner,
   process.env.REDISCLOUD_URL // or your Redis configuration
 );
- 
+
 taskRunnerQueue.process(async (job) => {
   try {
     const { PATH, ID } = job.data.getSync; // Ensure this matches the structure of your job data
-
+    console.log(PATH, ID)
     if (PATH === "CLUB") {
-      console.log("process CLUB"); 
-     const clubProcessor = new ClubTaskProcessor();
+      //console.log("process CLUB");
+      const clubProcessor = new ClubTaskProcessor();
       await clubProcessor.process(job); 
     } else {
-      console.log("process Association");
+      //console.log("process Association");
       const associationProcessor = new AssociationTaskProcessor();
       await associationProcessor.process(job);
     }

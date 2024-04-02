@@ -6,7 +6,7 @@ const { addJobToQueue } = require("../queues/queueUtils");
 
 const taskRunnerCron = () => {
   cron.schedule(
-    
+    // "0 1 * * *"
     //"*/1 * * * *",
     "0 1 * * *",
     async () => {

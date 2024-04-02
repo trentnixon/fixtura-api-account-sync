@@ -8,7 +8,7 @@ async function dataCenterAssociations(fromStrapi) {
     const details = await getDetailedAssociationDetails(associationObj.TYPEID);
   
 
-    console.log(details)
+    //console.log(details)
 
     return {
       TYPEOBJ: associationObj,

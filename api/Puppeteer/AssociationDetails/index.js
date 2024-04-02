@@ -73,7 +73,7 @@ class getAssociationDetails {
       // Find association databy looping through the clubs assigned to the association and grabbing there data via the club updater
       const ASSOCIATIONCLUBS = ActiveAssociation.attributes.clubs.data;
       logger.info("ASSOCIATIONCLUBS ", ASSOCIATIONCLUBS.length);
-      console.log(ASSOCIATIONCLUBS.length )
+      //console.log(ASSOCIATIONCLUBS.length )
       if (ASSOCIATIONCLUBS.length > 0) {
         logger.info("Process Association with Clubs");
         // if the association is a normal one, then run the checker

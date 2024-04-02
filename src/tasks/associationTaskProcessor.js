@@ -10,9 +10,12 @@ class AssociationTaskProcessor extends TaskProcessor {
       await Controller_Associations(job.data);
 
       // Update the account's setup status
-      console.log("AssociationTaskProcessor COMPLETED Set isSet up to TRUE", job.data.getSync)
-       await fetcher(`accounts/${job.data.getSync.ID}`, "PUT", {
-        data: { isSetup: true },  
+      console.log(
+        "AssociationTaskProcessor COMPLETED Set isSet up to TRUE",
+        job.data.getSync
+      );
+      await fetcher(`accounts/${job.data.getSync.ID}`, "PUT", {
+        data: { isSetup: true },
       });
       logger.info(
         `Successfully processed association task for ID: ${job.data.getSync.ID}`

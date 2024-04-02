@@ -13,6 +13,8 @@ class CompetitionHandler {
   // Handles existing competitions based on account type
   async handleExistingCompetition(competition, existingCompetitionId) {
     try {
+      
+    
       if (this.dataObj.ACCOUNT.ACCOUNTTYPE === "CLUB") {
         await this.competitionCRUD.updateClubCompetition(competition, existingCompetitionId);
       } else {

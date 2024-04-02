@@ -86,6 +86,7 @@ class GameDataFetcher {
           round,
           date,
           dayOne: dateObj,
+          dateObj:dateObj,
           type,
           time,
           ground,

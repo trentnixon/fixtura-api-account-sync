@@ -16,8 +16,8 @@ class GameCRUD {
 
   getSportType() {
     // Retrieve the sport type from dataObj and return the corresponding endpoint
-    console.log("this.dataObj.DETAILS")
-    console.log(this.dataObj.DETAILS.Sport)
+    //console.log("this.dataObj.DETAILS")
+    //console.log(this.dataObj.DETAILS.Sport)
     const sportType = this.dataObj.DETAILS.Sport;
     return this.endpoints[sportType] || 'game-meta-datas'; // Default to 'game-meta-datas' if not specified
   }

@@ -53,7 +53,7 @@ class assignClubToCompetition {
     // club assign comp to something
     for (const competition of competitions) {
 
-        console.log("AssignCompetitionsToAssociation", competition)
+      //console.log("AssignCompetitionsToAssociation", competition)
       const existingCompetitions = await this.checkIfCompetitionExists(
         competition.competitionName,
         "competitions"

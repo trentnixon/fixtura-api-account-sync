@@ -16,8 +16,8 @@ class PuppeteerManager {
     }
     try {
       this.browser = await puppeteer.launch({
-        headless: process.env.NODE_ENV === 'development' ? false : 'new',
-        //headless: false, // Consider setting to true for production
+        //headless: process.env.NODE_ENV === 'development' ? false : 'new',
+        headless: false, // Consider setting to true for production
         args: [
           "--disable-setuid-sandbox",
           "--no-sandbox",

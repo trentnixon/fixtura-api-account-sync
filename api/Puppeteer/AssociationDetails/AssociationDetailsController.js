@@ -81,7 +81,7 @@ class AssociationDetailsController extends BaseController {
 
         for (const competition of associationComps) {
           logger.debug('Process This competition');
-          console.log(competition)
+          //console.log(competition)
           const noClubDetailsObj = new GetNoClubDetails();
           noClubDetailsObj.setBrowser(this.browser);
           await noClubDetailsObj.setup(competition);

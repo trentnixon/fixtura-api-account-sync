@@ -74,7 +74,7 @@ class TeamFetcher {
   async getClubIDFromHref(href) {
    
     const playHQId = this.extractPlayHQId(href);
-    console.log("extractPlayHQId from Href", href, playHQId)
+    //console.log("extractPlayHQId from Href", href, playHQId)
     if (!this.isValidPlayHQId(playHQId)) {
         logger.error(`Invalid PlayHQ ID format: ${playHQId}, URL: ${href}`);
         return null;

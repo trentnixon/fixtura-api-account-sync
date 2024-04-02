@@ -42,13 +42,18 @@ class GetCompetitions {
       this.AccountID
     );
 
+    console.log("associationData ", associationData)
+    
     for (const association of associationData.attributes.associations.data) {
       try {
+        console.log("association.attributes.href ", association.attributes.href)
         const comp = await this.fetchAssociationCompetitions(
           page,
           association.attributes.href,
           association.id
         );
+
+        console.log("comp ", comp)
 
         competitions = [...competitions, ...comp];
       } catch (error) {
@@ -72,20 +77,22 @@ class GetCompetitions {
         competitions = await this.fetchAssociationCompetitions(
           page,
           this.URL,
-          this.AccountID
+          this.AccountID 
         );
       } else {
         competitions = await this.processClubCompetitions(page);
+
       }
 
       if (competitions.length === 0) {
-        throw new Error("No competitions found");
+        //throw new Error("No competitions found");
+        logger.info("No competitions found")
       }
 
       console.log("competitions found", competitions.length);
       this.processingTracker.itemFound("competitions", competitions.length);
       return competitions;
-    } catch (error) {
+    } catch (error) { 
       logger.error("Error in GetCompetitions setup method", {
         error,
         method: "setup",

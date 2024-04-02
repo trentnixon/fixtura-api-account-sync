@@ -1,4 +1,4 @@
-const { dataCenterClubs } = require("./api/DataCenter/evaluateClubs"); 
+const { dataCenterClubs } = require("./api/DataCenter/evaluateClubs");
 const {
   dataCenterAssociations,
 } = require("./api/DataCenter/evaluateAssociations");
@@ -26,7 +26,7 @@ function trackMemoryUsage(interval = 20000) {
       .map(([key, value]) => `${key}: ${(value / 1024 / 1024).toFixed(2)} MB`)
       .join(", ");
 
-    console.log(`Memory Usage: ${memoryUsageInfo}`); 
+    console.log(`Memory Usage: ${memoryUsageInfo}`);
   }, interval);
 
   return { intervalId, getPeakUsage: () => peakMemoryUsage };
@@ -40,7 +40,7 @@ class DataController extends BaseController {
     this.memoryTracker = null;
   }
 
-  async fetchAndUpdateData() { 
+  async fetchAndUpdateData() {
     let hasError = false;
     this.memoryTracker = trackMemoryUsage(); // Start memory tracking
     const startTime = new Date(); // Start time
@@ -68,29 +68,26 @@ class DataController extends BaseController {
       });
     }
 
-    /** Now lets fetch the Data about this account */ 
+    /** Now lets fetch the Data about this account */
     try {
       console.log("STAT ACCOUNT SET UP");
 
-          /*    
-            console.log(dataObj)
-            throw new Error("STOP HERE BEFORE processGameData"); 
-          */
+      //console.log(dataObj)
+      //throw new Error("STOP HERE BEFORE processGameData");
 
-       // Scrap and process the Competition Data
+      // Scrap and process the Competition Data
       await this.processAndAssignCompetitions(dataObj);
       // Get an Updated DataOBJ for Account Type
-      dataObj = await this.dataCenter(this.strapiData); 
+      dataObj = await this.dataCenter(this.strapiData);
 
       // Scrap the Teams Data
-      await this.processTeams(dataObj);  
+      await this.processTeams(dataObj);
       // Get an Updated DataOBJ for Account Type
       dataObj = await this.dataCenter(this.strapiData);
       //console.log(dataObj);
       /*  throw new Error("STOP HERE BEFORE processGameData"); */
-      // Process Game Data 
-      await this.processGameData(dataObj); 
-
+      // Process Game Data
+      await this.processGameData(dataObj);
     } catch (error) {
       console.error(`Error processing data: ${error}`);
       hasError = true;
@@ -137,9 +134,9 @@ class DataController extends BaseController {
 
     const scrapedCompetitions = await getCompetitionsObj.setup();
 
-    /*   console.log("scrapedCompetitionsscrapedCompetitionsscrapedCompetitionsscrapedCompetitions")
-     console.log(scrapedCompetitions)
-     throw new Error('STOP HERE');  */
+    //console.log("scrapedCompetitionsscrapedCompetitionsscrapedCompetitionsscrapedCompetitions")
+    //console.log(scrapedCompetitions)
+    //throw new Error('STOP HERE'); 
 
     const assignScrapedCompetitions = new AssignCompetitions(
       scrapedCompetitions,
@@ -153,18 +150,15 @@ class DataController extends BaseController {
 
     const clubTeams = new GetTeamsFromLadder(dataObj.ACCOUNT, dataObj.Grades);
     const teamList = await clubTeams.setup();
-  
-     
- /*      console.log("teamList");
-      throw new Error("STOP HERE"); */
-   
-    const assignTeam = new AssignTeamsToCompsAndGrades(); 
+
+    //console.log("teamList");
+    //throw new Error("STOP HERE");
+
+    const assignTeam = new AssignTeamsToCompsAndGrades();
     await assignTeam.setup(teamList);
   }
 
-
   async processGameData(dataObj) {
- 
     // Test a Single Team
     /*  const TestTeamsOBJ=[{
       teamName: 'Lynbrook',
@@ -175,25 +169,28 @@ class DataController extends BaseController {
     //const useTeamsOBJ = TestTeamsOBJ
 
     // Use ALl Teams
-    const useTeamsOBJ =  dataObj.TEAMS
+    const useTeamsOBJ = dataObj.TEAMS;
 
-    const scrapeGameData = new getGameData(dataObj.ACCOUNT,useTeamsOBJ);
+    const scrapeGameData = new getGameData(dataObj.ACCOUNT, useTeamsOBJ);
 
     // Suppose each batch fetches data for 10 teams (this number can be adjusted)
     const batchSize = 10;
     const totalBatches = Math.ceil(useTeamsOBJ.length / batchSize);
 
     for (let i = 0; i < totalBatches; i++) {
-        const currentBatchTeams = useTeamsOBJ.slice(i * batchSize, (i + 1) * batchSize);
-        
-        // Scrape data for the current batch
-        const filteredArray = await scrapeGameData.setupBatch(currentBatchTeams); 
-        //console.log(filteredArray)
-        // Assign game data for the current batch
-        const assignGameDataObj = new assignGameData();
-        await assignGameDataObj.setup(filteredArray);  
+      const currentBatchTeams = useTeamsOBJ.slice(
+        i * batchSize,
+        (i + 1) * batchSize
+      );
+
+      // Scrape data for the current batch
+      const filteredArray = await scrapeGameData.setupBatch(currentBatchTeams);
+      //console.log(filteredArray)
+      // Assign game data for the current batch
+      const assignGameDataObj = new assignGameData();
+      await assignGameDataObj.setup(filteredArray);
     }
-}
+  }
 }
 
 // Init Controller
@@ -221,7 +218,7 @@ async function Controller_Associations(FromSTRAPI) {
       FromSTRAPI
     );
     await dataController.fetchAndUpdateData();
-    return { Complete: true }; 
+    return { Complete: true };
   } catch (error) {
     console.error(`Error getting Association Details: ${error}`);
     //throw error;

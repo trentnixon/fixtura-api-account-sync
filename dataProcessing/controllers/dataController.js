@@ -27,40 +27,43 @@ class DataController {
 
   async start() {
     try {
-      
       this.memoryTracker.startTracking();
       const startTime = new Date();
 
       // Fetch data
       let dataObj = await this.reSyncData();
+      console.log(dataObj)
 
       // Create a data collection entry
       const collectionID = await this.dataService.initCreateDataCollection(
         dataObj.ACCOUNT.ACCOUNTID
       );
       await this.processingTracker.updateDatabaseAfterAction(collectionID);
-      await this.processingTracker.setCurrentStage("competitions",collectionID);
+      await this.processingTracker.setCurrentStage(
+        "competitions",
+        collectionID
+      );
 
       // Process and assign competitions
       await this.ProcessCompetitions(dataObj);
+
       await this.processingTracker.completeStage("competitions", collectionID);
-      
 
       // Refresh dataObj for the next step
       dataObj = await this.reSyncData();
 
       // Process and assign Teams
-      await this.processingTracker.setCurrentStage("teams",collectionID);
+      await this.processingTracker.setCurrentStage("teams", collectionID);
       await this.ProcessTeams(dataObj);
-      await this.processingTracker.completeStage("teams",collectionID);
+      await this.processingTracker.completeStage("teams", collectionID);
 
       // Refresh dataObj for the next step
       dataObj = await this.reSyncData();
 
       // Process and assign Games
-      await this.processingTracker.setCurrentStage("games",collectionID);
+      await this.processingTracker.setCurrentStage("games", collectionID);
       await this.ProcessGames(dataObj);
-      await this.processingTracker.completeStage("games",collectionID);
+      await this.processingTracker.completeStage("games", collectionID);
 
       await this.ProcessTracking(startTime, collectionID);
 
@@ -79,12 +82,18 @@ class DataController {
     // Process and assign competitions
     const competitionProcessor = new CompetitionProcessor(dataObj);
     await competitionProcessor.process();
+    /* ********************* */
+    //throw new Error('THROW ERROR IN ProcessCompetitions');
+    /* ********************* */
   };
 
   ProcessTeams = async (dataObj) => {
     // Process and assign teams
     const teamProcessor = new TeamProcessor(dataObj);
     await teamProcessor.process();
+    /* ********************* */
+    //throw new Error('THROW ERROR IN ProcessTeams');
+    /* ********************* */
   };
 
   ProcessGames = async (dataObj) => {

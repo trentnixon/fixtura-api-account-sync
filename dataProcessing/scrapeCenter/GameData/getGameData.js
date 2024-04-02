@@ -23,12 +23,13 @@ class GetTeamsGameData {
   async processGamesBatch(page, teamsBatch) {
     let storedGames = [];
     for (const team of teamsBatch) {
-      //console.log(team)
+      console.log(team)
       try {
         const { teamName, id, href, grade } = team;
-        //console.log({ teamName, id, href, grade })
-        logger.info(`Processing team ${teamName} id ${id}...`);
+        console.log({ teamName, id, href, grade })
+        
         const url = `${this.domain}${href}`; // Assuming full URL is provided in team.href
+        logger.info(`Processing team ${teamName} id ${id} ${url}...`);
         const gameDataFetcher = new GameDataFetcher(page, url, grade);
         const gameData = await gameDataFetcher.fetchGameData();
         storedGames.push(...gameData.flat().filter((match) => match !== null)); // Flatten and filter the data
@@ -55,6 +56,8 @@ class GetTeamsGameData {
     try {
       const page = await this.initPage();
       let fetchedGames = await this.processGamesBatch(page, this.teams);
+      console.log("fetchedGames ", fetchedGames)
+
       fetchedGames = this.removeDuplicateGames(fetchedGames);
       if (fetchedGames.length === 0) {
         console.log("No game data found");

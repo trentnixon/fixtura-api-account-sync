@@ -15,9 +15,9 @@ async function Controller_Club(fromRedis) {
       error: error,
     });
     throw error;
-  }
+  } 
 }
-
+ 
 async function Controller_Associations(fromRedis) {
   try {
     const dataController = new DataController(fromRedis.getSync);

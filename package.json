@@ -1,15 +1,13 @@
 {
-  "name": "apifetch",
-  "version": "1.0.0",
-  "description": "",
+  "name": "fixtura-account-sync",
+  "version": "2.0.0",
+  "description": "This Web Worker is responsible for keeping active accounts up to date",
   "main": "worker.js",
   "scripts": {
     "test": "jest",
     "worker": "nodemon worker.js",
     "start": "node index.js",
-    "dev": "set NODE_ENV=development && set PORT=7000 && nodemon worker.js",
-    "updated": "set NODE_ENV=development && set PORT=7000 && nodemon worker_version3.js",
-    
+    "dev": "set NODE_ENV=development && set PORT=7000 && nodemon worker.js",    
     "LOGS": "heroku logs --tail"
   },
   "author": "",

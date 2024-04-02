@@ -6,7 +6,7 @@ const {
   getDetailedAssociationDetails,
 } = require("../utils/ProcessorUtils");
 const CRUDOperations = require("./CRUDoperations");
- 
+
 class DataService {
   constructor() {
     // Initialization code, if needed
@@ -97,13 +97,14 @@ class DataService {
   }
 
   createTeamsArrForAssociation(competitionsData) {
+    console.log("competitionsData ", competitionsData)
     const arr = [];
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
     competitionsData.forEach((comp) => {
       const startDate = new Date(comp.attributes.startDate);
-
+      
       // If startDate is more than one year ago, skip this iteration
       if (startDate < oneYearAgo) {
         return;
@@ -124,18 +125,32 @@ class DataService {
 
   createArrGradesForClub(competitionsData, clubId) {
     let arr = [];
+    const today = new Date();
+    const fourteenDaysAgo = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() - 14
+    );
+
     competitionsData.forEach((comp) => {
-      if (comp?.attributes?.competition?.data?.attributes?.grades?.data) {
-        comp?.attributes?.competition?.data?.attributes?.grades?.data.forEach(
-          (comps) => {
+      const endDate = new Date(
+        comp.attributes.competition.data.attributes.endDate
+      );
+
+      if (
+        comp.attributes.competition.data.attributes.grades.data &&
+        endDate > fourteenDaysAgo
+      ) {
+        comp.attributes.competition.data.attributes.grades.data.forEach(
+          (grades) => {
             arr.push({
               club: [clubId],
               compID: comp.attributes.competition.data.id,
               compName:
                 comp.attributes.competition.data.attributes.competitionName,
-              id: comps.id,
-              gradeName: comps.attributes.gradeName,
-              url: comps.attributes.url,
+              id: grades.id,
+              gradeName: grades.attributes.gradeName,
+              url: grades.attributes.url,
             });
           }
         );
@@ -145,23 +160,37 @@ class DataService {
   }
 
   createArrGradesForAssociation(details) {
-    return details.reduce((arr, comp) => {
-      const gradeArr = comp.attributes.grades.data.map((grade) => ({
-        compID: comp.id,
-        compName: comp.attributes.competitionName,
-        id: grade.id,
-        gradeName: grade.attributes.gradeName,
-        url: grade.attributes.url,
-        // No club ID included for associations
-      }));
+    const today = new Date();
+    const fourteenDaysAgo = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() - 14
+    );
 
-      return [...arr, ...gradeArr];
+    return details.reduce((arr, comp) => {
+      const endDate = new Date(comp.attributes.endDate);
+
+      // Proceed only if the competition's end date is within the last 14 days
+      if (endDate > fourteenDaysAgo) {
+        const gradeArr = comp.attributes.grades.data.map((grade) => ({
+          compID: comp.id,
+          compName: comp.attributes.competitionName,
+          id: grade.id,
+          gradeName: grade.attributes.gradeName,
+          url: grade.attributes.url,
+          endDate: endDate,
+          // No club ID included for associations
+        }));
+        return [...arr, ...gradeArr];
+      } else {
+        return arr;
+      }
     }, []);
   }
 
   async initCreateDataCollection(accountId) {
     try {
-      console.log("Creating Data Collection for Account ID:", accountId);
+      //console.log("Creating Data Collection for Account ID:", accountId);
       const currentDate = new Date();
       const CRUD = new CRUDOperations();
       const dataCollectionId = await CRUD.createDataCollection(accountId, {
@@ -169,7 +198,7 @@ class DataService {
         whenWasTheLastCollection: currentDate,
       });
 
-      console.log("Data Collection Created with ID:", dataCollectionId);
+      //console.log("Data Collection Created with ID:", dataCollectionId);
       return dataCollectionId;
     } catch (error) {
       logger.critical(

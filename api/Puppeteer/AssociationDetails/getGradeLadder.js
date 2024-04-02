@@ -42,7 +42,7 @@ class getGradeLadders {
     let teamIndex = 0;
     try {
       for (const { id, attributes: team } of this.TEAMS) {
-        console.log("team.grades.data.id ", team.grades.data);
+        //console.log("team.grades.data.id ", team.grades.data);
         logger.info(`Processing team ${team.teamName} (Index ${teamIndex})...`);
         logger.info(`on playHQ URL ${team.href}/ladder`);
         // Navigate to team page

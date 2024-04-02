@@ -1,16 +1,28 @@
 const qs = require("qs");
 
 const queryHelpers = {
-  getClubRelationsForClub: (clubId) => {
-    return qs.stringify({
-      populate: ["teams", "competitions", "associations"], // Update with actual relations needed
-    }, { encodeValuesOnly: true });
+  getClubRelationsForClub: () => {
+    return qs.stringify(
+      {
+        populate: [
+          "teams",
+          "competitions",
+          "associations",
+          "associations.competitions",
+          "club_to_competitions",
+        ], // Update with actual relations needed
+      },
+      { encodeValuesOnly: true }
+    );
   },
 
   getClubRelationsForAssociation: (associationId) => {
-    return qs.stringify({
-      populate: ["clubs", "competitions"], // Update with actual relations needed
-    }, { encodeValuesOnly: true });
+    return qs.stringify(
+      {
+        populate: ["clubs", "competitions"], // Update with actual relations needed
+      },
+      { encodeValuesOnly: true }
+    );
   },
 
   // Additional query helper methods...

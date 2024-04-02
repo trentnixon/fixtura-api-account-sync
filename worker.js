@@ -15,12 +15,12 @@ if (!QUEUE_CONFIG[ENVIRONMENT]) {
     `Unsupported NODE_ENV: "${ENVIRONMENT}". Supported environments are: ${Object.keys(
       QUEUE_CONFIG
     ).join(", ")}`
-  );
+  ); 
 }
 logger.info(`Worker starting in ${ENVIRONMENT} mode.`);
 
 // Initialize queues
-accountInitQueue;
+accountInitQueue;  
 taskRunnerQueue;
 
 // Start cron jobs

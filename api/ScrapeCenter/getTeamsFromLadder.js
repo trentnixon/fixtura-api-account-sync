@@ -38,6 +38,7 @@ class GetTeamsFromLadder extends BaseController {
       return teamData;
     } catch (err) {
       logger.error(`Error processing competition URL: ${url}`, error);
+      console.log(error)
       logger.critical("An error occurred in setup", {
         file: "getTeamsFromLadder.js",
         function: "setup",

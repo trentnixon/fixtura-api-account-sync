@@ -64,17 +64,13 @@ async function Controller_Associations(FromSTRAPI) {
     DATAOBJ = await dataCenterAssociations(FromSTRAPI);
     //console.log(DATAOBJ);
     await Master_ScrapeTeams(DATAOBJ);
-    //  console.log(TEAMLIST)
+    //console.log(TEAMLIST)
     DATAOBJ = await dataCenterAssociations(FromSTRAPI);
     await Master_ScrapeGameData(DATAOBJ);
-    /*
-   
-      const intervalId = trackMemoryUsage();
-    clearInterval(intervalId);
-    console.log("ASSOCIATION SYNC UPDATE COMPLETE"); */
+  
     return { Complete: true };
   } catch (error) {
-    //clearInterval(intervalId);
+   
     console.error(`Error getting Association Details: ${error}`);
     logger.critical("An error occurred in Controller_Associations", {
       file: "updateTask.js",

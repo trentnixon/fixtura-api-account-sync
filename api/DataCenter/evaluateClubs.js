@@ -4,8 +4,7 @@ async function dataCenterClubs(fromStrapi) {
   try {
     const clubObj = await getClubObj(fromStrapi.ID);
     const details = await getDetailedClubDetails(clubObj.TYPEID);
-    /* console.log("dataCenterClubs");
-    console.log(details); */
+  
     return {
       TYPEOBJ: clubObj,
       ACCOUNT: { ACCOUNTID: fromStrapi.ID, ACCOUNTTYPE: fromStrapi.PATH },
@@ -27,7 +26,7 @@ async function dataCenterClubs(fromStrapi) {
 }
 
 const createTeamsArr = (obj) => {
-  //console.log(obj)
+  
   let arr = [];
   obj.forEach((team) => {
     team.attributes.grades.data.forEach((grade) => {

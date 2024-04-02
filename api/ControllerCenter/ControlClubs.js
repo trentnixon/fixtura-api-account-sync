@@ -28,9 +28,9 @@ async function Controller_Club(FromSTRAPI) {
       
       //Step 1 -  Get the conditioned Data
       const DATAOBJ = await DataCenterClubs(FromSTRAPI);
-      console.log(DATAOBJ);
+      //console.log(DATAOBJ);
       const CompetitionsFoundOnPlayHQ = StartScrapeGetCompetitions(DATAOBJ, FromSTRAPI)
-      console.log(CompetitionsFoundOnPlayHQ);
+      //console.log(CompetitionsFoundOnPlayHQ);
       /* 
       const clubController = new ClubDetailsController();
       const result = await clubController.setup(id); // Call the Setup method directly
