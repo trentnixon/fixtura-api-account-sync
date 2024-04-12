@@ -25,6 +25,6 @@ taskRunnerQueue;
 
 // Start cron jobs
 accountInitCron();
-taskRunnerCron();
+taskRunnerCron(); 
 
 logger.info("Worker started successfully.");

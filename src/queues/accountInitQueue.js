@@ -19,7 +19,7 @@ accountInitQueue.process(async (job) => {
       await clubProcessor.process(job); 
     } else {
       const associationProcessor = new AssociationTaskProcessor();
-      await associationProcessor.process(job);
+      await associationProcessor.process(job); 
     }
     logger.info(`Successfully processed account Init for a ${PATH} with ID: ${ID}`);
   } catch (error) {
