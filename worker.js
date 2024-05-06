@@ -9,7 +9,7 @@ const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 
 function initializeQueueProcessing() {
   // Check Data sync for Asset Bundlers
-  //checkAssetGeneratorAccountStatus();
+  checkAssetGeneratorAccountStatus();
   
   // run account Sync as set by Strapi
   handleAccountSync();
