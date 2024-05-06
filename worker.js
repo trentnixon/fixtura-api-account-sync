@@ -12,7 +12,7 @@ function initializeQueueProcessing() {
   //checkAssetGeneratorAccountStatus();
   
   // run account Sync as set by Strapi
-  //handleAccountSync();
+  handleAccountSync();
   onboardNewAccountTask();
 }
 
