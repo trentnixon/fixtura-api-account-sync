@@ -52,7 +52,7 @@ class getTeamsGameData extends BaseController {
   
 
   async setupBatch(teamsBatch) {
-    console.log(teamsBatch)
+    //console.log(teamsBatch)
    
     try {
       await this.initDependencies(this.ACCOUNTID);
@@ -69,9 +69,9 @@ class getTeamsGameData extends BaseController {
   }
 
   filterDuplicates(games) {
-    console.log(`Length after scrape ${games.length}`);
+    //console.log(`Length after scrape ${games.length}`);
     const filtered = games.filter((v, i, a) => a.findIndex((t) => t.gameID === v.gameID) === i);
-    console.log(`Length after Filter ${filtered.length}`);
+    //console.log(`Length after Filter ${filtered.length}`);
     return filtered;
   }
 

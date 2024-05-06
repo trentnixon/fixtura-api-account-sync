@@ -212,8 +212,8 @@ class GetCompetitions extends BaseController {
 
 
   async setup() {
-    console.log("TEST 1 . GetClubDetails Setup called"); 
-    console.log("this.ACCOUNTID", this.ACCOUNTID);
+    //console.log("TEST 1 . GetClubDetails Setup called"); 
+    //console.log("this.ACCOUNTID", this.ACCOUNTID);
 
     try {
       await this.initDependencies(this.ACCOUNTID); // Call the initDependencies method from the BaseController

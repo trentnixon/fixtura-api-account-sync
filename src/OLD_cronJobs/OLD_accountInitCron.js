@@ -1,10 +1,9 @@
 const cron = require("node-cron");
 const fetcher = require("../utils/fetcher");
 const logger = require("../utils/logger");
-//const accountInitQueue = require('../queues/accountInitQueue');
 const { addJobToQueue } = require("../queues/queueUtils");
 const taskRunnerQueue = require("../queues/taskRunnerQueue");
-
+ 
 const accountInitCron = () => {
   cron.schedule(
     "*/1 * * * *",
@@ -14,7 +13,7 @@ const accountInitCron = () => {
         console.log("accountInitCron", getSync);
         if (getSync && getSync.continue) {
           await addJobToQueue(taskRunnerQueue, { getSync: getSync });
-        } else {
+        } else { 
           logger.info("[accountInitCron.js] No accountInit jobs to queue.");
         }
       } catch (error) {
@@ -25,11 +24,11 @@ const accountInitCron = () => {
         });
       }
     },
-    {
+    { 
       scheduled: true,
       timezone: "Australia/Sydney",
     }
-  );
+  ); 
 };
 
 module.exports = accountInitCron;

@@ -18,8 +18,10 @@ class ClubTaskProcessor extends TaskProcessor {
       await fetcher(`accounts/${job.data.getSync.ID}`, "PUT", {
         data: { isSetup: true },
       });
+
+
       logger.info(
-        `Successfully processed accountInit for ID: ${job.data.getSync.ID}`
+        `Successfully processed onboardNewAccount for ID: ${job.data.getSync.ID}`
       );
     } catch (error) {
       logger.error(

@@ -43,7 +43,7 @@ class GetClubDetails extends BaseController {
       /* Step 4 */
       // Find all of the Teams Associatiated with this Club
       const ListOfTeamsInClub = await this.processClubTeams(ActiveClub);
-      console.log("ListOfTeamsInClub", ListOfTeamsInClub);
+      //console.log("ListOfTeamsInClub", ListOfTeamsInClub);
  
       /* Step 5 */
       // Now assign those teams to the Club ID
@@ -105,7 +105,7 @@ class GetClubDetails extends BaseController {
 
 
   async setup(accountId) {
-    console.log("TEST 1 . GetClubDetails Setup called");
+    //console.log("TEST 1 . GetClubDetails Setup called");
     try { 
       await this.initDependencies(accountId); // Call the initDependencies method from the BaseController
       const result = await this.processClub(accountId);

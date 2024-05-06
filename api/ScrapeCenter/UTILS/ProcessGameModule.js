@@ -82,7 +82,7 @@ async function processGameDetails(matchElement, baseXpath, teamMatches, GradeID,
     let gameID = urlToScoreCard ? urlToScoreCard.split("/").slice(-1)[0] : null;
     let teamNames = await ScrapeTeams(matchElement, `${baseXpath} ${Constants.SELECTORS.TEAMS.General}`);
 
-  console.log(`gameID ${gameID} ${teamNames[0].name} vs ${teamNames[1].name} ${urlToScoreCard}`)
+  //console.log(`gameID ${gameID} ${teamNames[0].name} vs ${teamNames[1].name} ${urlToScoreCard}`)
   
   teamMatches.push({
     grade: [GradeID],

@@ -52,7 +52,7 @@ class getTeamsGameData {
       // Scrape the league name
       const leagueName = await ScrapeLeagueName(page);
 
-      console.log(this.ActiveGrades)
+      //console.log(this.ActiveGrades)
       const gradeObj = this.ActiveGrades.find(
         (grade) => grade.Name === leagueName
       );

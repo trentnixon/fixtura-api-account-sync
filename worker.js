@@ -1,30 +1,31 @@
-/* const dotenv = require("dotenv");
-dotenv.config(); */
+// Internal Cron tasks
 
-const { ENVIRONMENT } = require("./src/config/environment");
-const { QUEUE_CONFIG } = require("./src/config/queueConfig");
-const accountInitQueue = require("./src/queues/accountInitQueue");
-const taskRunnerQueue = require("./src/queues/taskRunnerQueue");
-const accountInitCron = require("./src/cronJobs/accountInitCron");
-const taskRunnerCron = require("./src/cronJobs/taskRunnerCron");
+// Queued processing Tasks
+const checkAssetGeneratorAccountStatus = require("./src/queues/checkAssetGeneratorAccountStatus");
+const handleAccountSync = require("./src/queues/syncUserAccountQueue");
+
 const logger = require("./src/utils/logger");
+const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 
-// Validate environment configuration
-if (!QUEUE_CONFIG[ENVIRONMENT]) {
-  throw new Error(
-    `Unsupported NODE_ENV: "${ENVIRONMENT}". Supported environments are: ${Object.keys(
-      QUEUE_CONFIG
-    ).join(", ")}`
-  ); 
+function initializeQueueProcessing() {
+  // Check Data sync for Asset Bundlers
+  //checkAssetGeneratorAccountStatus();
+  
+  // run account Sync as set by Strapi
+  //handleAccountSync();
+  onboardNewAccountTask();
 }
-logger.info(`Worker starting in ${ENVIRONMENT} mode.`);
 
-// Initialize queues
-accountInitQueue;  
-taskRunnerQueue;
-
-// Start cron jobs
-accountInitCron();
-taskRunnerCron(); 
+// Start Processors
+initializeQueueProcessing();
 
 logger.info("Worker started successfully.");
+
+// TODO!! SET UP ADN TEST THE OnBOARDING REDIS HOOK UP
+/* function startCronJobs() {
+  //taskCronSyncUserAccounts();
+  // OnBoarding Cron Removed and handled in Strapi
+} */
+
+// Start cron jobs
+//startCronJobs(); 

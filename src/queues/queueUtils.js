@@ -15,7 +15,7 @@ const addJobToQueue = async (queue, jobData, options = {}) => {
   await queue.add(jobData, options);
   logger.info(`Job added to queue for ID: ${ID}`);
   return true;
-};
+}; 
 
 const getQueueStats = async (queue) => {
   const counts = await queue.getJobCounts();
