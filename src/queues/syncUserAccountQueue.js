@@ -16,13 +16,13 @@ async function handleAccountSync() {
       logger.debug(`Start processing job with ID: ${ID} on path: ${PATH}`);
 
       // Decision structure to process different types of tasks
-     /*  if (PATH === "CLUB") {
+      if (PATH === "CLUB") {
         const clubProcessor = new ClubTaskProcessor();
         await clubProcessor.process(job);
       } else if (PATH === "ASSOCIATION") {
-        const associationProcessor = new AssociationTaskProcessor(); 
+        const associationProcessor = new AssociationTaskProcessor();
         await associationProcessor.process(job);
-      } */
+      }
 
       logger.info(`Successfully processed task for ID: ${ID}`);
     } catch (error) {
