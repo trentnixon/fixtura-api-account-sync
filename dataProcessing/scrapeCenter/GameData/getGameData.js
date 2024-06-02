@@ -57,13 +57,13 @@ class GetTeamsGameData {
       const page = await this.initPage();
       let fetchedGames = await this.processGamesBatch(page, this.teams);
       console.log("fetchedGames ", fetchedGames)
-
+ 
       fetchedGames = this.removeDuplicateGames(fetchedGames);
       if (fetchedGames.length === 0) {
         console.log("No game data found");
         //throw new Error("No game data found");
       }
-      this.processingTracker.itemFound("games", fetchedGames.length);
+      this.processingTracker.itemFound("games", fetchedGames.length); 
       return fetchedGames;
     } catch (error) { 
       logger.error("Error in setup method", { error });

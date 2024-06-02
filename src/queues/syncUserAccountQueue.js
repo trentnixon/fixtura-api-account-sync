@@ -18,7 +18,7 @@ async function handleAccountSync() {
       // Decision structure to process different types of tasks
       if (PATH === "CLUB") {
         const clubProcessor = new ClubTaskProcessor();
-        await clubProcessor.process(job);
+        await clubProcessor.process(job); 
       } else if (PATH === "ASSOCIATION") {
         const associationProcessor = new AssociationTaskProcessor();
         await associationProcessor.process(job);

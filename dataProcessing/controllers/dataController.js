@@ -16,7 +16,7 @@ class DataController {
     this.memoryTracker = new MemoryTracker();
     this.CRUDOperations = new CRUDOperations();
     if (!ProcessingTracker.instance) {
-      new ProcessingTracker();
+      new ProcessingTracker(); 
     }
     this.processingTracker = ProcessingTracker.getInstance();
   }
@@ -99,9 +99,9 @@ class DataController {
   ProcessGames = async (dataObj) => {
     // Process and assign game data
     const gameDataProcessor = new GameDataProcessor(dataObj);
-    await gameDataProcessor.process();
+    await gameDataProcessor.process(); 
   };
-
+ 
   ProcessTracking = async (startTime, collectionID) => {
     // Calculate processing time and memory usage
     const TimeTaken = new Date() - startTime;

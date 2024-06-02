@@ -18,7 +18,7 @@ function initializeQueueProcessing() {
 
 // Start Processors
 initializeQueueProcessing();
-
+ 
 logger.info("Worker started successfully.");
 
 // TODO!! SET UP ADN TEST THE OnBOARDING REDIS HOOK UP
