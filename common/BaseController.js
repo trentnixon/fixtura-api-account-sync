@@ -1,7 +1,7 @@
-/** 
- * SOLID APPROVED  
+/**
+ * SOLID APPROVED
  * DO NOT ADJUST UNLESS ERROR IN CODE
-*/
+ */
 // BaseController.js
 class BaseController {
   constructor() {
@@ -19,22 +19,14 @@ class BaseController {
     await this.dependencies.changeisUpdating(accountId, true);
   }
 
-
-
   async initCreateDataCollection(accountId) {
     return await this.dependencies.createDataCollection(accountId, true);
   }
   async initUpdateDataCollection(accountId, DATA) {
-    
-    console.log("initUpdateDataCollection", accountId)
-      console.log(DATA)
-   
     await this.dependencies.updateDataCollection(accountId, DATA);
   }
 
-//
-
-
+  //
 
   async dispose() {
     for (const disposable of this.disposables) {
@@ -47,10 +39,9 @@ class BaseController {
 
     if (this.browser) {
       await this.browser.close();
-      console.log("CLOSE BROWSER IN BASECONTROLLER")
+      console.log("CLOSE BROWSER IN BASECONTROLLER");
     }
   }
 }
 
 module.exports = BaseController;
-

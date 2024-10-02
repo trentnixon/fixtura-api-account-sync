@@ -16,7 +16,7 @@ class DataController {
     this.memoryTracker = new MemoryTracker();
     this.CRUDOperations = new CRUDOperations();
     if (!ProcessingTracker.instance) {
-      new ProcessingTracker(); 
+      new ProcessingTracker();
     }
     this.processingTracker = ProcessingTracker.getInstance();
   }
@@ -32,7 +32,6 @@ class DataController {
 
       // Fetch data
       let dataObj = await this.reSyncData();
-      console.log(dataObj)
 
       // Create a data collection entry
       const collectionID = await this.dataService.initCreateDataCollection(
@@ -78,7 +77,7 @@ class DataController {
   }
 
   // Processes
-  ProcessCompetitions = async (dataObj) => {
+  ProcessCompetitions = async dataObj => {
     // Process and assign competitions
     const competitionProcessor = new CompetitionProcessor(dataObj);
     await competitionProcessor.process();
@@ -87,7 +86,7 @@ class DataController {
     /* ********************* */
   };
 
-  ProcessTeams = async (dataObj) => {
+  ProcessTeams = async dataObj => {
     // Process and assign teams
     const teamProcessor = new TeamProcessor(dataObj);
     await teamProcessor.process();
@@ -96,12 +95,12 @@ class DataController {
     /* ********************* */
   };
 
-  ProcessGames = async (dataObj) => {
+  ProcessGames = async dataObj => {
     // Process and assign game data
     const gameDataProcessor = new GameDataProcessor(dataObj);
-    await gameDataProcessor.process(); 
+    await gameDataProcessor.process();
   };
- 
+
   ProcessTracking = async (startTime, collectionID) => {
     // Calculate processing time and memory usage
     const TimeTaken = new Date() - startTime;

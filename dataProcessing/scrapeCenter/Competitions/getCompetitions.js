@@ -3,6 +3,7 @@ const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
 const AssociationCompetitionsFetcher = require("./AssociationCompetitionsFetcher");
 const CRUDOperations = require("../../services/CRUDoperations");
 const ProcessingTracker = require("../../services/processingTracker");
+const { error } = require("winston");
 
 /**
  * Handles scraping of competition data from websites.
@@ -18,11 +19,11 @@ class GetCompetitions {
     this.CRUDOperations = new CRUDOperations();
   }
 
-  // Initialize Puppeteer and create a new page 
+  // Initialize Puppeteer and create a new page
   async initPage() {
-    return await this.puppeteerManager.createPageInNewContext(); 
-   /*  await this.puppeteerManager.launchBrowser();
-    return this.puppeteerManager.browser.newPage(); */ 
+    return await this.puppeteerManager.createPageInNewContext();
+    /*  await this.puppeteerManager.launchBrowser();
+    return this.puppeteerManager.browser.newPage(); */
   }
 
   // Fetch competitions for associations
@@ -42,19 +43,13 @@ class GetCompetitions {
       this.AccountID
     );
 
-    console.log("associationData ", associationData)
-    
     for (const association of associationData.attributes.associations.data) {
       try {
-        console.log("association.attributes.href ", association.attributes.href)
         const comp = await this.fetchAssociationCompetitions(
           page,
           association.attributes.href,
           association.id
         );
-
-        console.log("comp ", comp)
-
         competitions = [...competitions, ...comp];
       } catch (error) {
         logger.error(
@@ -63,36 +58,34 @@ class GetCompetitions {
         );
       }
     }
-
     return competitions;
   }
 
   // Main method to setup competition scraping
   async setup() {
     try {
-      const page = await this.initPage(); 
+      const page = await this.initPage();
       let competitions = [];
 
       if (this.ACCOUNTTYPE === "ASSOCIATION") {
         competitions = await this.fetchAssociationCompetitions(
           page,
           this.URL,
-          this.AccountID 
+          this.AccountID
         );
       } else {
         competitions = await this.processClubCompetitions(page);
-
       }
 
       if (competitions.length === 0) {
         //throw new Error("No competitions found");
-        logger.info("No competitions found")
+        logger.info("No competitions found");
       }
 
-      console.log("competitions found", competitions.length);
+      //console.log("[competitions found]", competitions);
       this.processingTracker.itemFound("competitions", competitions.length);
       return competitions;
-    } catch (error) { 
+    } catch (error) {
       logger.error("Error in GetCompetitions setup method", {
         error,
         method: "setup",

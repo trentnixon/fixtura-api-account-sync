@@ -8,44 +8,53 @@ const { syncUserAccount } = require("../config/queueConfig");
  * Function to synchronize user accounts by processing tasks from the queue.
  * Handles specific tasks based on the type (club or association).
  */
-async function handleAccountSync() {
-  // Registering the processing function for the queue
-  syncUserAccount.process(async (job) => {
+async function handleAccountSync(testData = null) {
+  const processJob = async jobData => {
     try {
-      const { PATH, ID } = job.data.getSync; // Extracts necessary data from job
+      const { PATH, ID } = jobData.getSync;
       logger.debug(`Start processing job with ID: ${ID} on path: ${PATH}`);
 
-      // Decision structure to process different types of tasks
       if (PATH === "CLUB") {
         const clubProcessor = new ClubTaskProcessor();
-        await clubProcessor.process(job); 
+        await clubProcessor.process({ data: jobData });
       } else if (PATH === "ASSOCIATION") {
         const associationProcessor = new AssociationTaskProcessor();
-        await associationProcessor.process(job);
+        await associationProcessor.process({ data: jobData });
       }
 
       logger.info(`Successfully processed task for ID: ${ID}`);
     } catch (error) {
-      // Logs detailed error message and stack for debugging
-      logger.error(`Error processing task for ID: ${ID}: ${error.message}`, {
-        jobData: job.data,
-        errorStack: error.stack,
-      });
-      throw error; // Re-throws the error to be caught by the queue's error handler
+      logger.error(
+        `Error processing task for ID: ${jobData.getSync.ID}: ${error.message}`,
+        {
+          jobData,
+          errorStack: error.stack,
+        }
+      );
+      throw error;
     }
-  });
+  };
 
-  // Event listener for successful job completion
-  syncUserAccount.on("completed", (job, result) => {
-    logger.info(
-      `Job ${job.id} completed successfully for account ${job.data.getSync.ID}`
-    );
-  });
+  if (testData) {
+    // For testing: process the test data directly
+    await processJob(testData);
+  } else {
+    // Normal queue processing
+    syncUserAccount.process(async job => {
+      await processJob(job.data);
+    });
 
-  // Event listener for failed jobs, utilizes a custom error handler
-  syncUserAccount.on("failed", (job, error) => {
-    queueErrorHandler(job, error, logger);
-  });
+    // Event listeners
+    syncUserAccount.on("completed", (job, result) => {
+      logger.info(
+        `Job ${job.id} completed successfully for account ${job.data.getSync.ID}`
+      );
+    });
+
+    syncUserAccount.on("failed", (job, error) => {
+      queueErrorHandler(job, error, logger);
+    });
+  }
 }
 
 module.exports = handleAccountSync;

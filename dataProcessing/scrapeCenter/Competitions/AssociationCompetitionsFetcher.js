@@ -9,15 +9,15 @@ class AssociationCompetitionsFetcher {
 
   async fetchCompetitions() {
     try {
-      logger.debug( 
+      logger.debug(
         `Checking competitions in fetchCompetitionInAssociation on URL: ${this.url} and this ID ${this.associationID}`
       );
       await this.navigateToUrl();
       await this.waitForPageLoad();
       const competitions = await this.extractCompetitionsData();
 
-      logger.debug("Competitions fetched");
-      //console.log("competitions", competitions)
+      //console.log("[fetchCompetitions]", competitions);
+
       return competitions;
     } catch (error) {
       logger.error(`Error in fetching competitions for association: ${error}`);
@@ -34,61 +34,80 @@ class AssociationCompetitionsFetcher {
   }
 
   async extractCompetitionsData() {
-    //console.log("extractCompetitionsData IS RUNNING", this.associationID);
     try {
-        return await this.page.evaluate((associationID) => {
-            const result = [];
-            // Selecting the container that includes both the h2 and ul elements.
-            const seasonOrgs = Array.from(document.querySelectorAll('[data-testid^="season-org-"]'));
-            if (!seasonOrgs.length) {
-                console.error("No seasonOrgs found");
-                throw new Error("No season organizations found on the page.");
-            }
+      return await this.page.evaluate(associationID => {
+        const result = [];
 
-            seasonOrgs.forEach((seasonOrg) => {
-                // First, capture the competition name, which is the text content of the h2 element in each seasonOrg.
-                const competitionName = seasonOrg.querySelector("h2") ? seasonOrg.querySelector("h2").textContent.trim() : "Unknown Competition Name";
+        // Select the parent block (the entire container with all competitions)
+        const seasonOrgsParent = document.querySelector(
+          '[data-testid^="season-org-"]'
+        );
 
-                const competitions = seasonOrg.querySelectorAll("ul > li > a");
-                if (!competitions.length) {
-                    console.error("No competitions found within seasonOrg");
-                    return; // Skip this iteration as no competitions found within this seasonOrg
-                }
+        if (!seasonOrgsParent) {
+          console.error("No seasonOrgs found");
+          throw new Error("No season organizations found on the page.");
+        }
 
-                competitions.forEach((comp) => {
-                    const season = comp.querySelector("span:nth-child(1)") ? comp.querySelector("span:nth-child(1)").textContent.trim() : "Unknown Season";
-                    const dateSpan = comp.querySelector("span:nth-child(2)");
-                    const [startDate, endDate] = dateSpan ? dateSpan.textContent.split(" — ").map(date => date.trim()) : ["Unknown Start Date", "Unknown End Date"];
-                    const status = comp.querySelector("div > span") ? comp.querySelector("div > span").textContent.trim() : "Unknown Status";
-                    const url = comp.href;
-                    const competitionId = url.split("/").slice(-1)[0];
+        // Loop over the child divs within the parent block
+        const seasonOrgs = Array.from(seasonOrgsParent.children);
 
-                    result.push({
-                        competitionName, // Using the captured name
-                        season,
-                        startDate,
-                        endDate,
-                        status,
-                        url,
-                        competitionId,
-                        association: associationID,
-                    });
-                });
+        // Iterate over each child div (which contains an h2 and competition list)
+        seasonOrgs.forEach((seasonOrg, index) => {
+          // Get the competition name from the current div
+          const competitionNameElement = seasonOrg.querySelector("h2");
+          const competitionName = competitionNameElement
+            ? competitionNameElement.textContent.trim()
+            : `Unknown Competition Name ${index}`;
+
+          // Extract competition details within the same seasonOrg
+          const competitions = seasonOrg.querySelectorAll("ul > li > a");
+          if (!competitions.length) {
+            console.error(
+              `No competitions found within seasonOrg ${index + 1}`
+            );
+            return; // Skip if no competitions found
+          }
+
+          // Iterate over each competition inside the current seasonOrg
+          competitions.forEach((comp, compIndex) => {
+            const season = comp.querySelector("span:nth-child(1)")
+              ? comp.querySelector("span:nth-child(1)").textContent.trim()
+              : `Unknown Season ${compIndex}`;
+            const dateSpan = comp.querySelector("span:nth-child(2)");
+            const [startDate, endDate] = dateSpan
+              ? dateSpan.textContent.split(" — ").map(date => date.trim())
+              : ["Unknown Start Date", "Unknown End Date"];
+            const status = comp.querySelector("div > span")
+              ? comp.querySelector("div > span").textContent.trim()
+              : "Unknown Status";
+            const url = comp.href;
+            const competitionId = url.split("/").slice(-1)[0];
+
+            // Push the competition data into the result array
+            result.push({
+              competitionName, // The correct competition name from this seasonOrg
+              season,
+              startDate,
+              endDate,
+              status,
+              url,
+              competitionId,
+              association: associationID,
             });
+          });
+        });
 
-            return result;
-        }, this.associationID);
+        return result;
+      }, this.associationID);
     } catch (error) {
-        logger.error(`Error in extractCompetitionsData: ${error}`);
-        throw error; // Rethrow the error after logging
+      logger.error(`Error in extractCompetitionsData: ${error}`);
+      throw error; // Rethrow the error after logging
     }
-}
-
+  }
 
   // This function will be stringified and passed to evaluate, hence it needs to be fully self-contained.
   extractCompetitionData(competitionElement, associationID) {
-
-  //("extractCompetitionData is HERE")
+    //("extractCompetitionData is HERE")
     const competitionName = competitionElement.textContent.trim();
     const anchorElement = competitionElement.nextElementSibling;
     if (!anchorElement)
@@ -109,7 +128,7 @@ class AssociationCompetitionsFetcher {
     const season = seasonSpan.textContent.trim();
     const [startDate, endDate] = dateSpan.textContent
       .split(" — ")
-      .map((date) => date.trim());
+      .map(date => date.trim());
     const status = statusSpan.textContent.trim();
     const url = link.href;
     const competitionId = url.split("/").slice(-1)[0];
@@ -126,11 +145,9 @@ class AssociationCompetitionsFetcher {
     };
   }
 
-  
   extractIdFromUrl(url) {
     return url.split("/").slice(-1)[0];
   }
 }
 
 module.exports = AssociationCompetitionsFetcher;
-

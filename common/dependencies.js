@@ -15,7 +15,6 @@ const changeisUpdating = async (ID, isUpdating) => {
 
 const createDataCollection = async (ID, ERR) => {
   //data-collections
-  console.log("createDataCollection ID", ID);
   const currentDate = new Date();
   const DATACOLLECTIONID = await fetcher(`data-collections`, `POST`, {
     data: {
@@ -23,14 +22,10 @@ const createDataCollection = async (ID, ERR) => {
       whenWasTheLastCollection: currentDate,
     },
   });
-  /*   console.log("DATACOLLECTIONID")
-  console.log(DATACOLLECTIONID.id) */
   return DATACOLLECTIONID.id;
 };
 
 const updateDataCollection = async (ID, OBJ) => {
-  console.log("updateDataCollection", ID);
-  console.log(ID, OBJ);
   await fetcher(`data-collections/${ID}`, `PUT`, {
     data: OBJ,
   });
@@ -91,7 +86,7 @@ const getClubRelationsForAssociation = () => {
 module.exports = {
   getPuppeteerInstance: async () => {
     return await puppeteer.launch({
-      headless: process.env.NODE_ENV === 'development' ? false : 'new',
+      headless: process.env.NODE_ENV === "development" ? false : "new",
       args: [
         "--disable-setuid-sandbox",
         "--no-sandbox",

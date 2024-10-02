@@ -16,26 +16,24 @@ class CompetitionProcessor {
   }
 
   /**
-   * Main process method. 
+   * Main process method.
    * Handles the workflow of scraping competition data and then assigning it.
    * Throws an error if any step in the process fails.
    */
   async process() {
     try {
       // Scrape competitions data
-    
       const getCompetitionsObj = new GetCompetitions(
         this.dataObj.TYPEOBJ,
         this.dataObj.ACCOUNT
       );
       const scrapedCompetitions = await getCompetitionsObj.setup();
-        //console.log("scrapedCompetitions", scrapedCompetitions)
-
       // Validate scraped data
       if (!scrapedCompetitions) {
         throw new Error("No competition data scraped.");
       }
 
+      //console.log("[scrapedCompetitions]", scrapedCompetitions);
       // Assign scraped data
       const assignCompetitionsObj = new AssignCompetitions(
         scrapedCompetitions,
@@ -49,7 +47,7 @@ class CompetitionProcessor {
       // Log and rethrow the error for higher-level handling
       this.processingTracker.errorDetected("competitions");
       logger.error("An error occurred in CompetitionProcessor:", { error });
-      
+
       throw error;
     }
   }

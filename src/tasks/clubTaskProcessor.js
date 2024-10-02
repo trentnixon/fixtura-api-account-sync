@@ -19,7 +19,6 @@ class ClubTaskProcessor extends TaskProcessor {
         data: { isSetup: true },
       });
 
-
       logger.info(
         `Successfully processed onboardNewAccount for ID: ${job.data.getSync.ID}`
       );

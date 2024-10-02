@@ -38,7 +38,7 @@ class GameDataFetcher {
 
   async getGameDetails() {
     try {
-      console.log(`Fetching data from URL: ${this.href}`);
+      //console.log(`[getGameDetails] Fetching data from URL: ${this.href}`);
       const matchList = await this.page.$x(this.xpath); // Fetch match elements using XPath
       const gameData = [];
 
@@ -86,7 +86,7 @@ class GameDataFetcher {
           round,
           date,
           dayOne: dateObj,
-          dateObj:dateObj,
+          dateObj: dateObj,
           type,
           time,
           ground,

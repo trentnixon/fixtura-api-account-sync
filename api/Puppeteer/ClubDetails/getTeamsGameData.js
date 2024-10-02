@@ -80,7 +80,7 @@ class getTeamsGameData {
             return { status: "bye" };
           }
 
-          /* ROUND *********** */ 
+          /* ROUND *********** */
           const round = await ScrapeRound(
             matchElement,
             SELECTORS.ROUND.General
@@ -157,7 +157,7 @@ class getTeamsGameData {
   async LoopTeams(page) {
     let teamIndex = 0;
 
-    console.log(this.TEAMS)
+    //console.log(this.TEAMS)
     //const Sample = this.TEAMS[0]
     try {
       for (const { id, attributes: team } of this.TEAMS) {
@@ -176,7 +176,7 @@ class getTeamsGameData {
 
         // Find Team Grade for Gamedata relation
         const GradeID = await this.getGradeID(page);
- 
+
         // Get the match list
         const matchList = await page.$$(".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY");
 
@@ -192,20 +192,18 @@ class getTeamsGameData {
       }
       return true;
     } catch (error) {
-      console.error(`Error getting team game data:`, error); 
+      console.error(`Error getting team game data:`, error);
     }
   }
 
-  async Setup() {  
+  async Setup() {
     logger.info("Setting up getTeamsGameData...");
-    console.log("this.ActiveGrades")
-    console.log(this.ActiveGrades)
     const page = await this.browser.newPage();
     try {
       await this.LoopTeams(page);
       logger.info("getTeamsGameData setup completed.");
       return true;
-    } catch (error) { 
+    } catch (error) {
       logger.error("Error setting up getTeamsGameData:", error);
       logger.critical("An error occurred in Setup", {
         file: "getTeamsGameData.js",

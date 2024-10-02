@@ -83,8 +83,8 @@ class DataService {
 
   createTeamsArrForClub(teamsData) {
     let arr = [];
-    teamsData.forEach((team) => {
-      team.attributes.grades.data.forEach((grade) => {
+    teamsData.forEach(team => {
+      team.attributes.grades.data.forEach(grade => {
         arr.push({
           teamName: team.attributes.teamName,
           id: team.id,
@@ -97,20 +97,19 @@ class DataService {
   }
 
   createTeamsArrForAssociation(competitionsData) {
-    console.log("competitionsData ", competitionsData)
     const arr = [];
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-    competitionsData.forEach((comp) => {
+    competitionsData.forEach(comp => {
       const startDate = new Date(comp.attributes.startDate);
-      
+
       // If startDate is more than one year ago, skip this iteration
       if (startDate < oneYearAgo) {
         return;
       }
 
-      comp.attributes.teams.data.forEach((team) => {
+      comp.attributes.teams.data.forEach(team => {
         arr.push({
           teamName: team.attributes.teamName,
           id: team.id,
@@ -132,7 +131,7 @@ class DataService {
       today.getDate() - 14
     );
 
-    competitionsData.forEach((comp) => {
+    competitionsData.forEach(comp => {
       const endDate = new Date(
         comp.attributes.competition.data.attributes.endDate
       );
@@ -142,7 +141,7 @@ class DataService {
         endDate > fourteenDaysAgo
       ) {
         comp.attributes.competition.data.attributes.grades.data.forEach(
-          (grades) => {
+          grades => {
             arr.push({
               club: [clubId],
               compID: comp.attributes.competition.data.id,
@@ -172,7 +171,7 @@ class DataService {
 
       // Proceed only if the competition's end date is within the last 14 days
       if (endDate > fourteenDaysAgo) {
-        const gradeArr = comp.attributes.grades.data.map((grade) => ({
+        const gradeArr = comp.attributes.grades.data.map(grade => ({
           compID: comp.id,
           compName: comp.attributes.competitionName,
           id: grade.id,

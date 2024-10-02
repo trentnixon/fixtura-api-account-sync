@@ -13,9 +13,7 @@ class AssignCompetitions {
     this.DATAOBJ = DATAOBJ;
   }
 
-
   async checkIfClubToCompIsAlreadyStored(competition) {
-   
     const query = qs.stringify(
       {
         filters: {
@@ -37,7 +35,7 @@ class AssignCompetitions {
 
     try {
       const response = await fetcher(`club-to-competitions?${query}`);
-      //console.log("CHECK RES=== ", response); 
+      //console.log("CHECK RES=== ", response);
       return response.length === 0 ? false : true;
     } catch (error) {
       logger.error(
@@ -76,11 +74,9 @@ class AssignCompetitions {
           competition.club = [this.DATAOBJ.TYPEOBJ.TYPEID];
           competition.competition = [isExisting[0].id];
 
-          //console.log("Check competition: ", competition);
           const isStored = await this.checkIfClubToCompIsAlreadyStored(
             competition
           );
-          //console.log("Check competition RESULTS: ", isStored);
 
           if (!isStored) {
             promises.push(
@@ -89,8 +85,6 @@ class AssignCompetitions {
           } else {
             logger.info(`${competition.competitionName} is already in Strapi`);
           }
-          //console.log(competition);
-          //console.log(`competitions/${isExisting[0].id}`);
         } else {
           // Process Association Competitions
           logger.debug(
@@ -145,7 +139,6 @@ class AssignCompetitions {
     );
 
     try {
-  
       const response = await fetcher(`${resourcePath}?${query}`);
       return response.length > 0 ? response : false;
     } catch (error) {

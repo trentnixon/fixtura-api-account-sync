@@ -48,7 +48,6 @@ class CompetitionCRUD {
   }
 
   async checkIfAssociationToCompIsAlreadyStored(competitionId, associationId) {
-
     // Build the query to check if the association is already linked to the competition
     const query = qs.stringify(
       {
@@ -82,7 +81,6 @@ class CompetitionCRUD {
   /**************************************************** */
   async updateClubCompetition(competition, existingCompetitionId) {
     try {
-
       // Update the competition in the database
       await fetcher(`competitions/${existingCompetitionId}`, "PUT", {
         data: competition,
@@ -112,27 +110,34 @@ class CompetitionCRUD {
   }
 
   async updateAssociationCompetition(competition, existingCompetitionId) {
+    // OCT 2024: removed if linked check
+    // not sure why it was here, but it was causing an error when comp names were in correct
+    // reinstating so each pass over a comp gets the latest version
+
     // Check if the association is already linked to the competition
-    const isLinked = await this.checkIfAssociationToCompIsAlreadyStored(
+    /* const isLinked = await this.checkIfAssociationToCompIsAlreadyStored(
       existingCompetitionId,
       this.dataObj.TYPEOBJ.TYPEID
-    );
-    if (!isLinked) {
-      try {
-        // If not linked, update the competition to link it with the association
-        //competition.association = [this.dataObj.TYPEOBJ.TYPEID];
-        await fetcher(`competitions/${existingCompetitionId}`, "PUT", { data: competition,});
-        logger.info(
-          `Competition updated for association: ${competition.competitionName}`
-        );
-      } catch (error) {
-        throw new Error(`Error updating competition for association: ${error}`);
-      }
-    } else {
+    ); */
+    //if (!isLinked) {
+    try {
+      // If not linked, update the competition to link it with the association
+      //competition.association = [this.dataObj.TYPEOBJ.TYPEID];
+      await fetcher(`competitions/${existingCompetitionId}`, "PUT", {
+        data: competition,
+      });
+      logger.info(
+        `Competition updated for association: ${competition.competitionName}`
+      );
+    } catch (error) {
+      throw new Error(`Error updating competition for association: ${error}`);
+    }
+    //}
+    /*  else {
       logger.info(
         `Competition already linked to association: ${competition.competitionName}`
       );
-    }
+    } */
   }
 
   /**************************************************** */

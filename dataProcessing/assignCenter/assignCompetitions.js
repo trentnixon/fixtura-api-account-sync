@@ -29,7 +29,6 @@ class AssignCompetitions {
         );
         console.log(error);
       }
-      
     }
     return { success: true };
   }
@@ -42,7 +41,7 @@ class AssignCompetitions {
         competitionId,
         "competitions"
       );
-    console.log("competition", competition);
+    //console.log("[processCompetition]", competition);
     if (existingCompetition) {
       this.processingTracker.itemUpdated("competitions");
       await this.competitionHandler.handleExistingCompetition(

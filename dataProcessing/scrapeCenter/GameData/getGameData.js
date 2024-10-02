@@ -2,7 +2,7 @@ const logger = require("../../../src/utils/logger");
 const GameDataFetcher = require("./GameDataFetcher");
 const ProcessingTracker = require("../../services/processingTracker");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
- 
+
 class GetTeamsGameData {
   constructor(dataObj) {
     this.teams = dataObj.TEAMS;
@@ -15,7 +15,7 @@ class GetTeamsGameData {
 
   // Initialize Puppeteer and create a new page
   async initPage() {
-    return await this.puppeteerManager.createPageInNewContext(); 
+    return await this.puppeteerManager.createPageInNewContext();
     /* await this.puppeteerManager.launchBrowser();
     return this.puppeteerManager.browser.newPage(); */
   }
@@ -23,19 +23,17 @@ class GetTeamsGameData {
   async processGamesBatch(page, teamsBatch) {
     let storedGames = [];
     for (const team of teamsBatch) {
-      console.log(team)
       try {
         const { teamName, id, href, grade } = team;
-        console.log({ teamName, id, href, grade })
-        
+
         const url = `${this.domain}${href}`; // Assuming full URL is provided in team.href
         logger.info(`Processing team ${teamName} id ${id} ${url}...`);
         const gameDataFetcher = new GameDataFetcher(page, url, grade);
         const gameData = await gameDataFetcher.fetchGameData();
-        storedGames.push(...gameData.flat().filter((match) => match !== null)); // Flatten and filter the data
+        storedGames.push(...gameData.flat().filter(match => match !== null)); // Flatten and filter the data
       } catch (error) {
         logger.error(`Error processing team game data: ${team.teamName}`, {
-          error, 
+          error,
         });
       }
     }
@@ -56,16 +54,16 @@ class GetTeamsGameData {
     try {
       const page = await this.initPage();
       let fetchedGames = await this.processGamesBatch(page, this.teams);
-      console.log("fetchedGames ", fetchedGames)
- 
+      console.log("fetchedGames ", fetchedGames);
+
       fetchedGames = this.removeDuplicateGames(fetchedGames);
       if (fetchedGames.length === 0) {
         console.log("No game data found");
         //throw new Error("No game data found");
       }
-      this.processingTracker.itemFound("games", fetchedGames.length); 
+      this.processingTracker.itemFound("games", fetchedGames.length);
       return fetchedGames;
-    } catch (error) { 
+    } catch (error) {
       logger.error("Error in setup method", { error });
       throw error;
     } finally {
@@ -74,7 +72,7 @@ class GetTeamsGameData {
   }
 
   removeDuplicateGames(games) {
-    return [...new Map(games.map((game) => [game.gameID, game])).values()];
+    return [...new Map(games.map(game => [game.gameID, game])).values()];
   }
 }
 
