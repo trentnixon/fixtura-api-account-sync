@@ -14,13 +14,13 @@ function initializeQueueProcessing() {
   // run account Sync as set by Strapi
   // uncomment this before pushing
   handleAccountSync();
-  const testData = {
+  /*  const testData = {
     getSync: {
-      PATH: "ASSOCIATION",
-      ID: "194",
+      PATH: "CLUB",
+      ID: "310",
     },
   };
-  handleAccountSync(testData);
+  handleAccountSync(testData); */
 
   onboardNewAccountTask();
 }
