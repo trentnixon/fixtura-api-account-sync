@@ -12,15 +12,15 @@ function initializeQueueProcessing() {
   checkAssetGeneratorAccountStatus();
 
   // run account Sync as set by Strapi
-  // uncomment this before pushing
-  handleAccountSync();
-  /*  const testData = {
+  // uncomment this before
+  //handleAccountSync();
+  const testData = {
     getSync: {
       PATH: "CLUB",
-      ID: "310",
+      ID: "49",
     },
   };
-  handleAccountSync(testData); */
+  handleAccountSync(testData);
 
   onboardNewAccountTask();
 }
