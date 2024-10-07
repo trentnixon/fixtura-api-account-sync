@@ -59,7 +59,7 @@ class GameDataFetcher {
   async extractMatchDetails(matchElement) {
     try {
       const gameDivs = await matchElement.$$(
-        "div.sc-fnpp5x-0.sc-fnpp5x-4.boRXYi.gehImT"
+        "div.sc-fnpp5x-0.sc-fnpp5x-5.boRXYi"
       );
       const gameDetails = [];
 
