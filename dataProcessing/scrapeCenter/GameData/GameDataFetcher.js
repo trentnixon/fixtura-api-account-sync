@@ -56,6 +56,8 @@ class GameDataFetcher {
     }
   }
 
+  // NOTE This class changes 'div.sc-fnpp5x-0.sc-fnpp5x-5.boRXYi'
+  // Find a better way to grab this data!
   async extractMatchDetails(matchElement) {
     try {
       const gameDivs = await matchElement.$$(

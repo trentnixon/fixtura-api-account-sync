@@ -23,8 +23,12 @@ async function fetcher(PATH, method = "GET", body = {}, retryCount = 2) {
     const res = await response.json();
 
     if (!response.ok) {
-      const errorDetail = res.error ? JSON.stringify(res.error) : 'Unknown error';
-      throw new Error(`[fetcher.js] Failed to fetch data from ${PATH}. Status: ${response.status}, Error: ${errorDetail}`);
+      const errorDetail = res.error
+        ? JSON.stringify(res.error)
+        : "Unknown error";
+      throw new Error(
+        `[fetcher.js] Failed to fetch data from ${PATH}. Status: ${response.status}, Error: ${errorDetail}`
+      );
     }
 
     logger.info(`Data fetched successfully from ${PATH}`);
@@ -42,8 +46,8 @@ async function fetcher(PATH, method = "GET", body = {}, retryCount = 2) {
     });
 
     if (retryCount > 0) {
-      logger.info("[fetcher.js] Retrying fetcher in 2 seconds...");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      logger.info("[fetcher.js] Retrying fetcher in 5 seconds...");
+      await new Promise(resolve => setTimeout(resolve, 5000));
       return fetcher(PATH, method, body, retryCount - 1);
     } else {
       return null;
