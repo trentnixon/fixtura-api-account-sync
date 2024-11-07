@@ -39,7 +39,7 @@ class GameDataFetcher {
   async getGameDetails() {
     try {
       //console.log(`[getGameDetails] Fetching data from URL: ${this.href}`);
-      const matchList = await this.page.$x(this.xpath); // Fetch match elements using XPath
+      const matchList = await this.page.$$(`xpath/${this.xpath}`); // Fetch match elements using XPath
       const gameData = [];
 
       for (const matchElement of matchList) {
@@ -102,6 +102,8 @@ class GameDataFetcher {
           teamAway: teams[1].name,
         });
       }
+
+      console.log("[gameDetails]", gameDetails);
 
       return gameDetails;
     } catch (error) {

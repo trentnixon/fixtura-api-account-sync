@@ -10,18 +10,19 @@ const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 function initializeQueueProcessing() {
   // Check Data sync for Asset Bundlers
   checkAssetGeneratorAccountStatus();
+  /*  const testData = {
+    getSync: {
+      PATH: "ASSOCIATION",
+      ID: 120,
+      continue: true,
+      FirstName: "Cricket Whanganui",
+    },
+  }; */
 
+  //handleAccountSync(testData);
   // run account Sync as set by Strapi
   // uncomment this before
   handleAccountSync();
-  /*   const testData = {
-    getSync: {
-      PATH: "CLUB",
-      ID: "106",
-    },
-  };
-  handleAccountSync(testData); */
-
   onboardNewAccountTask();
 }
 
@@ -29,12 +30,3 @@ function initializeQueueProcessing() {
 initializeQueueProcessing();
 
 logger.info("Worker started successfully.");
-
-// TODO!! SET UP ADN TEST THE OnBOARDING REDIS HOOK UP
-/* function startCronJobs() {
-  //taskCronSyncUserAccounts();
-  // OnBoarding Cron Removed and handled in Strapi
-} */
-
-// Start cron jobs
-//startCronJobs();

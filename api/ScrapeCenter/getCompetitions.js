@@ -76,17 +76,21 @@ class GetCompetitions extends BaseController {
       const seasonOrgs = Array.from(
         document.querySelectorAll('[data-testid^="season-org-"]')
       );
-      return seasonOrgs.flatMap((seasonOrg) => {
+      return seasonOrgs.flatMap(seasonOrg => {
         const competitionsList = Array.from(seasonOrg.querySelectorAll("h2"));
-        return competitionsList.map((competition) => {
+        return competitionsList.map(competition => {
           const competitionName = competition.textContent;
-          const competitionUrl = competition.parentElement.querySelector("a")?.href;
-          const statusElement = competition.parentElement.querySelector('div > span');
-          const statusText = statusElement ? statusElement.textContent || "Not Found" : "Not Found";
+          const competitionUrl =
+            competition.parentElement.querySelector("a")?.href;
+          const statusElement =
+            competition.parentElement.querySelector("div > span");
+          const statusText = statusElement
+            ? statusElement.textContent || "Not Found"
+            : "Not Found";
           return {
             competitionName,
             competitionUrl,
-            status:statusText
+            status: statusText,
           };
         });
       });
@@ -94,8 +98,7 @@ class GetCompetitions extends BaseController {
 
     logger.debug("Competitions fetched");
     return competitions;
-}
-
+  }
 
   async fetchCompetitionsInClubs(page, url) {
     try {
@@ -107,9 +110,9 @@ class GetCompetitions extends BaseController {
       ];
 
       // Define a handler function
-      const handler = (request) => {
+      const handler = request => {
         if (
-          blockedResources.some((resource) => request.url().includes(resource))
+          blockedResources.some(resource => request.url().includes(resource))
         ) {
           request.abort();
         } else {
@@ -122,7 +125,7 @@ class GetCompetitions extends BaseController {
       page.on("request", handler);
 
       // Optionally handle or ignore page errors
-      page.on("pageerror", (err) => {
+      page.on("pageerror", err => {
         console.log("getCompetitions ::: Page error: " + err.toString());
         if (err instanceof EvalError) {
           console.log("Caught EvalError: " + err.toString());
@@ -130,12 +133,14 @@ class GetCompetitions extends BaseController {
       });
 
       // Optionally handle or ignore other errors
-      page.on("error", (err) => {
+      page.on("error", err => {
         console.log("Error: " + err.toString());
       });
 
       // Wait for an element defined by XPath to appear on the page
-      await page.waitForXPath("//*[starts-with(@data-testid, 'season-org-')]");
+      await page.waitForSelector(
+        "xpath///*[starts-with(@data-testid, 'season-org-')]"
+      );
 
       // Use page.evaluate to access the document object in the browser context and
       // Use document.evaluate to select elements by XPath
@@ -176,43 +181,48 @@ class GetCompetitions extends BaseController {
 
   async extractCompetitionsData(page) {
     return await page.evaluate(() => {
-        const results = [];
-        
-        const h2Elements = document.querySelectorAll('h2'); // Selecting all h2 elements which contain competition names.
-        
-        h2Elements.forEach(h2 => {
-            const competitionName = h2.textContent || "Not Found";
-            const ul = h2.nextElementSibling; // Assuming that ul is the next element after h2.
-            
-            if(ul && ul.tagName === 'UL') { // Check if ul exists and is actually a ul tag.
-                const liElements = ul.querySelectorAll('li'); // Selecting all li elements under the ul tag.
-                
-                liElements.forEach(li => {
-                    const aTag = li.querySelector('a');
-                    if(aTag) {
-                        const competitionUrl = aTag.href || "Not Found";
-                        const orgElement = h2.closest('[data-testid^="season-org-"]');
-                        const orgName = orgElement ? orgElement.querySelector("div > div > span.organisation-name")?.textContent || "Not Found" : "Not Found";
-                        const statusElement = li.querySelector('div > span');
-                        const statusText = statusElement ? statusElement.textContent || "Not Found" : "Not Found";
-                        results.push({
-                            competitionName,
-                            competitionUrl,
-                            orgName,
-                            status:statusText
-                        });
-                    }
-                });
+      const results = [];
+
+      const h2Elements = document.querySelectorAll("h2"); // Selecting all h2 elements which contain competition names.
+
+      h2Elements.forEach(h2 => {
+        const competitionName = h2.textContent || "Not Found";
+        const ul = h2.nextElementSibling; // Assuming that ul is the next element after h2.
+
+        if (ul && ul.tagName === "UL") {
+          // Check if ul exists and is actually a ul tag.
+          const liElements = ul.querySelectorAll("li"); // Selecting all li elements under the ul tag.
+
+          liElements.forEach(li => {
+            const aTag = li.querySelector("a");
+            if (aTag) {
+              const competitionUrl = aTag.href || "Not Found";
+              const orgElement = h2.closest('[data-testid^="season-org-"]');
+              const orgName = orgElement
+                ? orgElement.querySelector("div > div > span.organisation-name")
+                    ?.textContent || "Not Found"
+                : "Not Found";
+              const statusElement = li.querySelector("div > span");
+              const statusText = statusElement
+                ? statusElement.textContent || "Not Found"
+                : "Not Found";
+              results.push({
+                competitionName,
+                competitionUrl,
+                orgName,
+                status: statusText,
+              });
             }
-        });
+          });
+        }
+      });
 
-        return results;
+      return results;
     });
-}
-
+  }
 
   async setup() {
-    //console.log("TEST 1 . GetClubDetails Setup called"); 
+    //console.log("TEST 1 . GetClubDetails Setup called");
     //console.log("this.ACCOUNTID", this.ACCOUNTID);
 
     try {

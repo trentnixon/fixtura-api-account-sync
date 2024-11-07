@@ -17,7 +17,7 @@ class GetCompetitions {
       throw new Error("Browser instance is not set.");
     }
     const page = await this.browser.newPage();
-    page.on("console", (msg) => {
+    page.on("console", msg => {
       console.log("PAGE LOG:", msg.text());
     });
 
@@ -50,8 +50,8 @@ class GetCompetitions {
     try {
       logger.info(`Checking this Competition ${url}`);
       await page.goto(url);
-      await page.waitForXPath(
-        "/html/body/div/section/main/div/div/div[1]/div/section[1]/section/div"
+      await page.waitForSelector(
+        "xpath//html/body/div/section/main/div/div/div[1]/div/section[1]/section/div"
       );
       await page.screenshot({ path: "getCompetitions.png", fullPage: true });
 
@@ -69,13 +69,13 @@ class GetCompetitions {
   }
 
   async extractCompetitionsData(page) {
-    const seasonOrgsHandles = await page.$x(
-      "/html/body/div/section/main/div/div/div[1]/div/section[1]/section/div"
+    const seasonOrgsHandles = await page.$$(
+      "xpath//html/body/div/section/main/div/div/div[1]/div/section[1]/section/div"
     );
 
     const seasonOrgsData = await Promise.all(
-      seasonOrgsHandles.map((handle) =>
-        page.evaluate((seasonOrg) => {
+      seasonOrgsHandles.map(handle =>
+        page.evaluate(seasonOrg => {
           const orgName = seasonOrg.querySelector(
             "div > div > span.organisation-name"
           ).textContent;
@@ -83,19 +83,19 @@ class GetCompetitions {
           const competitionsList = Array.from(seasonOrg.querySelectorAll("h2"));
 
           return competitionsList
-            .filter((competition) => {
+            .filter(competition => {
               // Check if the competition has the active selector or pending
               const completedSpan = Array.from(
                 competition.parentElement.querySelectorAll("span")
               ).find(
-                (span) =>
+                span =>
                   span.textContent === "Active" ||
                   span.textContent === "Pending" ||
                   span.textContent === "Completed"
               );
               return completedSpan;
             })
-            .map((competition) => {
+            .map(competition => {
               const competitionName = competition.textContent;
               const competitionUrl =
                 competition.parentElement.querySelector("a").href;

@@ -16,13 +16,19 @@ class PuppeteerManager {
     }
     try {
       this.browser = await puppeteer.launch({
-        headless: process.env.NODE_ENV === 'development' ? false : 'new',
+        headless: process.env.NODE_ENV === "development" ? false : "shell",
         //headless: 'new', // Consider setting to true for production
         args: [
           "--disable-setuid-sandbox",
           "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-web-security",
+          "--single-process",
+          "--no-zygote",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--no-first-run",
+          "--no-default-browser-check",
+          "--disable-background-networking",
+          "--disable-background-timer-throttling",
         ],
       });
       logger.info("Puppeteer browser launched");
@@ -35,13 +41,11 @@ class PuppeteerManager {
   async createPageInNewContext() {
     await this.launchBrowser(); // Ensure the browser is launched only once
 
-    // Create a new incognito browser context
-    const context = await this.browser.createIncognitoBrowserContext();
-    // Create a new page within this context
-    const page = await context.newPage();
+    // Create a new page in the default browser context
+    const page = await this.browser.newPage();
 
-    // Add context to disposables for cleanup
-    this.addDisposable(context);
+    // Add page to disposables for cleanup
+    this.addDisposable(page);
 
     return page;
   }

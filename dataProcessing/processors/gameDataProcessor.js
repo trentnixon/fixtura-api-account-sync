@@ -20,15 +20,15 @@ class GameDataProcessor {
    */
   async process() {
     try {
-      // Scrape game data 
+      // Scrape game data
       const getGameDataObj = new getTeamsGameData(this.dataObj);
-      const scrapedGameData = await getGameDataObj.setup(); 
+      const scrapedGameData = await getGameDataObj.setup();
 
       if (!scrapedGameData) {
-        throw new Error("No game data scraped."); 
+        throw new Error("No game data scraped.");
       }
-      
 
+      console.log("[scrapedGameData]", scrapedGameData);
       // Assign scraped data
       const assignGameDataObj = new assignGameData(
         scrapedGameData,

@@ -23,11 +23,11 @@ class GetTeamsFromLadder extends BaseController {
     const page = await this.browser.newPage();
     const url = grade.url;
     try {
-      logger.info(`Navigating to ${url}/ladder`); 
+      logger.info(`Navigating to ${url}/ladder`);
       await page.goto(`${url}/ladder`);
 
-      const teams = await this.getTeamNamesAndUrls(page); 
-      const teamData = teams.map((team) => ({
+      const teams = await this.getTeamNamesAndUrls(page);
+      const teamData = teams.map(team => ({
         ...team,
         competition: [grade.compID],
         grades: [grade.id],
@@ -38,7 +38,7 @@ class GetTeamsFromLadder extends BaseController {
       return teamData;
     } catch (err) {
       logger.error(`Error processing competition URL: ${url}`, error);
-      console.log(error)
+      console.log(error);
       logger.critical("An error occurred in setup", {
         file: "getTeamsFromLadder.js",
         function: "setup",
@@ -52,18 +52,19 @@ class GetTeamsFromLadder extends BaseController {
 
   async getTeamNamesAndUrls(page) {
     try {
-      const teamXpath = "/html/body/div/section/main/div/div/div[1]/section/section/div/div/div/div/div[1]/table/tbody/tr/td[2]/a";
-      
-      const links = await page.$x(teamXpath);
+      const teamXpath =
+        "/html/body/div/section/main/div/div/div[1]/section/section/div/div/div/div/div[1]/table/tbody/tr/td[2]/a";
+
+      const links = await page.$$(`xpath/${teamXpath}`);
       const teams = [];
-  
+
       for (const link of links) {
-        const href = await link.evaluate(el => el.getAttribute('href'));
+        const href = await link.evaluate(el => el.getAttribute("href"));
         const teamID = href.split("/").pop();
         //console.log(href)
-        const splitUrl = href.split('/');
+        const splitUrl = href.split("/");
         const STRAPIID = splitUrl[4];
-        
+
         const query = qs.stringify(
           {
             filters: {
@@ -76,26 +77,26 @@ class GetTeamsFromLadder extends BaseController {
             encodeValuesOnly: true,
           }
         );
-  
+
         const response = await fetcher(`clubs?${query}`);
         //console.log("CLUB :: response");
         //console.log(response[0].id);
-        
+
         const teamName = await link.evaluate(el => el.innerText.trim());
-  
+
         let teamObj = {
           teamName: teamName,
           href: href,
-          teamID: teamID
+          teamID: teamID,
         };
-        
+
         if (response[0]?.id !== undefined) {
           teamObj.club = [response[0].id];
         }
-        
+
         teams.push(teamObj);
       }
-  
+
       return teams;
     } catch (err) {
       logger.error("Error occurred while getting team names and URLs:", err);
@@ -107,17 +108,15 @@ class GetTeamsFromLadder extends BaseController {
       throw err;
     }
   }
-  
- 
 
   async LoopURLS() {
     try {
       const allTeamData = [];
- 
+
       for (const item of this.URLS) {
         const teamData = await this.processGrade(item);
         allTeamData.push(...teamData);
-      } 
+      }
       logger.info("All team data processed successfully");
       return allTeamData;
     } catch (error) {
@@ -161,7 +160,6 @@ class GetTeamsFromLadder extends BaseController {
       logger.info("Dispose of items and Pupeteer | Finally");
     }
   }
-
 }
 
 module.exports = GetTeamsFromLadder;

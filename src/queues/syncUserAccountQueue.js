@@ -40,6 +40,7 @@ async function handleAccountSync(testData = null) {
     await processJob(testData);
   } else {
     // Normal queue processing
+
     syncUserAccount.process(async job => {
       await processJob(job.data);
     });

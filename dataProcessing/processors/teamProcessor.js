@@ -30,6 +30,7 @@ class TeamProcessor {
         //throw new Error("No team data scraped.");
       }
 
+      //console.log("[scrapedTeams]", scrapedTeams);
       // Assign scraped data
       const assignTeamsObj = new AssignTeamsToCompsAndGrades(
         scrapedTeams,
@@ -45,7 +46,7 @@ class TeamProcessor {
         method: "process",
         class: "TeamProcessor",
       });
-      throw error;
+      //throw error;
     }
   }
 }

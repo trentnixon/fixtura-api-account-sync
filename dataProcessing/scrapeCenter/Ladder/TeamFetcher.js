@@ -36,13 +36,13 @@ class TeamFetcher {
     try {
       const teamXpath =
         "/html/body/div/section/main/div/div/div[1]/section/section/div/div/div/div/div[1]/table/tbody/tr/td[2]/a";
-      const links = await this.page.$x(teamXpath);
+      const links = await this.page.$$(`xpath/${teamXpath}`);
       const teams = [];
 
       for (const link of links) {
-        const href = await link.evaluate((el) => el.getAttribute("href"));
+        const href = await link.evaluate(el => el.getAttribute("href"));
         const teamID = href.split("/").pop();
-        const teamName = await link.evaluate((el) => el.innerText.trim());
+        const teamName = await link.evaluate(el => el.innerText.trim());
 
         const clubID = await this.getClubIDFromHref(href);
 
@@ -72,33 +72,32 @@ class TeamFetcher {
    * Extracts the club ID from the team's href attribute.
    */
   async getClubIDFromHref(href) {
-   
     const playHQId = this.extractPlayHQId(href);
     //console.log("extractPlayHQId from Href", href, playHQId)
-    if (!this.isValidPlayHQId(playHQId)) {
+    /* if (!this.isValidPlayHQId(playHQId)) {
         logger.error(`Invalid PlayHQ ID format: ${playHQId}, URL: ${href}`);
         return null;
-    }
- 
+    } */
+
     try {
-        return await this.CRUDOperations.fetchClubIdByPlayHQId(playHQId);
+      return await this.CRUDOperations.fetchClubIdByPlayHQId(playHQId);
     } catch (error) {
-        logger.error(`Error fetching club ID for PlayHQID: ${playHQId}`);
-        console.log(error)
-        return null;
+      logger.error(`Error fetching club ID for PlayHQID: ${playHQId}`);
+      console.log(error);
+      return null;
     }
-}
+  }
 
   // UTILS FUNCS
   extractPlayHQId(href) {
     const splitUrl = href.split("/");
     return splitUrl.length >= 5 ? splitUrl[4] : null;
   }
-  
-  isValidPlayHQId(playHQId) {
+
+  /*  isValidPlayHQId(playHQId) {
     const playHQIDPattern = /^[a-z0-9]{8}$/i;
     return playHQIDPattern.test(playHQId);
-  }
+  } */
 }
 
 module.exports = TeamFetcher;
