@@ -37,34 +37,51 @@ async function scrapeDate(matchElement) {
 }
 
 // Scrapes type, time, and ground information from the match element
+
+// Define types as an array to look up
+const typeDefinitions = ["One Day", "Two Day+", "T20"];
+
 async function scrapeTypeTimeGround(matchElement) {
   try {
-    const gameInfoXpath =
-      ".//li[@data-testid='games-on-date']/div[2]/div/div[2]";
+    const gameInfoXpath = "xpath/.//div[@class='sc-10c3c88-11 GJoRe']"; // Updated XPath with recent Puppeteer syntax
 
-    const gameInfoElement = await matchElement.$$(`xpath/${gameInfoXpath}`);
-    if (gameInfoElement.length === 0) {
+    const gameInfoElements = await matchElement.$$(`${gameInfoXpath}`);
+    if (gameInfoElements.length === 0) {
       logger.warn(`Game info element not found using XPath: ${gameInfoXpath}`);
       return { type: null, time: null, ground: null };
     }
 
-    const spans = await gameInfoElement[0].$$("span");
+    // Extract spans and links within the matched gameInfoElement
+    const spans = await gameInfoElements[0].$$("span");
     if (spans.length === 0) {
       logger.warn("No spans found for type, time, and ground extraction.");
       return { type: null, time: null, ground: null };
     }
 
-    // Extract time and ground, and handle type if present
-    const type =
-      spans.length >= 3
-        ? await spans[0].evaluate(el => el.textContent.trim())
-        : null;
-    const timeIndex = type ? 1 : 0;
-    const groundIndex = type ? 3 : 1;
-    const time = await spans[timeIndex].evaluate(el => el.textContent.trim());
-    const ground = await spans[groundIndex].evaluate(el =>
-      el.textContent.trim()
-    );
+    let type = null;
+    let time = null;
+    let ground = null;
+
+    for (const span of spans) {
+      const spanText = await span.evaluate(el => el.textContent.trim());
+
+      // Check if the text matches any type in typeDefinitions
+      if (typeDefinitions.includes(spanText)) {
+        type = spanText;
+      }
+
+      // Use regex to detect and extract only the time (e.g., "10:30 AM")
+      else if (/^\d{1,2}:\d{2} [APM]{2}/.test(spanText)) {
+        const match = spanText.match(/^\d{1,2}:\d{2} [APM]{2}/);
+        time = match ? match[0] : null;
+      }
+    }
+
+    // Check for an href link for the ground location within gameInfoElement
+    const links = await gameInfoElements[0].$$("a");
+    if (links.length > 0) {
+      ground = await links[0].evaluate(el => el.textContent.trim());
+    }
 
     return { type, time, ground };
   } catch (error) {
