@@ -57,9 +57,9 @@ class DataController {
       dataObj = await this.reSyncData();
 
       // Process and assign Games
-      await this.processingTracker.setCurrentStage("games", collectionID);
+      /*       await this.processingTracker.setCurrentStage("games", collectionID);
       await this.ProcessGames(dataObj);
-      await this.processingTracker.completeStage("games", collectionID);
+      await this.processingTracker.completeStage("games", collectionID); */
 
       await this.ProcessTracking(startTime, collectionID);
 
