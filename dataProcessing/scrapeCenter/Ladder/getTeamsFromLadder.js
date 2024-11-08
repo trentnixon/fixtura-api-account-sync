@@ -4,7 +4,7 @@ const CRUDOperations = require("../../services/CRUDoperations");
 const ProcessingTracker = require("../../services/processingTracker");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
 
-/** 
+/**
  * The GetTeams class handles scraping of team data from websites.
  * Supports different modes for clubs and associations and includes duplicate removal logic.
  */
@@ -23,9 +23,7 @@ class GetTeams {
   }
 
   async initPage() {
-    return await this.puppeteerManager.createPageInNewContext(); 
-    /* await this.puppeteerManager.launchBrowser();
-    return this.puppeteerManager.browser.newPage(); */
+    return await this.puppeteerManager.createPageInNewContext();
   }
 
   async fetchTeamData(page, fetcherInfo) {
@@ -83,14 +81,14 @@ class GetTeams {
   }
 
   findCompIDForTeam(teamInfo) {
-    const gradeInfo = this.GRADES.find((grade) => grade.id === teamInfo.grade);
+    const gradeInfo = this.GRADES.find(grade => grade.id === teamInfo.grade);
     return gradeInfo ? gradeInfo.compID : null;
   }
 
   removeDuplicateTeams(teams) {
     const uniqueTeams = [];
 
-    teams.forEach((team) => {
+    teams.forEach(team => {
       if (!this.isDuplicateTeam(team, uniqueTeams)) {
         uniqueTeams.push(team);
       }
@@ -101,7 +99,7 @@ class GetTeams {
 
   isDuplicateTeam(team, teamList) {
     return teamList.some(
-      (existingTeam) =>
+      existingTeam =>
         existingTeam.teamID === team.teamID &&
         existingTeam.competition.toString() === team.competition.toString() &&
         existingTeam.grades.toString() === team.grades.toString()

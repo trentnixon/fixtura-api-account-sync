@@ -17,9 +17,9 @@ function initializeQueueProcessing() {
       continue: true,
       FirstName: "Cricket Whanganui",
     },
-  }; */
+  };
 
-  //handleAccountSync(testData);
+  handleAccountSync(testData); */
   // run account Sync as set by Strapi
   // uncomment this before
   handleAccountSync();

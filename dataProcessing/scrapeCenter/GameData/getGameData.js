@@ -16,11 +16,11 @@ class GetTeamsGameData {
   // Initialize Puppeteer and create a new page
   async initPage() {
     return await this.puppeteerManager.createPageInNewContext();
-    /* await this.puppeteerManager.launchBrowser();
-    return this.puppeteerManager.browser.newPage(); */
   }
 
   async processGamesBatch(page, teamsBatch) {
+    console.log("Items in [teamsBatch]", teamsBatch.length);
+    //throw new Error("THROW ERROR IN processGamesBatch");
     let storedGames = [];
     for (const team of teamsBatch) {
       try {

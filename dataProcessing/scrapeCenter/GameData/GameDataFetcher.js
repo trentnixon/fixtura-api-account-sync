@@ -103,7 +103,7 @@ class GameDataFetcher {
         });
       }
 
-      console.log("[gameDetails]", gameDetails);
+      //console.log("[gameDetails]", gameDetails);
 
       return gameDetails;
     } catch (error) {

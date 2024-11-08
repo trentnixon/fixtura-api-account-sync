@@ -19,7 +19,54 @@ class GameDataProcessor {
    * Throws an error if any step in the process fails.
    */
   async process() {
+    const batchSize = 10;
+    let BatchItem = 1;
     try {
+      // Split teams array into smaller batches for processing
+      const teamBatches = this.createBatches(this.dataObj.TEAMS, batchSize);
+
+      // Loop through each batch
+      for (const teamsBatch of teamBatches) {
+        console.log("[teamBatches]", teamBatches.length, BatchItem);
+        // Scrape game data for the current batch
+        const getGameDataObj = new getTeamsGameData({
+          ...this.dataObj,
+          TEAMS: teamsBatch,
+        });
+        const scrapedGameData = await getGameDataObj.setup();
+
+        if (!scrapedGameData) {
+          logger.warn("No game data scraped for current batch.");
+          continue;
+        }
+
+        console.log("[scrapedGameData]", scrapedGameData);
+
+        // Assign the scraped data for the current batch
+        const assignGameDataObj = new assignGameData(
+          scrapedGameData,
+          this.dataObj
+        );
+        await assignGameDataObj.setup();
+        BatchItem++;
+      }
+
+      return { process: true };
+    } catch (error) {
+      this.processingTracker.errorDetected("games");
+      logger.error("Error in GameDataProcessor process method", {
+        error,
+        method: "process",
+        class: "GameDataProcessor",
+      });
+      throw error;
+    }
+  }
+
+  /*  async process() {
+    try {
+      // Find a way to limit the memory here.
+      // maybe running 1 team at a time then commiting the data
       // Scrape game data
       const getGameDataObj = new getTeamsGameData(this.dataObj);
       const scrapedGameData = await getGameDataObj.setup();
@@ -46,6 +93,15 @@ class GameDataProcessor {
       });
       throw error;
     }
+  } */
+
+  // Helper function to split array into batches
+  createBatches(array, batchSize) {
+    let batches = [];
+    for (let i = 0; i < array.length; i += batchSize) {
+      batches.push(array.slice(i, i + batchSize));
+    }
+    return batches;
   }
 }
 

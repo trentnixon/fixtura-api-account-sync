@@ -22,8 +22,6 @@ class GetCompetitions {
   // Initialize Puppeteer and create a new page
   async initPage() {
     return await this.puppeteerManager.createPageInNewContext();
-    /*  await this.puppeteerManager.launchBrowser();
-    return this.puppeteerManager.browser.newPage(); */
   }
 
   // Fetch competitions for associations
@@ -82,7 +80,6 @@ class GetCompetitions {
         logger.info("No competitions found");
       }
 
-      //console.log("[competitions found]", competitions);
       this.processingTracker.itemFound("competitions", competitions.length);
       return competitions;
     } catch (error) {
