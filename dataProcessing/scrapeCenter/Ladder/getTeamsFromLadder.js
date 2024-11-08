@@ -33,7 +33,6 @@ class GetTeams {
 
   async processTeams(page) {
     let teams = [];
-
     for (const GradeInfo of this.GRADES) {
       try {
         const fetcherInfo = {
@@ -74,6 +73,7 @@ class GetTeams {
         method: "setup",
         class: "GetTeams",
       });
+      console.error(error);
       throw error;
     } finally {
       await this.puppeteerManager.dispose();

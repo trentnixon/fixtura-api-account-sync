@@ -20,6 +20,46 @@ class TeamProcessor {
    */
   async process() {
     try {
+      const grades = this.dataObj.Grades;
+      let gradeCount = 1;
+      for (const grade of grades) {
+        console.log("Processing ", gradeCount, " of ", grades.length);
+        // Initialize GetTeams with a single grade
+        const getTeamsObj = new GetTeamsFromLadder({
+          ...this.dataObj,
+          Grades: [grade],
+        });
+        const scrapedTeams = await getTeamsObj.setup();
+
+        if (!scrapedTeams || scrapedTeams.length === 0) {
+          logger.warn(`No team data scraped for grade ${grade.id}.`);
+          this.processingTracker.errorDetected("teams");
+          continue; // Skip to the next grade
+        }
+
+        // Assign the scraped team data for the current grade
+        const assignTeamsObj = new AssignTeamsToCompsAndGrades(
+          scrapedTeams,
+          this.dataObj
+        );
+        await assignTeamsObj.setup();
+        gradeCount++;
+      }
+
+      return { process: true };
+    } catch (error) {
+      this.processingTracker.errorDetected("teams");
+      logger.error("Error in TeamProcessor process method", {
+        error,
+        method: "process",
+        class: "TeamProcessor",
+      });
+      throw error;
+    }
+  }
+
+  /* async process() {
+    try {
       // Scrape team data
       const getTeamsObj = new GetTeamsFromLadder(this.dataObj);
       const scrapedTeams = await getTeamsObj.setup();
@@ -48,7 +88,7 @@ class TeamProcessor {
       });
       //throw error;
     }
-  }
+  } */
 }
 
 module.exports = TeamProcessor;

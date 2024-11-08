@@ -10,7 +10,7 @@ const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 function initializeQueueProcessing() {
   // Check Data sync for Asset Bundlers
   checkAssetGeneratorAccountStatus();
-  /*  const testData = {
+  /* const testData = {
     getSync: {
       PATH: "ASSOCIATION",
       ID: 120,
