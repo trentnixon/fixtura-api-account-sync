@@ -45,16 +45,16 @@ class DataController {
 
       // Process and assign competitions
       // last checked: 25/1024
-      await this.ProcessCompetitions(dataObj);
+      /*  await this.ProcessCompetitions(dataObj);
       await this.processingTracker.completeStage("competitions", collectionID);
-      dataObj = await this.reSyncData();
+      dataObj = await this.reSyncData(); */
 
       // Process and assign Teams
       // last checked: 25/1024
-      /*   await this.processingTracker.setCurrentStage("teams", collectionID);
+      await this.processingTracker.setCurrentStage("teams", collectionID);
       await this.ProcessTeams(dataObj);
       await this.processingTracker.completeStage("teams", collectionID);
-      dataObj = await this.reSyncData(); */
+      dataObj = await this.reSyncData();
 
       // Process and assign Games
       /*       await this.processingTracker.setCurrentStage("games", collectionID);
