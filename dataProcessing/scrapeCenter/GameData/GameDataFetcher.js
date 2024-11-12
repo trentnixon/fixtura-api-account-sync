@@ -77,7 +77,8 @@ class GameDataFetcher {
         const dateObj = moment(date, "dddd, DD MMMM YYYY").toDate();
 
         const round = await scrapeRound(gameDiv);
-        const { type, time, ground } = await scrapeTypeTimeGround(gameDiv);
+        const { type, time, ground, dateRangeObj, finalDaysPlay } =
+          await scrapeTypeTimeGround(gameDiv);
         const status = await scrapeStatus(gameDiv);
         const { urlToScoreCard, gameID } = await scrapeScoreCardInfo(gameDiv);
         const teams = await scrapeTeamsInfo(gameDiv);
@@ -88,10 +89,11 @@ class GameDataFetcher {
           round,
           date,
           dayOne: dateObj,
-          dateObj: dateObj,
           type,
           time,
           ground,
+          dateRangeObj,
+          finalDaysPlay,
           status,
           urlToScoreCard,
           gameID,

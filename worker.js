@@ -12,14 +12,14 @@ function initializeQueueProcessing() {
   checkAssetGeneratorAccountStatus();
   /* const testData = {
     getSync: {
-      PATH: "ASSOCIATION",
-      ID: 313,
+      PATH: "CLUB",
+      ID: 119,
       continue: true,
-      FirstName: "Cricket Whanganui",
+      FirstName: "Hawke's Bay Cricket Association",
     },
-  };
+  }; */
 
-  handleAccountSync(testData); */
+  //handleAccountSync(testData);
   // run account Sync as set by Strapi
   // uncomment this before
   handleAccountSync();

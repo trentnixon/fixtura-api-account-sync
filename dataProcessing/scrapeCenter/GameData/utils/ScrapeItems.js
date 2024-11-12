@@ -1,4 +1,5 @@
 const logger = require("../../../../src/utils/logger");
+const moment = require("moment");
 
 // Scrapes the round information from the match element
 async function scrapeRound(matchElement) {
@@ -48,19 +49,20 @@ async function scrapeTypeTimeGround(matchElement) {
     const gameInfoElements = await matchElement.$$(`${gameInfoXpath}`);
     if (gameInfoElements.length === 0) {
       logger.warn(`Game info element not found using XPath: ${gameInfoXpath}`);
-      return { type: null, time: null, ground: null };
+      return { type: null, time: null, ground: null, dateRangeObj: null };
     }
 
-    // Extract spans and links within the matched gameInfoElement
+    // Extract spans within the matched gameInfoElement
     const spans = await gameInfoElements[0].$$("span");
     if (spans.length === 0) {
       logger.warn("No spans found for type, time, and ground extraction.");
-      return { type: null, time: null, ground: null };
+      return { type: null, time: null, ground: null, dateRangeObj: null };
     }
 
     let type = null;
     let time = null;
     let ground = null;
+    let dateRangeObj = [];
 
     for (const span of spans) {
       const spanText = await span.evaluate(el => el.textContent.trim());
@@ -70,25 +72,51 @@ async function scrapeTypeTimeGround(matchElement) {
         type = spanText;
       }
 
-      // Use regex to detect and extract only the time (e.g., "10:30 AM")
+      // Extract time only if present
       else if (/^\d{1,2}:\d{2} [APM]{2}/.test(spanText)) {
+        //console.log("[spanText]", spanText);
         const match = spanText.match(/^\d{1,2}:\d{2} [APM]{2}/);
         time = match ? match[0] : null;
       }
+
+      // Extract dates in "Day, dd Mon yy" format, handling one or two dates
+      const dateMatches = spanText.match(
+        /\b[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{2}\b/g
+      );
+      if (dateMatches) {
+        // Only add dates if they're not already in dateRangeObj to avoid duplicates
+        dateMatches.forEach(date => {
+          if (!dateRangeObj.includes(date)) {
+            dateRangeObj.push(date);
+          }
+        });
+      }
     }
 
+    // Sort dateRangeObj to ensure dates are in the correct order
+    if (dateRangeObj.length > 1) {
+      dateRangeObj = [dateRangeObj[0], dateRangeObj[1]]; // Preserve order of first and second dates only
+    }
+    // Convert the latest date in dateRangeObj to a Date object for finalDaysPlay
+    if (dateRangeObj.length > 0) {
+      const lastDateStr = dateRangeObj[dateRangeObj.length - 1];
+      finalDaysPlay = moment(lastDateStr, "ddd, DD MMM YY").toDate();
+    }
     // Check for an href link for the ground location within gameInfoElement
     const links = await gameInfoElements[0].$$("a");
     if (links.length > 0) {
       ground = await links[0].evaluate(el => el.textContent.trim());
     }
 
-    return { type, time, ground };
+    //console.log("[dateRangeObj]", dateRangeObj);
+    return { type, time, ground, dateRangeObj, finalDaysPlay };
   } catch (error) {
     logger.error(`Error in scrapeTypeTimeGround: ${error.message}`);
-    return { type: null, time: null, ground: null };
+    return { type: null, time: null, ground: null, dateRangeObj: null };
   }
 }
+
+// END
 
 // Scrapes the status from the match element
 async function scrapeStatus(matchElement) {
