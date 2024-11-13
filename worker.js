@@ -9,13 +9,13 @@ const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 
 function initializeQueueProcessing() {
   // Check Data sync for Asset Bundlers
-  checkAssetGeneratorAccountStatus();
-  /* const testData = {
+  /*  checkAssetGeneratorAccountStatus();
+  const testData = {
     getSync: {
-      PATH: "CLUB",
-      ID: 119,
+      PATH: "ASSOCIATION",
+      ID: 312,
       continue: true,
-      FirstName: "Hawke's Bay Cricket Association",
+      FirstName: "Central Coast Cricket Association",
     },
   }; */
 

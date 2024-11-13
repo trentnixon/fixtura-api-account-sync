@@ -54,7 +54,7 @@ class GetTeamsGameData {
     try {
       const page = await this.initPage();
       let fetchedGames = await this.processGamesBatch(page, this.teams);
-      console.log("fetchedGames ", fetchedGames);
+      //console.log("fetchedGames ", fetchedGames);
 
       fetchedGames = this.removeDuplicateGames(fetchedGames);
       if (fetchedGames.length === 0) {

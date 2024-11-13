@@ -39,9 +39,6 @@ class GameDataProcessor {
           logger.warn("No game data scraped for current batch.");
           continue;
         }
-
-        console.log("[scrapedGameData]", scrapedGameData);
-
         // Assign the scraped data for the current batch
         const assignGameDataObj = new assignGameData(
           scrapedGameData,
@@ -62,38 +59,6 @@ class GameDataProcessor {
       throw error;
     }
   }
-
-  /*  async process() {
-    try {
-      // Find a way to limit the memory here.
-      // maybe running 1 team at a time then commiting the data
-      // Scrape game data
-      const getGameDataObj = new getTeamsGameData(this.dataObj);
-      const scrapedGameData = await getGameDataObj.setup();
-
-      if (!scrapedGameData) {
-        throw new Error("No game data scraped.");
-      }
-
-      console.log("[scrapedGameData]", scrapedGameData);
-      // Assign scraped data
-      const assignGameDataObj = new assignGameData(
-        scrapedGameData,
-        this.dataObj
-      );
-      await assignGameDataObj.setup();
-
-      return { process: true };
-    } catch (error) {
-      this.processingTracker.errorDetected("games");
-      logger.error("Error in GameDataProcessor process method", {
-        error,
-        method: "process",
-        class: "GameDataProcessor",
-      });
-      throw error;
-    }
-  } */
 
   // Helper function to split array into batches
   createBatches(array, batchSize) {

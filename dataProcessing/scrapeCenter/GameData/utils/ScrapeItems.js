@@ -1,5 +1,6 @@
 const logger = require("../../../../src/utils/logger");
-const moment = require("moment");
+//const moment = require("moment");
+const moment = require("moment-timezone");
 
 // Scrapes the round information from the match element
 async function scrapeRound(matchElement) {
@@ -95,20 +96,21 @@ async function scrapeTypeTimeGround(matchElement) {
 
     // Sort dateRangeObj to ensure dates are in the correct order
     if (dateRangeObj.length > 1) {
-      dateRangeObj = [dateRangeObj[0], dateRangeObj[1]]; // Preserve order of first and second dates only
+      dateRangeObj = [dateRangeObj[1], dateRangeObj[0]]; // Preserve order of first and second dates only
     }
     // Convert the latest date in dateRangeObj to a Date object for finalDaysPlay
     if (dateRangeObj.length > 0) {
       const lastDateStr = dateRangeObj[dateRangeObj.length - 1];
-      finalDaysPlay = moment(lastDateStr, "ddd, DD MMM YY").toDate();
+
+      finalDaysPlay = moment
+        .tz(lastDateStr, "ddd, DD MMM YY", "Australia/Sydney")
+        .format("YYYY-MM-DDTHH:mm:ssZ"); // Format as ISO string with timezone offset
     }
     // Check for an href link for the ground location within gameInfoElement
     const links = await gameInfoElements[0].$$("a");
     if (links.length > 0) {
       ground = await links[0].evaluate(el => el.textContent.trim());
     }
-
-    //console.log("[dateRangeObj]", dateRangeObj);
     return { type, time, ground, dateRangeObj, finalDaysPlay };
   } catch (error) {
     logger.error(`Error in scrapeTypeTimeGround: ${error.message}`);
