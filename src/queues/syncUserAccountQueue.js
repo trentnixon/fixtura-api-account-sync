@@ -12,6 +12,7 @@ async function handleAccountSync(testData = null) {
   const processJob = async jobData => {
     try {
       const { PATH, ID } = jobData.getSync;
+
       logger.debug(`Start processing job with ID: ${ID} on path: ${PATH}`);
 
       if (PATH === "CLUB") {

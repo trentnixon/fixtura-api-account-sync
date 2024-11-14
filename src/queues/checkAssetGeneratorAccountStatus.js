@@ -17,12 +17,12 @@ function getWeekOfYear(date) {
 
 async function checkAssetGeneratorAccountStatus() {
   logger.info("Running checkAssetGeneratorAccountStatus");
-  startAssetBundleCreation.process(async (job) => {
+  startAssetBundleCreation.process(async job => {
     try {
       const { PATH, ID, processGameData } = job.data.getSync;
       logger.debug(`Processing job with ID: ${ID}, path: ${PATH}`);
       logger.debug(`Processing job Data collection is : ${processGameData}`);
-
+      logger.debug(`TES HERE`);
       if (processGameData) {
         // AMEND THIS PROCESS TO ONLY PROCESS GAMES
         let processor =
@@ -48,7 +48,7 @@ async function checkAssetGeneratorAccountStatus() {
     }
   });
 
-  startAssetBundleCreation.on("completed", (job) => {
+  startAssetBundleCreation.on("completed", job => {
     const weekOfYear = getWeekOfYear(new Date());
     logger.info(
       `Job completed: ${job.id} for account ID: ${job.data.getSync.ID}`
@@ -57,7 +57,7 @@ async function checkAssetGeneratorAccountStatus() {
       accountId: job.data.getSync.ID,
       weekOfYear,
     });
-  }); 
+  });
 
   startAssetBundleCreation.on("failed", (job, error) => {
     logger.error(`Job failed: ${job.id}, error: ${error.message}`);
