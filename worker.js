@@ -10,20 +10,20 @@ const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 function initializeQueueProcessing() {
   // Check Data sync for Asset Bundlers
   checkAssetGeneratorAccountStatus();
-  /*
+
   const testData = {
     getSync: {
-      PATH: "ASSOCIATION",
-      ID: 312,
+      PATH: "CLUB",
+      ID: 107,
       continue: true,
-      FirstName: "Central Coast Cricket Association",
+      FirstName: "Shayne Loughnan",
     },
-  }; */
+  };
 
-  //handleAccountSync(testData);
+  handleAccountSync(testData);
   // run account Sync as set by Strapi
   // uncomment this before
-  handleAccountSync();
+  //handleAccountSync();
   onboardNewAccountTask();
 }
 
