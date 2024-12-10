@@ -83,47 +83,104 @@ class DataService {
 
   createTeamsArrForClub(teamsData) {
     let arr = [];
-    teamsData.forEach(team => {
-      team.attributes.grades.data.forEach(grade => {
-        arr.push({
-          teamName: team.attributes.teamName,
-          id: team.id,
-          href: team.attributes.href,
-          grade: grade.id,
-        });
+    if (!Array.isArray(teamsData)) {
+      logger.warn("Invalid teamsData provided to createTeamsArrForClub", {
+        teamsData,
       });
+      return arr;
+    }
+
+    teamsData.forEach(team => {
+      try {
+        if (!team?.attributes?.grades?.data) {
+          logger.warn("Invalid team data structure", { team });
+          return;
+        }
+
+        team.attributes.grades.data.forEach(grade => {
+          if (!grade?.id) {
+            logger.warn("Invalid grade data", { grade });
+            return;
+          }
+
+          arr.push({
+            teamName: team.attributes.teamName || "Unknown Team",
+            id: team.id,
+            href: team.attributes?.href || "",
+            grade: grade.id,
+          });
+        });
+      } catch (error) {
+        logger.error("Error processing team in createTeamsArrForClub", {
+          team,
+          error: error.message,
+        });
+      }
     });
     return arr;
   }
 
   createTeamsArrForAssociation(competitionsData) {
     const arr = [];
+    if (!Array.isArray(competitionsData)) {
+      logger.warn(
+        "Invalid competitionsData provided to createTeamsArrForAssociation",
+        { competitionsData }
+      );
+      return arr;
+    }
+
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
     competitionsData.forEach(comp => {
-      const startDate = new Date(comp.attributes.startDate);
+      try {
+        if (!comp?.attributes?.startDate || !comp?.attributes?.teams?.data) {
+          logger.warn("Invalid competition data structure", { comp });
+          return;
+        }
 
-      // If startDate is more than one year ago, skip this iteration
-      if (startDate < oneYearAgo) {
-        return;
-      }
+        const startDate = new Date(comp.attributes.startDate);
+        if (startDate < oneYearAgo) {
+          return;
+        }
 
-      comp.attributes.teams.data.forEach(team => {
-        arr.push({
-          teamName: team.attributes.teamName,
-          id: team.id,
-          href: team.attributes.href,
-          grade: team.attributes.grades?.data[0]?.id, // Assuming the first grade is relevant
+        comp.attributes.teams.data.forEach(team => {
+          if (!team?.attributes) {
+            logger.warn("Invalid team data", { team });
+            return;
+          }
+
+          arr.push({
+            teamName: team.attributes.teamName || "Unknown Team",
+            id: team.id,
+            href: team.attributes.href || "",
+            grade: team.attributes.grades?.data?.[0]?.id || null,
+          });
         });
-      });
+      } catch (error) {
+        logger.error(
+          "Error processing competition in createTeamsArrForAssociation",
+          {
+            competition: comp,
+            error: error.message,
+          }
+        );
+      }
     });
-
     return arr;
   }
 
   createArrGradesForClub(competitionsData, clubId) {
     let arr = [];
+    if (!Array.isArray(competitionsData) || !clubId) {
+      logger.warn("Invalid input to createArrGradesForClub", {
+        competitionsData,
+        clubId,
+      });
+      return arr;
+    }
+
     const today = new Date();
     const fourteenDaysAgo = new Date(
       today.getFullYear(),
@@ -132,27 +189,44 @@ class DataService {
     );
 
     competitionsData.forEach(comp => {
-      const endDate = new Date(
-        comp.attributes.competition.data.attributes.endDate
-      );
+      try {
+        if (!comp?.attributes?.competition?.data) {
+          logger.warn("Invalid competition data structure", { comp });
+          return;
+        }
 
-      if (
-        comp.attributes.competition.data.attributes.grades.data &&
-        endDate > fourteenDaysAgo
-      ) {
-        comp.attributes.competition.data.attributes.grades.data.forEach(
-          grades => {
-            arr.push({
-              club: [clubId],
-              compID: comp.attributes.competition.data.id,
-              compName:
-                comp.attributes.competition.data.attributes.competitionName,
-              id: grades.id,
-              gradeName: grades.attributes.gradeName,
-              url: grades.attributes.url,
-            });
+        const compData = comp.attributes.competition.data;
+        if (!compData?.attributes?.endDate) {
+          logger.warn("Missing endDate in competition", { compData });
+          return;
+        }
+
+        const endDate = new Date(compData.attributes.endDate);
+        if (!compData.attributes?.grades?.data || endDate <= fourteenDaysAgo) {
+          return;
+        }
+
+        compData.attributes.grades.data.forEach(grades => {
+          if (!grades?.attributes) {
+            logger.warn("Invalid grades data", { grades });
+            return;
           }
-        );
+
+          arr.push({
+            club: [clubId],
+            compID: compData.id,
+            compName:
+              compData.attributes.competitionName || "Unknown Competition",
+            id: grades.id,
+            gradeName: grades.attributes.gradeName || "Unknown Grade",
+            url: grades.attributes.url || "",
+          });
+        });
+      } catch (error) {
+        logger.error("Error processing competition in createArrGradesForClub", {
+          competition: comp,
+          error: error.message,
+        });
       }
     });
     return arr;
