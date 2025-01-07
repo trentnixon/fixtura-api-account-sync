@@ -7,40 +7,58 @@ class TeamProcessor {
 
   async processTeam(teamElement, club, competition, page) {
     logger.info(`"Processing club" ${club.data.id}`);
-    
+
     try {
-      const teamName = await teamElement.$eval("span:nth-child(1)", (el) => el.textContent);
-      const gradeName = await teamElement.$eval("span:nth-child(2)", (el) => el.textContent);
-      const gender = await teamElement.$eval("span:nth-child(3)", (el) => el.textContent);
-      const age = await teamElement.$eval("span:nth-child(4)", (el) => el.textContent);
+      const teamName = await teamElement.$eval(
+        "span:nth-child(1)",
+        el => el.textContent
+      );
+      const gradeName = await teamElement.$eval(
+        "span:nth-child(2)",
+        el => el.textContent
+      );
+      const gender = await teamElement.$eval(
+        "span:nth-child(3)",
+        el => el.textContent
+      );
+      const age = await teamElement.$eval(
+        "span:nth-child(4)",
+        el => el.textContent
+      );
       const hrefElement = await teamElement.$("a");
-      const href = hrefElement ? await hrefElement.evaluate((el) => el.href) : null;
+      const href = hrefElement
+        ? await hrefElement.evaluate(el => el.href)
+        : null;
       logger.info(`"Processing Team" ${teamName}`);
       //console.log("the error is on this href", href)
       if (href) {
         const newPage = await this.browser.newPage();
-      await newPage.goto(href);
+        await newPage.goto(href);
 
-      let gradeLink = null;
-      try {
-        await newPage.waitForSelector(".sc-crzoUp.lebimc.button", { timeout: 5000 });
-        const gradeLinkElement = await newPage.$(".sc-crzoUp.lebimc.button");
-        gradeLink = gradeLinkElement
-          ? await gradeLinkElement.evaluate((el) => el.href)
-          : null;
-      } catch (error) { 
-        logger.error("Element .sc-crzoUp.lebimc.button not found. Proceeding without it.");
-        logger.critical("An error occurred in processTeam", {
-          file: "getClubTeams.js",
-          function: "processTeam",
-          error: error,
-        });
-        // Add a return statement or handle the error appropriately
-        // return null; // Uncomment this line if you want to stop processing this team
-      }
-  
+        let gradeLink = null;
+        try {
+          await newPage.waitForSelector(".sc-crzoUp.lebimc.button", {
+            timeout: 5000,
+          });
+          const gradeLinkElement = await newPage.$(".sc-crzoUp.lebimc.button");
+          gradeLink = gradeLinkElement
+            ? await gradeLinkElement.evaluate(el => el.href)
+            : null;
+        } catch (error) {
+          logger.error(
+            "Element .sc-crzoUp.lebimc.button not found. Proceeding without it."
+          );
+          logger.critical("An error occurred in processTeam", {
+            file: "getClubTeams.js",
+            function: "processTeam",
+            error: error,
+          });
+          // Add a return statement or handle the error appropriately
+          // return null; // Uncomment this line if you want to stop processing this team
+        }
+
         await newPage.close();
-  
+
         const teamID = href.split("/").pop();
         const gradeLinkID = gradeLink ? gradeLink.split("/").pop() : null;
         return {
@@ -59,7 +77,10 @@ class TeamProcessor {
         return null;
       }
     } catch (error) {
-      logger.error(`Error processing team: ${competition.data.attributes.url}`, error);
+      logger.error(
+        `Error processing team: ${competition.data.attributes.url}`,
+        error
+      );
       logger.critical("An error occurred in processTeam", {
         file: "getClubTeams.js",
         function: "processTeam",
@@ -68,11 +89,10 @@ class TeamProcessor {
       return null;
     }
   }
-  
 }
 
 class GetClubTeams {
-  constructor(href, browser) { 
+  constructor(href, browser) {
     this.URL = href;
     this.browser = browser;
     this.teamProcessor = new TeamProcessor(browser);
@@ -86,27 +106,39 @@ class GetClubTeams {
     try {
       await page.goto(competitionUrl);
       logger.info(`Navigated to competition URL: ${competitionUrl}`);
-      
+
       await page.waitForSelector('[data-testid="teams-list"] > li');
       logger.info(`Found teams list on competition URL: ${competitionUrl}`);
-      
+
       const teamList = await page.$$('[data-testid="teams-list"] > li');
-      logger.info(`Retrieved ${teamList.length} team elements from competition URL: ${competitionUrl}`);
+      logger.info(
+        `Retrieved ${teamList.length} team elements from competition URL: ${competitionUrl}`
+      );
 
       const competitionTeams = await Promise.all(
         teamList.map(async (teamElement, index) => {
           if (index === 0) {
             return null;
           }
-          return this.teamProcessor.processTeam(teamElement, club, competition, page);
+          return this.teamProcessor.processTeam(
+            teamElement,
+            club,
+            competition,
+            page
+          );
         })
       );
 
-      logger.info(`Processed ${competitionTeams.length} teams from competition URL: ${competitionUrl}`);
-      return competitionTeams.filter((team) => team !== null);
+      logger.info(
+        `Processed ${competitionTeams.length} teams from competition URL: ${competitionUrl}`
+      );
+      return competitionTeams.filter(team => team !== null);
     } catch (error) {
-      logger.error(`Error processing competition URL: ${competitionUrl}`, error);
-      console.log(error)
+      logger.error(
+        `Error processing competition URL: ${competitionUrl}`,
+        error
+      );
+      console.log(error);
       logger.critical("An error occurred in processCompetition", {
         file: "getClubTeams.js",
         function: "processCompetition",
