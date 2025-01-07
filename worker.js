@@ -13,7 +13,7 @@ function initializeQueueProcessing() {
 
   const testData = {
     getSync: {
-      PATH: "CLUB",
+      PATH: "ASSOCIATION",
       ID: 134,
       continue: true,
       FirstName: "ADMIN",
