@@ -11,19 +11,19 @@ function initializeQueueProcessing() {
   // Check Data sync for Asset Bundlers
   checkAssetGeneratorAccountStatus();
 
-  const testData = {
+  /*   const testData = {
     getSync: {
       PATH: "ASSOCIATION",
       ID: 134,
       continue: true,
       FirstName: "ADMIN",
     },
-  };
+  }; */
 
-  handleAccountSync(testData);
+  //handleAccountSync(testData);
   // run account Sync as set by Strapi
   // uncomment this before
-  //handleAccountSync();
+  handleAccountSync();
   onboardNewAccountTask();
 }
 
