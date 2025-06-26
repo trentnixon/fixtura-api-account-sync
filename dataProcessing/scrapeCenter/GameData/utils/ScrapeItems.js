@@ -9,7 +9,7 @@ async function scrapeRound(matchElement) {
     const elements = await matchElement.$$(`xpath/${roundXPath}`);
 
     if (elements.length > 0) {
-      return await elements[0].evaluate(el => el.textContent.trim());
+      return await elements[0].evaluate((el) => el.textContent.trim());
     } else {
       logger.warn(`Round element not found using XPath: ${roundXPath}`);
       return null;
@@ -27,7 +27,7 @@ async function scrapeDate(matchElement) {
     const elements = await matchElement.$$(`xpath/${dateXPath}`);
 
     if (elements.length > 0) {
-      return await elements[0].evaluate(el => el.textContent.trim());
+      return await elements[0].evaluate((el) => el.textContent.trim());
     } else {
       logger.warn(`Date element not found using XPath: ${dateXPath}`);
       return null;
@@ -45,7 +45,8 @@ const typeDefinitions = ["One Day", "Two Day+", "T20"];
 
 async function scrapeTypeTimeGround(matchElement) {
   try {
-    const gameInfoXpath = "xpath/.//div[@class='sc-10c3c88-11 GJoRe']"; // Updated XPath with recent Puppeteer syntax
+    // sc-kpDqfm sc-1uurivg-12 htBoat iTeyOw
+    const gameInfoXpath = "xpath/.//div[@class='sc-1uurivg-11 jbzXQr']"; // Updated XPath with recent Puppeteer syntax
 
     const gameInfoElements = await matchElement.$$(`${gameInfoXpath}`);
     if (gameInfoElements.length === 0) {
@@ -66,7 +67,7 @@ async function scrapeTypeTimeGround(matchElement) {
     let dateRangeObj = [];
 
     for (const span of spans) {
-      const spanText = await span.evaluate(el => el.textContent.trim());
+      const spanText = await span.evaluate((el) => el.textContent.trim());
 
       // Check if the text matches any type in typeDefinitions
       if (typeDefinitions.includes(spanText)) {
@@ -86,7 +87,7 @@ async function scrapeTypeTimeGround(matchElement) {
       );
       if (dateMatches) {
         // Only add dates if they're not already in dateRangeObj to avoid duplicates
-        dateMatches.forEach(date => {
+        dateMatches.forEach((date) => {
           if (!dateRangeObj.includes(date)) {
             dateRangeObj.push(date);
           }
@@ -109,7 +110,7 @@ async function scrapeTypeTimeGround(matchElement) {
     // Check for an href link for the ground location within gameInfoElement
     const links = await gameInfoElements[0].$$("a");
     if (links.length > 0) {
-      ground = await links[0].evaluate(el => el.textContent.trim());
+      ground = await links[0].evaluate((el) => el.textContent.trim());
     }
     return { type, time, ground, dateRangeObj, finalDaysPlay };
   } catch (error) {
@@ -128,7 +129,7 @@ async function scrapeStatus(matchElement) {
     const statusElement = await matchElement.$$(`xpath/${statusXPath}`);
 
     if (statusElement.length > 0) {
-      return await statusElement[0].evaluate(el => el.textContent.trim());
+      return await statusElement[0].evaluate((el) => el.textContent.trim());
     } else {
       logger.warn(`Status element not found using XPath: ${statusXPath}`);
       return null;
@@ -146,7 +147,7 @@ async function scrapeScoreCardInfo(gameDiv) {
     const urlElement = await gameDiv.$(urlSelector);
 
     if (urlElement) {
-      const urlToScoreCard = await urlElement.evaluate(el =>
+      const urlToScoreCard = await urlElement.evaluate((el) =>
         el.getAttribute("href")
       );
       const gameID = urlToScoreCard.split("/").pop();
@@ -170,8 +171,10 @@ async function scrapeTeamsInfo(gameDiv) {
       ".//li[@data-testid='games-on-date']/div[2]/div[1]/div/div[3]";
 
     async function extractTeamInfo(teamElement) {
-      const name = await teamElement.$eval("a", el => el.textContent.trim());
-      const href = await teamElement.$eval("a", el => el.getAttribute("href"));
+      const name = await teamElement.$eval("a", (el) => el.textContent.trim());
+      const href = await teamElement.$eval("a", (el) =>
+        el.getAttribute("href")
+      );
       const id = href.split("/").pop();
       return { name, href, id };
     }

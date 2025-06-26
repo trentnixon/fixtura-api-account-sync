@@ -38,7 +38,7 @@ class GameDataFetcher {
 
   async getGameDetails() {
     try {
-      //console.log(`[getGameDetails] Fetching data from URL: ${this.href}`);
+      console.log(`[getGameDetails] Fetching data from URL: ${this.href}`);
       const matchList = await this.page.$$(`xpath/${this.xpath}`); // Fetch match elements using XPath
       const gameData = [];
 
@@ -60,9 +60,9 @@ class GameDataFetcher {
   // Find a better way to grab this data!
   async extractMatchDetails(matchElement) {
     try {
-      const gameDivs = await matchElement.$$(
-        "div.sc-fnpp5x-0.sc-fnpp5x-5.boRXYi"
-      );
+      console.log("[try to extractMatchDetails]");
+      // where is this div?
+      const gameDivs = await matchElement.$$("div.sc-1pr338c-0.cNVAcP");
       const gameDetails = [];
 
       for (const gameDiv of gameDivs) {
@@ -73,10 +73,10 @@ class GameDataFetcher {
 
         // Extracting various game details
         const date = await scrapeDate(gameDiv);
-
         const dateObj = moment(date, "dddd, DD MMMM YYYY").toDate();
 
         const round = await scrapeRound(gameDiv);
+        console.log("[round]", round);
         const { type, time, ground, dateRangeObj, finalDaysPlay } =
           await scrapeTypeTimeGround(gameDiv);
         const status = await scrapeStatus(gameDiv);
@@ -120,23 +120,37 @@ class GameDataFetcher {
   // Helpers for navigation and page loading
 
   async navigateToUrl() {
-    try {
-      // Set timeout to 10 seconds (10000 milliseconds)
-      await this.page.goto(this.href, { timeout: 10000 });
-    } catch (error) {
-      console.error(`Navigating to URL failed: ${error}`);
-      // Handle the timeout or navigation error
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Set timeout to 10 seconds (10000 milliseconds)
+        await this.page.goto(this.href, {
+          timeout: 30000,
+          waitUntil: "domcontentloaded",
+        });
+        return;
+      } catch (error) {
+        // Log error using logger for consistency
+        logger.error(
+          `Attempt ${attempt} - Navigating to URL (${this.href}) failed in navigateToUrl:`,
+          { error }
+        );
+        if (attempt === maxRetries) throw error;
+        // Wait 2 seconds before retrying
+        await new Promise((res) => setTimeout(res, 2000));
+      }
     }
   }
 
   async waitForPageLoad() {
     try {
-      // Wait for the selector, with a timeout of 10 seconds
-      await this.page.waitForSelector(".sc-fnpp5x-1.bVXtKq", {
+      await this.page.waitForSelector('li[data-testid="games-on-date"]', {
         timeout: 10000,
       });
     } catch (error) {
-      console.error(`Waiting for page load failed: ${error}`);
+      console.error(
+        `Waiting for page load failed: ${error}: This could be due to the Class in on the page changing. Check value in GameDataFetcher.js`
+      );
       // Handle the timeout or selector not found error
     }
   }

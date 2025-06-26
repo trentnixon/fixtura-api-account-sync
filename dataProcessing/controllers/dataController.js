@@ -44,13 +44,13 @@ class DataController {
       );
 
       // Process and assign competitions
-      // last checked: 25/1024
+      // last checked: 25/10/24
       await this.ProcessCompetitions(dataObj);
       await this.processingTracker.completeStage("competitions", collectionID);
       dataObj = await this.reSyncData();
 
       // Process and assign Teams
-      // last checked: 25/1024
+      // last checked: 25/10/24
       await this.processingTracker.setCurrentStage("teams", collectionID);
       await this.ProcessTeams(dataObj);
       await this.processingTracker.completeStage("teams", collectionID);
@@ -74,7 +74,7 @@ class DataController {
   }
 
   // Processes
-  ProcessCompetitions = async dataObj => {
+  ProcessCompetitions = async (dataObj) => {
     // Process and assign competitions
     const competitionProcessor = new CompetitionProcessor(dataObj);
     await competitionProcessor.process();
@@ -83,7 +83,7 @@ class DataController {
     /* ********************* */
   };
 
-  ProcessTeams = async dataObj => {
+  ProcessTeams = async (dataObj) => {
     // Process and assign teams
     const teamProcessor = new TeamProcessor(dataObj);
     await teamProcessor.process();
@@ -92,7 +92,7 @@ class DataController {
     /* ********************* */
   };
 
-  ProcessGames = async dataObj => {
+  ProcessGames = async (dataObj) => {
     // Process and assign game data
     const gameDataProcessor = new GameDataProcessor(dataObj);
     await gameDataProcessor.process();

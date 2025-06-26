@@ -30,7 +30,8 @@ class GetTeamsGameData {
         logger.info(`Processing team ${teamName} id ${id} ${url}...`);
         const gameDataFetcher = new GameDataFetcher(page, url, grade);
         const gameData = await gameDataFetcher.fetchGameData();
-        storedGames.push(...gameData.flat().filter(match => match !== null)); // Flatten and filter the data
+
+        storedGames.push(...gameData.flat().filter((match) => match !== null)); // Flatten and filter the data
       } catch (error) {
         logger.error(`Error processing team game data: ${team.teamName}`, {
           error,
@@ -54,7 +55,6 @@ class GetTeamsGameData {
     try {
       const page = await this.initPage();
       let fetchedGames = await this.processGamesBatch(page, this.teams);
-      //console.log("fetchedGames ", fetchedGames);
 
       fetchedGames = this.removeDuplicateGames(fetchedGames);
       if (fetchedGames.length === 0) {
@@ -72,7 +72,7 @@ class GetTeamsGameData {
   }
 
   removeDuplicateGames(games) {
-    return [...new Map(games.map(game => [game.gameID, game])).values()];
+    return [...new Map(games.map((game) => [game.gameID, game])).values()];
   }
 }
 
