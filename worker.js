@@ -8,8 +8,22 @@ const logger = require("./src/utils/logger");
 const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 
 function initializeQueueProcessing() {
-  // Check Data sync for Asset Bundlers
-  checkAssetGeneratorAccountStatus();
+  console.log("=== WORKER STARTUP DEBUG ===");
+  console.log(
+    "checkAssetGeneratorAccountStatus function:",
+    typeof checkAssetGeneratorAccountStatus
+  );
+  console.log("onboardNewAccountTask function:", typeof onboardNewAccountTask);
+
+  console.log("=== INITIALIZING QUEUE PROCESSING ===");
+
+  try {
+    console.log("Calling checkAssetGeneratorAccountStatus...");
+    checkAssetGeneratorAccountStatus();
+    console.log("checkAssetGeneratorAccountStatus completed");
+  } catch (error) {
+    console.error("Error in checkAssetGeneratorAccountStatus:", error);
+  }
 
   /*   const testData = {
     getSync: {
@@ -23,8 +37,23 @@ function initializeQueueProcessing() {
   //handleAccountSync(testData);
   // run account Sync as set by Strapi
   // uncomment this before
-  handleAccountSync();
-  onboardNewAccountTask();
+  try {
+    console.log("Calling handleAccountSync...");
+    handleAccountSync();
+    console.log("handleAccountSync completed");
+  } catch (error) {
+    console.error("Error in handleAccountSync:", error);
+  }
+
+  try {
+    console.log("Calling onboardNewAccountTask...");
+    onboardNewAccountTask();
+    console.log("onboardNewAccountTask completed");
+  } catch (error) {
+    console.error("Error in onboardNewAccountTask:", error);
+  }
+
+  console.log("=== QUEUE PROCESSING INITIALIZATION COMPLETE ===");
 }
 
 // Start Processors

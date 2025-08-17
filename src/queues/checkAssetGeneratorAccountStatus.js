@@ -16,7 +16,23 @@ function getWeekOfYear(date) {
 }
 
 async function checkAssetGeneratorAccountStatus() {
+  console.log("=== checkAssetGeneratorAccountStatus START ===");
   logger.info("Running checkAssetGeneratorAccountStatus");
+
+  // Debug: Check if queues are properly initialized
+  console.log("Queue objects:", {
+    startAssetBundleCreation: !!startAssetBundleCreation,
+    setSyncAccountFixtures: !!setSyncAccountFixtures,
+  });
+
+  logger.info(
+    `startAssetBundleCreation queue initialized: ${!!startAssetBundleCreation}`
+  );
+  logger.info(
+    `setSyncAccountFixtures queue initialized: ${!!setSyncAccountFixtures}`
+  );
+
+  console.log("Setting up startAssetBundleCreation processor...");
   startAssetBundleCreation.process(async (job) => {
     try {
       const { PATH, ID, processGameData } = job.data.getSync;
@@ -47,11 +63,64 @@ async function checkAssetGeneratorAccountStatus() {
       throw error;
     }
   });
+  console.log("startAssetBundleCreation processor setup complete");
 
+  // Debug: Log when setting up setSyncAccountFixtures processor
+  console.log("Setting up setSyncAccountFixtures processor...");
+  logger.info("Setting up setSyncAccountFixtures processor...");
+
+  try {
+    setSyncAccountFixtures.process(async (job) => {
+      try {
+        const { accountId, weekOfYear } = job.data;
+        console.log(`🎯 PROCESSING setSyncAccountFixtures job:`, {
+          accountId,
+          weekOfYear,
+        });
+        logger.info(
+          `Processing setSyncAccountFixtures for account ${accountId}, week ${weekOfYear}`
+        );
+
+        // TODO: Implement the actual fixture sync logic here
+        // This should handle syncing fixtures for the specific account and week
+        console.log(
+          `Syncing fixtures for account ${accountId}, week ${weekOfYear}`
+        );
+
+        // For now, just log completion
+        logger.info(
+          `Successfully processed setSyncAccountFixtures for account ${accountId}, week ${weekOfYear}`
+        );
+      } catch (error) {
+        logger.error(
+          `Error processing setSyncAccountFixtures job ${job.id}: ${error.message}`,
+          {
+            jobData: job.data,
+            errorStack: error.stack,
+          }
+        );
+        throw error;
+      }
+    });
+    console.log("✅ setSyncAccountFixtures processor setup complete");
+  } catch (error) {
+    console.error(
+      "❌ Error setting up setSyncAccountFixtures processor:",
+      error
+    );
+    throw error;
+  }
+
+  logger.info("setSyncAccountFixtures processor setup complete");
+
+  console.log("Setting up event listeners...");
   startAssetBundleCreation.on("completed", (job) => {
     const weekOfYear = getWeekOfYear(new Date());
     logger.info(
       `Job completed: ${job.id} for account ID: ${job.data.getSync.ID}`
+    );
+    logger.info(
+      `Adding job to setSyncAccountFixtures queue: accountId=${job.data.getSync.ID}, weekOfYear=${weekOfYear}`
     );
     setSyncAccountFixtures.add({
       accountId: job.data.getSync.ID,
@@ -61,12 +130,39 @@ async function checkAssetGeneratorAccountStatus() {
 
   startAssetBundleCreation.on("failed", (job, error) => {
     logger.error(`Job failed: ${job.id}, error: ${error.message}`);
+    const weekOfYear = getWeekOfYear(new Date());
+    logger.info(
+      `Adding failed job to setSyncAccountFixtures queue: accountId=${job.data.getSync.ID}, weekOfYear=${weekOfYear}`
+    );
     setSyncAccountFixtures.add({
       accountId: job.data.getSync.ID,
-      weekOfYear: getWeekOfYear(new Date()),
+      weekOfYear,
     });
     queueErrorHandler("taskRunner", error);
   });
+
+  // Event listeners for setSyncAccountFixtures
+  setSyncAccountFixtures.on("completed", (job) => {
+    console.log(
+      `🎉 setSyncAccountFixtures job ${job.id} completed for account ${job.data.accountId}`
+    );
+    logger.info(
+      `setSyncAccountFixtures job ${job.id} completed successfully for account ${job.data.accountId}`
+    );
+  });
+
+  setSyncAccountFixtures.on("failed", (job, error) => {
+    console.error(
+      `💥 setSyncAccountFixtures job ${job.id} failed: ${error.message}`
+    );
+    logger.error(
+      `setSyncAccountFixtures job ${job.id} failed: ${error.message}`
+    );
+  });
+
+  console.log("Event listeners setup complete");
+  logger.info("checkAssetGeneratorAccountStatus setup complete");
+  console.log("=== checkAssetGeneratorAccountStatus COMPLETE ===");
 }
 
 module.exports = checkAssetGeneratorAccountStatus;
