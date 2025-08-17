@@ -7,27 +7,25 @@ function createSharedClient(type) {
   return getRedisClient(type);
 }
 
-
 const queueNames = {
   // 1 Sync Account on Bundle Create
-  startAssetBundleCreation:"startAssetBundleCreation",
+  startAssetBundleCreation: "startAssetBundleCreation",
   // 2 send ID to Results Sync
-  setSyncAccountFixtures:"setSyncAccountFixtures",
+  setSyncAccountFixtures: "setSyncAccountFixtures",
   // 3 Account Sync on Internal Cron
   syncUserAccount: "syncUserAccount",
   // 4 onboarding
-  onboardNewAccount: "onboardNewAccount", 
+  onboardNewAccount: "onboardNewAccount",
 };
-
 
 let initializedQueues;
 
 function initializeQueues() {
   if (!initializedQueues) {
     initializedQueues = {};
-    Object.keys(queueNames).forEach(key => {
+    Object.keys(queueNames).forEach((key) => {
       initializedQueues[key] = new Queue(queueNames[key], {
-        createClient: type => createSharedClient(type)
+        createClient: (type) => createSharedClient(type),
       });
     });
   }
