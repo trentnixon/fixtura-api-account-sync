@@ -25,16 +25,16 @@ function initializeQueueProcessing() {
     console.error("Error in checkAssetGeneratorAccountStatus:", error);
   }
 
-  /*   const testData = {
+  const testData = {
     getSync: {
       PATH: "ASSOCIATION",
-      ID: 319,
+      ID: 427,
       continue: true,
       FirstName: "ADMIN",
     },
-  }; */
+  };
 
-  //handleAccountSync(testData);
+  handleAccountSync(testData);
   // run account Sync as set by Strapi
   // uncomment this before
   try {

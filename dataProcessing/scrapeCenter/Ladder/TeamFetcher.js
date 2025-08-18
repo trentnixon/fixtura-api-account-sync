@@ -1,5 +1,9 @@
 const logger = require("../../../src/utils/logger");
 const CRUDOperations = require("../../services/CRUDoperations");
+const LadderDetector = require("./LadderDetector");
+const TeamExtractor = require("./TeamExtractor");
+const PageAnalyzer = require("./PageAnalyzer");
+const PageStructureMonitor = require("./PageStructureMonitor");
 
 /**
  * TeamFetcher class is responsible for fetching team data from a given URL.
@@ -10,10 +14,19 @@ class TeamFetcher {
     this.page = page;
     this.teamInfo = teamInfo; // Contains URL and additional data like competition ID and grade ID
     this.CRUDOperations = new CRUDOperations();
+
+    // Initialize modules
+    this.ladderDetector = new LadderDetector(page);
+    this.teamExtractor = new TeamExtractor(page);
+    this.pageAnalyzer = new PageAnalyzer(page);
+    this.structureMonitor = new PageStructureMonitor(page);
+
+    // Track if we've established a baseline for this session
+    this.baselineEstablished = false;
   }
 
   /**
-   * Fetches teams by navigating to the ladder page of the team and extracting names and URLs.
+   * Fetches teams by navigating to the ladder page of the team and extracting team information.
    */
   async fetchTeams() {
     try {
@@ -34,38 +47,132 @@ class TeamFetcher {
    */
   async getTeamNamesAndUrls() {
     try {
-      const teamXpath =
-        "/html/body/div/section/main/div/div/div[1]/section/section/div/div/div/div/div[1]/table/tbody/tr/td[2]/a";
-      const links = await this.page.$$(`xpath/${teamXpath}`);
-      const teams = [];
+      await this.monitorPageStructure();
 
-      for (const link of links) {
-        const href = await link.evaluate(el => el.getAttribute("href"));
-        const teamID = href.split("/").pop();
-        const teamName = await link.evaluate(el => el.innerText.trim());
-
-        const clubID = await this.getClubIDFromHref(href);
-
-        let teamObj = {
-          teamName,
-          href,
-          teamID,
-          competition: [this.teamInfo.compID],
-          grades: [this.teamInfo.id],
-          club: clubID ? [clubID] : [],
-        };
-
-        teams.push(teamObj);
+      const hasNoLadder = await this.ladderDetector.hasNoLadder();
+      if (hasNoLadder) {
+        return [];
       }
 
-      return teams;
+      const tableFound = await this.ladderDetector.waitForLadderTable();
+
+      // Page analysis should happen AFTER table is loaded
+      const pageAnalysis = await this.pageAnalyzer.analyzePage();
+      this.pageAnalyzer.logAnalysis(pageAnalysis);
+
+      const teamLinks = await this.teamExtractor.findTeamLinks();
+
+      if (teamLinks.length === 0) {
+        logger.warn("No team links found with any selector");
+        return [];
+      }
+
+      const teams = await this.teamExtractor.extractTeamData(
+        teamLinks,
+        this.teamInfo
+      );
+
+      const teamsWithClubs = await this.addClubInfoToTeams(teams);
+
+      return teamsWithClubs;
     } catch (error) {
-      logger.error("Error in TeamFetcher.getTeamNamesAndUrls", {
-        error,
-        method: "getTeamNamesAndUrls",
-      });
-      throw error;
+      logger.error(
+        `Error in TeamFetcher.getTeamNamesAndUrls: ${error.message}`
+      );
+      return [];
     }
+  }
+
+  /**
+   * Monitors page structure for changes and alerts when investigation is needed
+   */
+  async monitorPageStructure() {
+    try {
+      // Establish baseline on first run
+      if (!this.baselineEstablished) {
+        logger.info("Establishing page structure baseline...");
+        await this.structureMonitor.establishBaseline();
+        this.baselineEstablished = true;
+        logger.info("Page structure baseline established successfully");
+      } else {
+        // Check for structure changes
+        logger.info("Checking for page structure changes...");
+        const changeAnalysis =
+          await this.structureMonitor.detectStructureChanges();
+
+        if (changeAnalysis.hasChanges) {
+          logger.error(
+            "🚨 PAGE STRUCTURE CHANGES DETECTED - INVESTIGATION REQUIRED 🚨"
+          );
+          logger.error(
+            "The page structure has changed since the baseline was established."
+          );
+          logger.error("This may indicate PlayHQ has updated their website.");
+          logger.error("Please investigate and update selectors if necessary.");
+
+          // Get current structure health
+          const health = await this.structureMonitor.getStructureHealth();
+          logger.info(`Current structure health: ${health.overall}`);
+          if (health.recommendations.length > 0) {
+            health.recommendations.forEach((rec) =>
+              logger.info(`Recommendation: ${rec}`)
+            );
+          }
+        } else {
+          logger.info("✅ Page structure is stable - no changes detected");
+        }
+      }
+    } catch (error) {
+      logger.warn("Could not monitor page structure:", error.message);
+    }
+  }
+
+  /**
+   * Logs performance statistics for the backoff strategy
+   */
+  logPerformanceStats() {
+    try {
+      this.ladderDetector.logPerformanceStats();
+    } catch (error) {
+      logger.warn("Could not log performance stats:", error.message);
+    }
+  }
+
+  /**
+   * Resets performance metrics
+   */
+  resetPerformanceMetrics() {
+    try {
+      this.ladderDetector.resetPerformanceMetrics();
+    } catch (error) {
+      logger.warn("Could not reset performance metrics:", error.message);
+    }
+  }
+
+  /**
+   * Adds club information to team objects
+   * @param {Array} teams - Array of team objects
+   * @returns {Promise<Array>} Teams with club information
+   */
+  async addClubInfoToTeams(teams) {
+    const teamsWithClubs = [];
+
+    for (const team of teams) {
+      try {
+        const clubID = await this.getClubIDFromHref(team.href);
+        team.club = clubID ? [clubID] : [];
+        teamsWithClubs.push(team);
+      } catch (error) {
+        logger.warn(
+          `Error adding club info for team ${team.teamName}:`,
+          error.message
+        );
+        team.club = [];
+        teamsWithClubs.push(team);
+      }
+    }
+
+    return teamsWithClubs;
   }
 
   /**
@@ -73,11 +180,6 @@ class TeamFetcher {
    */
   async getClubIDFromHref(href) {
     const playHQId = this.extractPlayHQId(href);
-    //console.log("extractPlayHQId from Href", href, playHQId)
-    /* if (!this.isValidPlayHQId(playHQId)) {
-        logger.error(`Invalid PlayHQ ID format: ${playHQId}, URL: ${href}`);
-        return null;
-    } */
 
     try {
       return await this.CRUDOperations.fetchClubIdByPlayHQId(playHQId);
@@ -93,21 +195,13 @@ class TeamFetcher {
     const splitUrl = href.split("/");
     return splitUrl.length >= 5 ? splitUrl[4] : null;
   }
-
-  /*  isValidPlayHQId(playHQId) {
-    const playHQIDPattern = /^[a-z0-9]{8}$/i;
-    return playHQIDPattern.test(playHQId);
-  } */
 }
 
 module.exports = TeamFetcher;
 
 // Developer Notes:
-// - The class uses Puppeteer to navigate and scrape data from web pages.
-// - Error handling is structured to provide clear information about where and why failures occur.
-
-// Future Improvements:
-// - Implement a more robust method for extracting and validating the PlayHQ ID.
-// - Explore optimization techniques for faster page navigation and data extraction.
-// - Consider implementing a caching mechanism to reduce redundant network calls for club data.
-// - Investigate ways to handle paginated ladder pages, if applicable.
+// - The class now uses modular components for better separation of concerns
+// - LadderDetector handles ladder detection and table waiting
+// - TeamExtractor handles finding and extracting team data
+// - PageAnalyzer handles debugging and page analysis
+// - Main class focuses on orchestration and business logic
