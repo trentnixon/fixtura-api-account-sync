@@ -122,6 +122,12 @@ async function checkAssetGeneratorAccountStatus() {
     logger.info(
       `Adding job to setSyncAccountFixtures queue: accountId=${job.data.getSync.ID}, weekOfYear=${weekOfYear}`
     );
+
+    // Add more visible logging
+    console.log(
+      `🚀 QUEUE TRANSITION: Adding job to setSyncAccountFixtures for account ${job.data.getSync.ID}, week ${weekOfYear}`
+    );
+
     setSyncAccountFixtures.add({
       accountId: job.data.getSync.ID,
       weekOfYear,
