@@ -93,9 +93,28 @@ class DataController {
   };
 
   ProcessGames = async (dataObj) => {
-    // Process and assign game data
-    const gameDataProcessor = new GameDataProcessor(dataObj);
-    await gameDataProcessor.process();
+    try {
+      // Process and assign game data
+      const gameDataProcessor = new GameDataProcessor(dataObj);
+      await gameDataProcessor.process();
+    } catch (error) {
+      logger.error("Error in ProcessGames:", error);
+
+      // Check if it's a connection-related error
+      if (error.message && error.message.includes("ECONNREFUSED")) {
+        logger.critical(
+          "API connection failed during game processing. Please check your API server status.",
+          {
+            method: "ProcessGames",
+            class: "DataController",
+            error: error.message,
+          }
+        );
+      }
+
+      // Re-throw the error to be handled by the main try-catch
+      throw error;
+    }
   };
 
   ProcessTracking = async (startTime, collectionID) => {

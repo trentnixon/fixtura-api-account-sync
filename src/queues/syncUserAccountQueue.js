@@ -2,36 +2,71 @@ const queueErrorHandler = require("./queueErrorHandler");
 const logger = require("../utils/logger");
 const ClubTaskProcessor = require("../tasks/clubTaskProcessor");
 const AssociationTaskProcessor = require("../tasks/associationTaskProcessor");
-const { syncUserAccount } = require("../config/queueConfig");
+const {
+  syncUserAccount,
+  startAssetBundleCreation,
+} = require("../config/queueConfig");
 
 /**
  * Function to synchronize user accounts by processing tasks from the queue.
  * Handles specific tasks based on the type (club or association).
  */
 async function handleAccountSync(testData = null) {
-  const processJob = async jobData => {
+  const processJob = async (jobData) => {
+    const accountId = jobData.getSync?.ID;
+    const accountPath = jobData.getSync?.PATH;
+
+    // Validate job data before processing
+    if (!accountId) {
+      logger.error("❌ CRITICAL: No account ID found in job data", {
+        jobData: jobData,
+        getSync: jobData.getSync,
+      });
+      throw new Error("Missing account ID in job data");
+    }
+
+    logger.info("🔄 Starting syncUserAccount job processing", {
+      accountId: accountId,
+      accountPath: accountPath,
+      jobData: jobData,
+    });
+
     try {
-      const { PATH, ID } = jobData.getSync;
+      logger.debug(
+        `Processing job with ID: ${accountId} on path: ${accountPath}`
+      );
 
-      logger.debug(`Start processing job with ID: ${ID} on path: ${PATH}`);
-
-      if (PATH === "CLUB") {
+      if (accountPath === "CLUB") {
+        logger.info("🏢 Processing CLUB account", { accountId: accountId });
         const clubProcessor = new ClubTaskProcessor();
         await clubProcessor.process({ data: jobData });
-      } else if (PATH === "ASSOCIATION") {
+      } else if (accountPath === "ASSOCIATION") {
+        logger.info("🏛️ Processing ASSOCIATION account", {
+          accountId: accountId,
+        });
         const associationProcessor = new AssociationTaskProcessor();
         await associationProcessor.process({ data: jobData });
+      } else {
+        logger.error("❌ Unknown account path", {
+          accountId: accountId,
+          accountPath: accountPath,
+          jobData: jobData,
+        });
+        throw new Error(`Unknown account path: ${accountPath}`);
       }
 
-      logger.info(`Successfully processed task for ID: ${ID}`);
+      logger.info("✅ Successfully processed syncUserAccount task", {
+        accountId: accountId,
+        accountPath: accountPath,
+      });
     } catch (error) {
-      logger.error(
-        `Error processing task for ID: ${jobData.getSync.ID}: ${error.message}`,
-        {
-          jobData,
-          errorStack: error.stack,
-        }
-      );
+      logger.error("❌ Error processing syncUserAccount task", {
+        accountId: accountId,
+        accountPath: accountPath,
+        error: error.message,
+        stack: error.stack,
+        jobData: jobData,
+      });
       throw error;
     }
   };
@@ -42,15 +77,78 @@ async function handleAccountSync(testData = null) {
   } else {
     // Normal queue processing
 
-    syncUserAccount.process(async job => {
+    syncUserAccount.process(async (job) => {
       await processJob(job.data);
     });
 
     // Event listeners
     syncUserAccount.on("completed", (job, result) => {
+      const accountId = job.data.getSync?.ID;
+      const accountPath = job.data.getSync?.PATH;
+
+      // Validate account data before proceeding
+      if (!accountId) {
+        logger.error("❌ CRITICAL: No account ID found in completed job data", {
+          jobId: job.id,
+          jobData: job.data,
+          getSync: job.data.getSync,
+        });
+        return;
+      }
+
+      logger.info("✅ syncUserAccount job completed successfully", {
+        jobId: job.id,
+        accountId: accountId,
+        accountPath: accountPath,
+        result: result,
+      });
+
+      // Add job to startAssetBundleCreation queue for asset generation
       logger.info(
-        `Job ${job.id} completed successfully for account ${job.data.getSync.ID}`
+        "🚀 QUEUE TRANSITION: Adding job to startAssetBundleCreation",
+        {
+          fromQueue: "syncUserAccount",
+          toQueue: "startAssetBundleCreation",
+          accountId: accountId,
+          accountPath: accountPath,
+          processGameData: true,
+        }
       );
+
+      try {
+        const newJobData = {
+          getSync: {
+            ...job.data.getSync,
+            processGameData: true, // Flag to indicate this should process game data
+          },
+        };
+
+        // Log the exact data being sent to the next queue
+        logger.info("📤 Job data being sent to startAssetBundleCreation", {
+          accountId: accountId,
+          jobData: newJobData,
+          originalJobId: job.id,
+        });
+
+        startAssetBundleCreation.add(newJobData);
+
+        logger.info(
+          "✅ Successfully added job to startAssetBundleCreation queue",
+          {
+            accountId: accountId,
+            accountPath: accountPath,
+            originalJobId: job.id,
+            processGameData: true,
+          }
+        );
+      } catch (error) {
+        logger.error("❌ Failed to add job to startAssetBundleCreation queue", {
+          accountId: accountId,
+          error: error.message,
+          stack: error.stack,
+          originalJobId: job.id,
+        });
+      }
     });
 
     syncUserAccount.on("failed", (job, error) => {

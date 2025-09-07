@@ -28,7 +28,6 @@ class AssignGameData {
   // Processes a single batch of games
   async processBatch(batch) {
     for (const game of batch) {
-     
       try {
         const [homeTeamID, awayTeamID] = await this.gameCRUD.getTeamsIds([
           game.teamHomeID,
@@ -54,10 +53,32 @@ class AssignGameData {
   async processGame(game) {
     try {
       const existingGame = await this.gameCRUD.checkIfGameExists(game.gameID);
+
+      // Handle null response (actual errors like connection issues)
+      if (existingGame === null) {
+        logger.warn(
+          `Could not determine if game exists - API returned null or unexpected format. Skipping game ${game.gameID}`,
+          {
+            method: "processGame",
+            class: "AssignGameData",
+            gameID: game.gameID,
+          }
+        );
+        // Mark as error but don't throw - allow processing to continue
+        this.processingTracker.errorDetected("games");
+        return;
+      }
+
+      // existingGame is either false (new game) or a game object (existing game)
       if (existingGame) {
         this.processingTracker.itemUpdated("games");
         await this.gameCRUD.updateGame(existingGame.id, game);
       } else {
+        logger.info(`Creating new game: ${game.gameID}`, {
+          method: "processGame",
+          class: "AssignGameData",
+          gameID: game.gameID,
+        });
         this.processingTracker.itemNew("games");
         await this.gameCRUD.createGame(game);
       }
