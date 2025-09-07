@@ -1,0 +1,14 @@
+[33m6024f16[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m, [m[1;31mheroku/master[m[33m)[m Enhance error handling and logging across data processing modules; improve fetcher timeout management and connection health checks in controllers and queues for better resilience and debugging.
+CONFIGURATION.md
+ERROR_HANDLING_IMPROVEMENTS.md
+dataProcessing/assignCenter/assignGameData.js
+dataProcessing/assignCenter/games/GameCrud.js
+dataProcessing/controllers/dataController.js
+src/OLD_cronJobs/OLD_accountInitCron.js
+src/OLD_cronJobs/OLD_taskCronSyncUserAccounts.js
+src/config/environment.js
+src/controller/controller.js
+src/queues/syncUserAccountQueue.js
+src/utils/connectionHealthCheck.js
+src/utils/fetcher.js
+test-connection.js

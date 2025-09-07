@@ -4,7 +4,7 @@ const ClubTaskProcessor = require("../tasks/clubTaskProcessor");
 const AssociationTaskProcessor = require("../tasks/associationTaskProcessor");
 const {
   syncUserAccount,
-  startAssetBundleCreation,
+  // startAssetBundleCreation, // COMMENTED OUT: No longer used after removing queue transitions
 } = require("../config/queueConfig");
 
 /**
@@ -103,7 +103,9 @@ async function handleAccountSync(testData = null) {
         result: result,
       });
 
-      // Add job to startAssetBundleCreation queue for asset generation
+      // COMMENTED OUT: Add job to startAssetBundleCreation queue for asset generation
+      // This was added in recent push but should be removed
+      /*
       logger.info(
         "🚀 QUEUE TRANSITION: Adding job to startAssetBundleCreation",
         {
@@ -114,8 +116,9 @@ async function handleAccountSync(testData = null) {
           processGameData: true,
         }
       );
+      */
 
-      try {
+      /*    try {
         const newJobData = {
           getSync: {
             ...job.data.getSync,
@@ -148,7 +151,7 @@ async function handleAccountSync(testData = null) {
           stack: error.stack,
           originalJobId: job.id,
         });
-      }
+      } */
     });
 
     syncUserAccount.on("failed", (job, error) => {

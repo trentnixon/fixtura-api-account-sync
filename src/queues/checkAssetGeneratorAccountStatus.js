@@ -114,6 +114,9 @@ async function checkAssetGeneratorAccountStatus() {
   logger.info("setSyncAccountFixtures processor setup complete");
 
   console.log("Setting up event listeners...");
+  // COMMENTED OUT: Queue transition to setSyncAccountFixtures
+  // This was added in recent push but should be removed
+  /*
   startAssetBundleCreation.on("completed", (job) => {
     const weekOfYear = getWeekOfYear(new Date());
     logger.info(
@@ -133,7 +136,11 @@ async function checkAssetGeneratorAccountStatus() {
       weekOfYear,
     });
   });
+  */
 
+  // COMMENTED OUT: Queue transition to setSyncAccountFixtures on failure
+  // This was added in recent push but should be removed
+  /*
   startAssetBundleCreation.on("failed", (job, error) => {
     logger.error(`Job failed: ${job.id}, error: ${error.message}`);
     const weekOfYear = getWeekOfYear(new Date());
@@ -146,6 +153,7 @@ async function checkAssetGeneratorAccountStatus() {
     });
     queueErrorHandler("taskRunner", error);
   });
+  */
 
   // Event listeners for setSyncAccountFixtures
   setSyncAccountFixtures.on("completed", (job) => {
