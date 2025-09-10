@@ -2,6 +2,7 @@ const queueErrorHandler = require("./queueErrorHandler");
 const logger = require("../utils/logger");
 const ClubTaskProcessor = require("../tasks/clubTaskProcessor");
 const AssociationTaskProcessor = require("../tasks/associationTaskProcessor");
+const { notifyCMSAccountSync } = require("../utils/cmsNotifier");
 const {
   syncUserAccount,
   // startAssetBundleCreation, // COMMENTED OUT: No longer used after removing queue transitions
@@ -73,7 +74,22 @@ async function handleAccountSync(testData = null) {
 
   if (testData) {
     // For testing: process the test data directly
-    await processJob(testData);
+    try {
+      await processJob(testData);
+
+      // Notify CMS of successful completion for test data
+      const accountId = testData.getSync?.ID;
+      if (accountId) {
+        await notifyCMSAccountSync(accountId, "completed");
+      }
+    } catch (error) {
+      // Notify CMS of failure for test data
+      const accountId = testData.getSync?.ID;
+      if (accountId) {
+        await notifyCMSAccountSync(accountId, "failed");
+      }
+      throw error; // Re-throw to maintain original error behavior
+    }
   } else {
     // Normal queue processing
 
@@ -82,7 +98,7 @@ async function handleAccountSync(testData = null) {
     });
 
     // Event listeners
-    syncUserAccount.on("completed", (job, result) => {
+    syncUserAccount.on("completed", async (job, result) => {
       const accountId = job.data.getSync?.ID;
       const accountPath = job.data.getSync?.PATH;
 
@@ -103,59 +119,28 @@ async function handleAccountSync(testData = null) {
         result: result,
       });
 
-      // COMMENTED OUT: Add job to startAssetBundleCreation queue for asset generation
-      // This was added in recent push but should be removed
-      /*
-      logger.info(
-        "🚀 QUEUE TRANSITION: Adding job to startAssetBundleCreation",
-        {
-          fromQueue: "syncUserAccount",
-          toQueue: "startAssetBundleCreation",
-          accountId: accountId,
-          accountPath: accountPath,
-          processGameData: true,
-        }
-      );
-      */
-
-      /*    try {
-        const newJobData = {
-          getSync: {
-            ...job.data.getSync,
-            processGameData: true, // Flag to indicate this should process game data
-          },
-        };
-
-        // Log the exact data being sent to the next queue
-        logger.info("📤 Job data being sent to startAssetBundleCreation", {
-          accountId: accountId,
-          jobData: newJobData,
-          originalJobId: job.id,
-        });
-
-        startAssetBundleCreation.add(newJobData);
-
-        logger.info(
-          "✅ Successfully added job to startAssetBundleCreation queue",
-          {
-            accountId: accountId,
-            accountPath: accountPath,
-            originalJobId: job.id,
-            processGameData: true,
-          }
-        );
-      } catch (error) {
-        logger.error("❌ Failed to add job to startAssetBundleCreation queue", {
-          accountId: accountId,
-          error: error.message,
-          stack: error.stack,
-          originalJobId: job.id,
-        });
-      } */
+      // Notify CMS of successful completion
+      await notifyCMSAccountSync(accountId, "completed");
     });
 
-    syncUserAccount.on("failed", (job, error) => {
+    syncUserAccount.on("failed", async (job, error) => {
+      const accountId = job.data.getSync?.ID;
+
+      // Handle queue error
       queueErrorHandler(job, error, logger);
+
+      // Notify CMS of failure if accountId is available
+      if (accountId) {
+        await notifyCMSAccountSync(accountId, "failed");
+      } else {
+        logger.error(
+          "❌ No account ID available for CMS notification on job failure",
+          {
+            jobId: job.id,
+            jobData: job.data,
+          }
+        );
+      }
     });
   }
 }

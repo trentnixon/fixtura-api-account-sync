@@ -1,7 +1,8 @@
-const queueErrorHandler = require("./queueErrorHandler");
+//const queueErrorHandler = require("./queueErrorHandler");
 const logger = require("../utils/logger");
 const ClubTaskProcessor = require("../tasks/clubTaskProcessor");
 const AssociationTaskProcessor = require("../tasks/associationTaskProcessor");
+const { notifyCMSAccountSync } = require("../utils/cmsNotifier");
 const {
   startAssetBundleCreation,
   setSyncAccountFixtures,
@@ -9,11 +10,11 @@ const {
 
 // This module handles job addition to queues with robust error management, facilitating operations related to asset generator account status checking.
 
-function getWeekOfYear(date) {
+/* function getWeekOfYear(date) {
   const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
   const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
   return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-}
+} */
 
 async function checkAssetGeneratorAccountStatus() {
   console.log("=== checkAssetGeneratorAccountStatus START ===");
@@ -47,6 +48,9 @@ async function checkAssetGeneratorAccountStatus() {
             : new AssociationTaskProcessor();
         await processor.process(job);
         logger.info(`Successfully processed taskRunner for ID: ${ID}`);
+
+        // Notify CMS of successful completion
+        await notifyCMSAccountSync(ID, "completed");
       } else {
         logger.warn(
           `Account ID: ${ID} has already collected data within the last 24 hours`
@@ -60,16 +64,22 @@ async function checkAssetGeneratorAccountStatus() {
           errorStack: error.stack,
         }
       );
+
+      // Notify CMS of failure
+      const accountId = job.data.getSync?.ID;
+      if (accountId) {
+        await notifyCMSAccountSync(accountId, "failed");
+      }
+
       throw error;
     }
   });
   console.log("startAssetBundleCreation processor setup complete");
 
   // Debug: Log when setting up setSyncAccountFixtures processor
-  console.log("Setting up setSyncAccountFixtures processor...");
   logger.info("Setting up setSyncAccountFixtures processor...");
 
-  try {
+  /*  try {
     setSyncAccountFixtures.process(async (job) => {
       try {
         const { accountId, weekOfYear } = job.data;
@@ -109,7 +119,7 @@ async function checkAssetGeneratorAccountStatus() {
       error
     );
     throw error;
-  }
+  } */
 
   logger.info("setSyncAccountFixtures processor setup complete");
 
@@ -156,7 +166,7 @@ async function checkAssetGeneratorAccountStatus() {
   */
 
   // Event listeners for setSyncAccountFixtures
-  setSyncAccountFixtures.on("completed", (job) => {
+  /*   setSyncAccountFixtures.on("completed", (job) => {
     console.log(
       `🎉 setSyncAccountFixtures job ${job.id} completed for account ${job.data.accountId}`
     );
@@ -172,7 +182,7 @@ async function checkAssetGeneratorAccountStatus() {
     logger.error(
       `setSyncAccountFixtures job ${job.id} failed: ${error.message}`
     );
-  });
+  }); */
 
   console.log("Event listeners setup complete");
   logger.info("checkAssetGeneratorAccountStatus setup complete");
