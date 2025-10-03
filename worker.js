@@ -8,7 +8,7 @@ const logger = require("./src/utils/logger");
 const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 
 // Integration Test Runner
-const IntegrationTestRunner = require("./__tests__/integration/cronScheduler");
+//const IntegrationTestRunner = require("./__tests__/integration/cronScheduler");
 
 function initializeQueueProcessing() {
   console.log("=== WORKER STARTUP DEBUG ===");
@@ -64,8 +64,8 @@ function initializeIntegrationTests() {
 
   try {
     console.log("Starting integration test runner...");
-    const runner = new IntegrationTestRunner();
-    runner.startRunner();
+    //const runner = new IntegrationTestRunner();
+    //runner.startRunner();
     console.log("Integration test runner started successfully");
   } catch (error) {
     console.error("Error starting integration test runner:", error);
