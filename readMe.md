@@ -25,7 +25,7 @@ This is the root folder of the Fixtura Account Sync service - a web worker respo
   - `src/`: Core service modules (queues, tasks, config)
   - `dataProcessing/`: Data processing and transformation modules
   - `common/`: Shared utilities and base controllers
-  - `__tests__/`: Test files
+  - `__tests__/`: **Complete integration testing framework** ✅
 - External:
   - Bull (Redis-based job queue)
   - Puppeteer (web scraping)

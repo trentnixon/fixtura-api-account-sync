@@ -7,6 +7,9 @@ const handleAccountSync = require("./src/queues/syncUserAccountQueue");
 const logger = require("./src/utils/logger");
 const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
 
+// Integration Test Runner
+const IntegrationTestRunner = require("./__tests__/integration/cronScheduler");
+
 function initializeQueueProcessing() {
   console.log("=== WORKER STARTUP DEBUG ===");
   console.log(
@@ -56,7 +59,25 @@ function initializeQueueProcessing() {
   console.log("=== QUEUE PROCESSING INITIALIZATION COMPLETE ===");
 }
 
+function initializeIntegrationTests() {
+  console.log("=== INITIALIZING INTEGRATION TESTS ===");
+
+  try {
+    console.log("Starting integration test runner...");
+    const runner = new IntegrationTestRunner();
+    runner.startRunner();
+    console.log("Integration test runner started successfully");
+  } catch (error) {
+    console.error("Error starting integration test runner:", error);
+  }
+
+  console.log("=== INTEGRATION TESTS INITIALIZATION COMPLETE ===");
+}
+
 // Start Processors
 initializeQueueProcessing();
+
+// Start Integration Tests
+initializeIntegrationTests();
 
 logger.info("Worker started successfully.");
