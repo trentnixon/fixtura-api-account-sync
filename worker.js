@@ -42,6 +42,7 @@ function initializeQueueProcessing() {
   // uncomment this before
   try {
     console.log("Calling handleAccountSync...");
+    console.log("Purge Cache Test...");
     handleAccountSync();
     console.log("handleAccountSync completed");
   } catch (error) {
