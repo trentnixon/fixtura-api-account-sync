@@ -7,6 +7,7 @@ This folder contains task processing modules that handle the execution of specif
 - `associationTaskProcessor.js`: Processes association-related tasks
 - `clubTaskProcessor.js`: Processes club-related tasks
 - `taskProcessor.js`: Base task processor with common functionality
+- `updateAccountOnlyProcessor.js`: Processes on-demand account updates (full sync without worker handoff)
 
 ## Relations
 

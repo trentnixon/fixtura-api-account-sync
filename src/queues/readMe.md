@@ -9,6 +9,7 @@ This folder contains Redis queue management modules for handling job queues, err
 - `queueErrorHandler.js`: Error handling for queue operations
 - `queueUtils.js`: Utility functions for queue management
 - `syncUserAccountQueue.js`: Main queue for user account synchronization
+- `updateAccountOnlyQueue.js`: On-demand account update queue (no data processing)
 
 ## Relations
 

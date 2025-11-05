@@ -3,6 +3,7 @@
 // Queued processing Tasks
 const checkAssetGeneratorAccountStatus = require("./src/queues/checkAssetGeneratorAccountStatus");
 const handleAccountSync = require("./src/queues/syncUserAccountQueue");
+const handleUpdateAccountOnly = require("./src/queues/updateAccountOnlyQueue");
 
 const logger = require("./src/utils/logger");
 const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
@@ -55,6 +56,14 @@ function initializeQueueProcessing() {
     console.log("onboardNewAccountTask completed");
   } catch (error) {
     console.error("Error in onboardNewAccountTask:", error);
+  }
+
+  try {
+    console.log("Calling handleUpdateAccountOnly...");
+    handleUpdateAccountOnly();
+    console.log("handleUpdateAccountOnly completed");
+  } catch (error) {
+    console.error("Error in handleUpdateAccountOnly:", error);
   }
 
   console.log("=== QUEUE PROCESSING INITIALIZATION COMPLETE ===");

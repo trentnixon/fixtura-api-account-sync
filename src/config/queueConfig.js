@@ -16,6 +16,8 @@ const queueNames = {
   syncUserAccount: "syncUserAccount",
   // 4 onboarding
   onboardNewAccount: "onboardNewAccount",
+  // 5 On-demand account update only (no data processing)
+  updateAccountOnly: "updateAccountOnly",
 };
 
 let initializedQueues;

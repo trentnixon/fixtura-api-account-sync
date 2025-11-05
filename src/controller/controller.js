@@ -56,4 +56,38 @@ async function Controller_Associations(fromRedis) {
   }
 }
 
-module.exports = { Controller_Club, Controller_Associations };
+/**
+ * Controller for on-demand account updates only (no data processing).
+ * Fetches fresh account data without processing competitions, teams, or games.
+ */
+async function Controller_UpdateAccountOnly(fromRedis) {
+  try {
+    // Check connection health before starting
+    const healthCheck = new ConnectionHealthCheck();
+    const isHealthy = await healthCheck.checkHealth();
+
+    if (!isHealthy) {
+      logger.warn(
+        "API connection is unhealthy, but proceeding with caution..."
+      );
+      healthCheck.logStatus();
+    }
+
+    const dataController = new DataController(fromRedis.getSync);
+    const result = await dataController.updateAccountOnly();
+    return result;
+  } catch (error) {
+    logger.critical("An error occurred in Controller_UpdateAccountOnly", {
+      file: "controller.js",
+      function: "Controller_UpdateAccountOnly",
+      error: error,
+    });
+    throw error;
+  }
+}
+
+module.exports = {
+  Controller_Club,
+  Controller_Associations,
+  Controller_UpdateAccountOnly,
+};

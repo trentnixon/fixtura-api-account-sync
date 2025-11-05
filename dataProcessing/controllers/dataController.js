@@ -25,6 +25,31 @@ class DataController {
     return await this.dataService.fetchData(this.fromRedis);
   }
 
+  /**
+   * Update account data only - fetches fresh account data without processing competitions, teams, or games.
+   * This is used for on-demand account updates that only refresh account metadata.
+   */
+  async updateAccountOnly() {
+    try {
+      // Fetch fresh account data from CMS
+      const dataObj = await this.reSyncData();
+
+      logger.info(
+        `Account data fetched successfully for account ${dataObj.ACCOUNT.ACCOUNTID} (${dataObj.ACCOUNT.ACCOUNTTYPE})`
+      );
+
+      // Return success without processing competitions, teams, or games
+      return { Complete: true, accountId: dataObj.ACCOUNT.ACCOUNTID };
+    } catch (error) {
+      errorHandler.handle(error, "DataController");
+      logger.error("Error in updateAccountOnly:", {
+        accountId: this.fromRedis?.ID,
+        error: error.message,
+      });
+      return { Complete: false };
+    }
+  }
+
   async start() {
     try {
       this.memoryTracker.startTracking();

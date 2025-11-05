@@ -34,8 +34,8 @@ class assignTeamToGameData {
   };
 }
 
-  
-  
+
+
 
   async checkIfCompetitionExists(gameID, resourcePath) {
     const query = qs.stringify(
@@ -81,8 +81,8 @@ class assignTeamToGameData {
       return [false, false];
     }
   }
-  
-  
+
+
 
   async storeGameData(game) {
     logger.info(`Storing game ${game.gameID}`);

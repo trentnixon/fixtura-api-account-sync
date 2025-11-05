@@ -4,42 +4,49 @@
  */
 
 const fetcher = require("../Utils/fetcher");
-const logger = require("../Utils/logger"); 
+const logger = require("../Utils/logger");
 const qs = require("qs");
 
 class assignGameData {
-
-  
   async setup(filteredArray, batchSize = 100) {
     const totalBatches = Math.ceil(filteredArray.length / batchSize);
 
     for (let i = 0; i < totalBatches; i++) {
-        const currentBatch = filteredArray.slice(i * batchSize, (i + 1) * batchSize);
-        
-        for (const game of currentBatch) {
-            if (!game.teamHomeID) {
-                logger.error(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
-                continue;
-            } 
+      const currentBatch = filteredArray.slice(
+        i * batchSize,
+        (i + 1) * batchSize
+      );
 
-            const existingGameId = await this.checkIfGameExists(game.gameID, "game-meta-datas");
-
-            const [homeTeamID, awayTeamID] = await this.getTeamsIds([game.teamHomeID, game.teamAwayID]);
-            homeTeamID && game.teams.push(homeTeamID); 
-            awayTeamID && game.teams.push(awayTeamID);
-
-            if (existingGameId) {
-                await this.updateGameData(existingGameId, game);
-            } else {
-                await this.storeGameData(game);  
-            }
+      for (const game of currentBatch) {
+        if (!game.teamHomeID) {
+          logger.error(`Games.teamHomeID was Undefined ${game.teamHomeID}`);
+          continue;
         }
-    } 
+
+        const existingGameId = await this.checkIfGameExists(
+          game.gameID,
+          "game-meta-datas"
+        );
+
+        const [homeTeamID, awayTeamID] = await this.getTeamsIds([
+          game.teamHomeID,
+          game.teamAwayID,
+        ]);
+        homeTeamID && game.teams.push(homeTeamID);
+        awayTeamID && game.teams.push(awayTeamID);
+
+        if (existingGameId) {
+          await this.updateGameData(existingGameId, game);
+        } else {
+          await this.storeGameData(game);
+        }
+      }
+    }
 
     return {
-        success: true,
+      success: true,
     };
-}
+  }
 
   async checkIfGameExists(gameID, resourcePath) {
     const query = qs.stringify(
@@ -70,7 +77,7 @@ class assignGameData {
     }
   }
 
-  async  getTeamsIds(teamIDs) {
+  async getTeamsIds(teamIDs) {
     const query = qs.stringify(
       {
         filters: {
@@ -92,8 +99,7 @@ class assignGameData {
       }
 
       // Map through the response to extract IDs
-      return response.map(team => team.id);
-
+      return response.map((team) => team.id);
     } catch (error) {
       logger.error(`Error checking teamIDs ${teamIDs}:`, error);
       logger.critical("An error occurred in getTeamsIds", {
@@ -103,7 +109,7 @@ class assignGameData {
       });
       return [false, false];
     }
-}
+  }
 
   async storeGameData(game) {
     logger.info(`Storing game ${game.gameID}`);

@@ -5,6 +5,8 @@ This folder contains data processing controllers that manage the overall data pr
 ## Files
 
 - `dataController.js`: Main data processing controller
+  - `start()`: Full processing pipeline (competitions, teams, games)
+  - `updateAccountOnly()`: On-demand account update only (fetches data, no processing)
 
 ## Relations
 
