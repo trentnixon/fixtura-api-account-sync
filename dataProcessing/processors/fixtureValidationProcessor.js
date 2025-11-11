@@ -15,7 +15,7 @@ class FixtureValidationProcessor {
     // MEMORY OPTIMIZATION: Process in smaller batches, browser closed between batches
     this.validationService = new FixtureValidationService({
       usePuppeteer: options.usePuppeteer !== false, // Default to true (required for PlayHQ)
-      timeout: options.timeout || 15000, // Reduced to 15 seconds for faster validation and less memory
+      timeout: options.timeout || 5000, // Reduced to 15 seconds for faster validation and less memory
       skipHttpValidation:
         options.skipHttpValidation !== undefined
           ? options.skipHttpValidation
