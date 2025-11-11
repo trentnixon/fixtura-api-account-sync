@@ -72,87 +72,117 @@ class DataController {
       await this.processingTracker.updateDatabaseAfterAction(collectionID);
 
       // ========================================
+      // COMMENTED OUT FOR MEMORY OPTIMIZATION TESTING
+      // Testing only fixture validation and cleanup features
       // ========================================
-      // [STAGE] PROCESS COMPETITIONS
+      // [STAGE] PROCESS COMPETITIONS - COMMENTED OUT
       // ========================================
-      logger.info("[STAGE] Starting competitions stage", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-        collectionID: collectionID,
-      });
-      await this.processingTracker.setCurrentStage(
-        "competitions",
-        collectionID
+      // logger.info("[STAGE] Starting competitions stage", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      //   collectionID: collectionID,
+      // });
+      // await this.processingTracker.setCurrentStage(
+      //   "competitions",
+      //   collectionID
+      // );
+      // logger.info("[STAGE] setCurrentStage('competitions') completed", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // await this.ProcessCompetitions(dataObj);
+      // await this.processingTracker.completeStage("competitions", collectionID);
+      // logger.info("[STAGE] completeStage('competitions') completed", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // logger.info("[START] Refreshing data after competitions", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // dataObj = await this.reSyncData();
+      // logger.info("[START] Data refreshed successfully after competitions", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+
+      // // ========================================
+      // // [STAGE] PROCESS TEAMS - COMMENTED OUT
+      // // ========================================
+      // logger.info("[STAGE] Starting teams stage", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      //   collectionID: collectionID,
+      // });
+      // await this.processingTracker.setCurrentStage("teams", collectionID);
+      // logger.info("[STAGE] setCurrentStage('teams') completed", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // await this.ProcessTeams(dataObj);
+      // await this.processingTracker.completeStage("teams", collectionID);
+      // logger.info("[STAGE] completeStage('teams') completed", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // logger.info("[START] Refreshing data after teams", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // dataObj = await this.reSyncData();
+      // logger.info("[START] Data refreshed successfully after teams", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+
+      // // ========================================
+      // // [STAGE] PROCESS GAMES - COMMENTED OUT
+      // // ========================================
+      // logger.info("[STAGE] Starting games stage", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      //   collectionID: collectionID,
+      // });
+      // await this.processingTracker.setCurrentStage("games", collectionID);
+      // logger.info("[STAGE] setCurrentStage('games') completed", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // logger.info("[GAMES] Calling ProcessGames", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // await this.ProcessGames(dataObj);
+      // logger.info("[GAMES] ProcessGames returned successfully", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      //   scrapedFixturesCount: (this.scrapedFixtures || []).length,
+      // });
+      // await this.processingTracker.completeStage("games", collectionID);
+      // logger.info("[STAGE] completeStage('games') completed", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // logger.info("[START] Refreshing data after games", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // dataObj = await this.reSyncData();
+      // logger.info("[START] Data refreshed successfully after games", {
+      //   accountId: dataObj.ACCOUNT.ACCOUNTID,
+      // });
+      // ========================================
+
+      // Refresh data once to get teams (needed for fixture validation)
+      // We skip processing but need teams to fetch existing fixtures
+      logger.info(
+        "[START] Refreshing data for fixture validation (testing mode)",
+        {
+          accountId: dataObj.ACCOUNT.ACCOUNTID,
+        }
       );
-      logger.info("[STAGE] setCurrentStage('competitions') completed", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      await this.ProcessCompetitions(dataObj);
-      await this.processingTracker.completeStage("competitions", collectionID);
-      logger.info("[STAGE] completeStage('competitions') completed", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      logger.info("[START] Refreshing data after competitions", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
       dataObj = await this.reSyncData();
-      logger.info("[START] Data refreshed successfully after competitions", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
+      logger.info(
+        "[START] Data refreshed successfully for fixture validation",
+        {
+          accountId: dataObj.ACCOUNT.ACCOUNTID,
+        }
+      );
 
-      // ========================================
-      // [STAGE] PROCESS TEAMS
-      // ========================================
-      logger.info("[STAGE] Starting teams stage", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-        collectionID: collectionID,
-      });
-      await this.processingTracker.setCurrentStage("teams", collectionID);
-      logger.info("[STAGE] setCurrentStage('teams') completed", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      await this.ProcessTeams(dataObj);
-      await this.processingTracker.completeStage("teams", collectionID);
-      logger.info("[STAGE] completeStage('teams') completed", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      logger.info("[START] Refreshing data after teams", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      dataObj = await this.reSyncData();
-      logger.info("[START] Data refreshed successfully after teams", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-
-      // ========================================
-      // [STAGE] PROCESS GAMES
-      // ========================================
-      logger.info("[STAGE] Starting games stage", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-        collectionID: collectionID,
-      });
-      await this.processingTracker.setCurrentStage("games", collectionID);
-      logger.info("[STAGE] setCurrentStage('games') completed", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      logger.info("[GAMES] Calling ProcessGames", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      await this.ProcessGames(dataObj);
-      logger.info("[GAMES] ProcessGames returned successfully", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-        scrapedFixturesCount: (this.scrapedFixtures || []).length,
-      });
-      await this.processingTracker.completeStage("games", collectionID);
-      logger.info("[STAGE] completeStage('games') completed", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      logger.info("[START] Refreshing data after games", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      dataObj = await this.reSyncData();
-      logger.info("[START] Data refreshed successfully after games", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
+      // Set scraped fixtures to empty array since we're not scraping
+      this.scrapedFixtures = [];
+      logger.info(
+        "[START] Testing mode: Only fixture validation and cleanup enabled",
+        {
+          accountId: dataObj.ACCOUNT.ACCOUNTID,
+          scrapedFixturesCount: 0,
+          note: "ProcessCompetitions, ProcessTeams, and ProcessGames are disabled for memory optimization",
+        }
+      );
 
       // ========================================
       // [STAGE] PROCESS FIXTURE VALIDATION
@@ -450,8 +480,11 @@ class DataController {
       });
 
       // Step 1: Compare fixtures using validation results and scraped fixtures
-      // ProcessGames collects scraped fixtures, ProcessFixtureValidation validates existing DB fixtures
-      // Comparison identifies fixtures that are invalid (404) or missing from scraped data
+      // TESTING MODE: ProcessGames is disabled, so scrapedFixtures will be empty
+      // In testing mode, we only identify fixtures with invalid URLs (404 errors)
+      // Missing from scraped data will not be detected (since we're not scraping)
+      // ProcessFixtureValidation validates existing DB fixtures for URL validity
+      // Comparison identifies fixtures that are invalid (404) based on validation results only
       logger.info("[CLEANUP] Creating FixtureComparisonService", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
@@ -465,13 +498,16 @@ class DataController {
         scrapedCount: (this.scrapedFixtures || []).length,
         fetchedCount: (this.fetchedFixtures || []).length,
         validationCount: (this.fixtureValidationResults || []).length,
+        testingMode: true,
+        note: "Only invalid URLs (404) will be detected in testing mode (no scraped data)",
       });
 
       // Compare: database fixtures vs validation results (and scraped fixtures from ProcessGames)
+      // TESTING MODE: scrapedFixtures is empty, so only invalid URLs will be identified
       const comparisonResult = comparisonService.compareFixtures(
-        this.scrapedFixtures || [], // Scraped fixtures from ProcessGames (may be empty if no games scraped)
+        this.scrapedFixtures || [], // Empty in testing mode (ProcessGames disabled)
         this.fetchedFixtures || [], // Database fixtures from validation step
-        this.fixtureValidationResults || [] // Validation results (identifies invalid URLs)
+        this.fixtureValidationResults || [] // Validation results (identifies invalid URLs - 404 errors)
       );
 
       logger.info("[CLEANUP] compareFixtures returned successfully", {
