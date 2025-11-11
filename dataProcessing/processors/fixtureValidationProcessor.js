@@ -12,16 +12,18 @@ class FixtureValidationProcessor {
     this.dataObj = dataObj;
     this.gameCRUD = new GameCRUD(dataObj);
     // Use Puppeteer for accurate validation (default: true)
-    // Reduce concurrency for Puppeteer since it's slower but more accurate
+    // MEMORY OPTIMIZATION: Process in smaller batches (25 fixtures per batch)
+    // Browser is closed and restarted between batches to free memory
     this.validationService = new FixtureValidationService({
       usePuppeteer: options.usePuppeteer !== false, // Default to true
-      timeout: options.timeout || 30000, // 30 seconds for Puppeteer
+      timeout: options.timeout || 15000, // Reduced to 15 seconds for faster validation and less memory
     });
     this.processingTracker = ProcessingTracker.getInstance();
-    // Lower concurrency for Puppeteer (2-3) vs HTTP (5-10)
-    // Puppeteer is slower but more accurate for JS-rendered pages
+    // Batch size for processing (browser cleanup between batches)
+    // MEMORY OPTIMIZATION: Smaller batches = more cleanup = less memory usage
+    // Reduced to 20 fixtures per batch for Heroku memory constraints
     this.concurrencyLimit =
-      options.concurrencyLimit || (options.usePuppeteer !== false ? 2 : 5);
+      options.concurrencyLimit || (options.usePuppeteer !== false ? 20 : 5); // 20 fixtures per batch for Puppeteer (memory optimized)
     this.validationResults = [];
   }
 

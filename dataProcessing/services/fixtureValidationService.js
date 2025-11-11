@@ -10,7 +10,7 @@ const PuppeteerManager = require("../../dataProcessing/puppeteer/PuppeteerManage
 class FixtureValidationService {
   constructor(options = {}) {
     this.domain = "https://www.playhq.com";
-    this.timeout = options.timeout || 30000; // 30 seconds timeout for Puppeteer
+    this.timeout = options.timeout || 15000; // Reduced from 30s to 15s for faster validation and less memory usage
     this.maxRetries = options.maxRetries || 2;
     this.usePuppeteer = options.usePuppeteer !== false; // Default to true for accuracy
     this.puppeteerManager = null;
@@ -109,9 +109,9 @@ class FixtureValidationService {
         throw navError;
       }
 
-      // Wait for page to render (JS might load content)
+      // Wait for page to render (reduced from 2000ms to 1000ms to reduce memory usage)
       // Use Promise-based setTimeout instead of deprecated waitForTimeout
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Get HTTP status for logging
       const httpStatus = response ? response.status() : "unknown";
@@ -514,91 +514,202 @@ class FixtureValidationService {
   }
 
   /**
-   * Validates multiple fixture URLs sequentially using a single Puppeteer page (following pattern from other services)
+   * Validates multiple fixture URLs sequentially using Puppeteer with memory optimization
+   * Processes in smaller batches with browser cleanup between batches to reduce memory usage
    * @param {Array<Object>} fixtures - Array of fixture objects with { id, gameID, urlToScoreCard }
-   * @param {number} concurrencyLimit - Not used for Puppeteer (sequential processing), but kept for API compatibility
+   * @param {number} concurrencyLimit - Batch size for processing (default: 20 fixtures per batch for memory optimization)
    * @returns {Promise<Array<Object>>} Array of validation results
    */
-  async validateFixturesBatch(fixtures, concurrencyLimit = 5) {
+  async validateFixturesBatch(fixtures, concurrencyLimit = 20) {
     const results = [];
 
     if (this.usePuppeteer) {
-      // For Puppeteer, use single page and process sequentially (like other services)
-      let page = null;
-      try {
-        // Initialize browser and create a single page (like GetTeamsGameData, GetCompetitions)
-        await this.initializeBrowser();
-        if (!this.puppeteerManager) {
-          throw new Error("PuppeteerManager not initialized");
-        }
+      // MEMORY OPTIMIZATION: Process in smaller batches with browser cleanup between batches
+      // This prevents memory accumulation when validating hundreds of fixtures
+      const batchSize = concurrencyLimit; // Process N fixtures per batch
+      const batches = [];
+      for (let i = 0; i < fixtures.length; i += batchSize) {
+        batches.push(fixtures.slice(i, i + batchSize));
+      }
 
-        // Use createPageInNewContext() like other services do
-        page = await this.puppeteerManager.createPageInNewContext();
+      logger.info(
+        `[VALIDATION] Validating ${fixtures.length} fixtures in ${batches.length} batches (${batchSize} fixtures per batch, timeout: ${this.timeout}ms)`
+      );
 
-        // Set user agent once for the page
+      // Process each batch separately with browser cleanup between batches
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        let page = null;
+
         try {
-          await page.setUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          );
-        } catch (uaError) {
-          logger.warn(`Failed to set user agent: ${uaError.message}`);
-        }
+          // Initialize browser for this batch
+          await this.initializeBrowser();
+          if (!this.puppeteerManager) {
+            throw new Error("PuppeteerManager not initialized");
+          }
 
-        logger.info(
-          `[VALIDATION] Validating ${fixtures.length} fixtures sequentially using Puppeteer (timeout: ${this.timeout}ms)`
-        );
+          // Create a new page for this batch
+          page = await this.puppeteerManager.createPageInNewContext();
 
-        // Process fixtures sequentially on the same page
-        for (let i = 0; i < fixtures.length; i++) {
-          const fixture = fixtures[i];
+          // Set user agent
           try {
-            const result = await this.validateFixtureUrl(
-              fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard,
-              fixture.id || fixture.attributes?.id,
-              fixture.gameID || fixture.attributes?.gameID,
-              page
+            await page.setUserAgent(
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             );
-            results.push(result);
+          } catch (uaError) {
+            logger.warn(`Failed to set user agent: ${uaError.message}`);
+          }
 
-            // Log progress every 10 fixtures
-            if ((i + 1) % 10 === 0 || i === fixtures.length - 1) {
-              const validCount = results.filter((r) => r.valid).length;
-              const invalidCount = results.length - validCount;
-              logger.info(
-                `[VALIDATION] Progress: ${i + 1}/${
-                  fixtures.length
-                } fixtures validated (${validCount} valid, ${invalidCount} invalid)`
-              );
-            }
-          } catch (error) {
-            logger.error(
-              `Error validating fixture ${i + 1}/${fixtures.length}: ${
-                error.message
-              }`
+          // Disable images and other resources to reduce memory usage
+          // Only block non-essential resources (images, fonts, media)
+          // Keep HTML, CSS, scripts, and XHR/fetch requests for accurate validation
+          try {
+            await page.setRequestInterception(true);
+            page.on("request", (request) => {
+              const resourceType = request.resourceType();
+              // Block images, fonts, media, websockets to save memory
+              // But allow document, script, stylesheet, xhr, fetch for validation
+              if (
+                ["image", "font", "media", "websocket", "manifest"].includes(
+                  resourceType
+                )
+              ) {
+                request.abort();
+              } else {
+                request.continue();
+              }
+            });
+          } catch (interceptError) {
+            // If request interception fails, continue without it
+            // This is not critical - just reduces memory savings
+            logger.debug(
+              `Request interception not available: ${interceptError.message}`
             );
+          }
+
+          logger.info(
+            `[VALIDATION] Processing batch ${batchIndex + 1}/${
+              batches.length
+            } (${batch.length} fixtures)`
+          );
+
+          // Process fixtures in this batch sequentially
+          for (let i = 0; i < batch.length; i++) {
+            const fixture = batch[i];
+            const globalIndex = batchIndex * batchSize + i;
+
+            try {
+              const result = await this.validateFixtureUrl(
+                fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard,
+                fixture.id || fixture.attributes?.id,
+                fixture.gameID || fixture.attributes?.gameID,
+                page
+              );
+              results.push(result);
+
+              // Clear page cache after each validation to free memory
+              try {
+                // Clear cookies and cache
+                const client = await page.target().createCDPSession();
+                await client.send("Network.clearBrowserCookies");
+                await client.send("Network.clearBrowserCache");
+                await client.detach();
+              } catch (clearError) {
+                // Ignore cache clearing errors
+              }
+
+              // Log progress every 10 fixtures
+              if (
+                (globalIndex + 1) % 10 === 0 ||
+                globalIndex === fixtures.length - 1
+              ) {
+                const validCount = results.filter((r) => r.valid).length;
+                const invalidCount = results.length - validCount;
+                logger.info(
+                  `[VALIDATION] Progress: ${globalIndex + 1}/${
+                    fixtures.length
+                  } fixtures validated (${validCount} valid, ${invalidCount} invalid)`
+                );
+              }
+            } catch (error) {
+              logger.error(
+                `Error validating fixture ${globalIndex + 1}/${
+                  fixtures.length
+                }: ${error.message}`
+              );
+              results.push({
+                valid: false,
+                status: "error",
+                fixtureId: fixture.id || fixture.attributes?.id,
+                gameID: fixture.gameID || fixture.attributes?.gameID,
+                url:
+                  fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard,
+                error: error.message,
+              });
+            }
+
+            // Small delay between validations (reduced from 500ms to 200ms)
+            if (i < batch.length - 1) {
+              await new Promise((resolve) => setTimeout(resolve, 200));
+            }
+          }
+
+          // Close page after batch to free memory
+          try {
+            if (page) {
+              await page.close();
+              page = null;
+            }
+          } catch (pageCloseError) {
+            logger.warn(`Error closing page: ${pageCloseError.message}`);
+          }
+        } catch (batchError) {
+          logger.error(
+            `Error processing batch ${batchIndex + 1}: ${batchError.message}`
+          );
+          // Mark all fixtures in this batch as errors
+          batch.forEach((fixture) => {
             results.push({
               valid: false,
-              status: "error",
+              status: "batch_error",
               fixtureId: fixture.id || fixture.attributes?.id,
               gameID: fixture.gameID || fixture.attributes?.gameID,
               url: fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard,
-              error: error.message,
+              error: batchError.message,
             });
+          });
+        } finally {
+          // Cleanup: Close browser after each batch to free memory
+          // This is the key optimization - restart browser between batches
+          logger.info(
+            `[VALIDATION] Cleaning up Puppeteer browser after batch ${
+              batchIndex + 1
+            }/${batches.length}`
+          );
+          if (this.puppeteerManager) {
+            try {
+              await this.puppeteerManager.dispose();
+              this.puppeteerManager = null;
+              this.browser = null;
+              logger.info(
+                `[VALIDATION] Puppeteer browser disposed after batch ${
+                  batchIndex + 1
+                }`
+              );
+            } catch (disposeError) {
+              logger.warn(`Error disposing browser: ${disposeError.message}`);
+            }
           }
 
-          // Small delay between validations to avoid overwhelming the server
-          if (i < fixtures.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
+          // Force garbage collection hint (if available)
+          if (global.gc) {
+            global.gc();
           }
-        }
-      } finally {
-        // Cleanup: dispose PuppeteerManager (like other services do)
-        logger.info("[VALIDATION] Cleaning up Puppeteer browser");
-        if (this.puppeteerManager) {
-          await this.puppeteerManager.dispose();
-          this.puppeteerManager = null;
-          this.browser = null;
-          logger.info("[VALIDATION] Puppeteer browser disposed successfully");
+
+          // Small delay between batches to allow memory cleanup
+          if (batchIndex < batches.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
       }
     } else {

@@ -29,6 +29,11 @@ class PuppeteerManager {
           "--no-default-browser-check",
           "--disable-background-networking",
           "--disable-background-timer-throttling",
+          "--disable-extensions",
+          "--disable-plugins",
+          "--disable-sync",
+          "--disable-images", // Disable images to save memory
+          "--blink-settings=imagesEnabled=false", // Disable images in Blink engine
         ],
       });
       logger.info("Puppeteer browser launched");
@@ -69,15 +74,48 @@ class PuppeteerManager {
   }
 
   async dispose() {
+    // Close all pages first to free memory
+    try {
+      const pages = await this.browser?.pages();
+      if (pages && pages.length > 0) {
+        await Promise.all(
+          pages.map(async (page) => {
+            try {
+              if (!page.isClosed()) {
+                await page.close();
+              }
+            } catch (pageError) {
+              logger.warn(`Error closing page: ${pageError.message}`);
+            }
+          })
+        );
+      }
+    } catch (pagesError) {
+      logger.warn(`Error getting pages: ${pagesError.message}`);
+    }
+
+    // Dispose of registered disposables
     for (const disposable of this.disposables) {
       try {
-        await disposable.dispose();
+        if (disposable && typeof disposable.dispose === "function") {
+          await disposable.dispose();
+        } else if (disposable && typeof disposable.close === "function") {
+          // If it's a page, close it
+          await disposable.close();
+        }
       } catch (error) {
-        logger.error("Error disposing resource", { error });
+        logger.warn("Error disposing resource", { error: error.message });
       }
     }
     this.disposables = [];
+
+    // Close browser
     await this.closeBrowser();
+
+    // Force garbage collection hint (if available)
+    if (global.gc) {
+      global.gc();
+    }
   }
 }
 
