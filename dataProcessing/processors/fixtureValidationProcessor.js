@@ -23,10 +23,9 @@ class FixtureValidationProcessor {
     });
     this.processingTracker = ProcessingTracker.getInstance();
     // Batch size for processing (browser cleanup between batches)
-    // MEMORY OPTIMIZATION: Smaller batches = more cleanup = less memory usage
-    // Reduced to 20 fixtures per batch for Heroku memory constraints
+    // MEMORY OPTIMIZATION: 20 fixtures per batch for Heroku memory constraints
     this.concurrencyLimit =
-      options.concurrencyLimit || (options.usePuppeteer !== false ? 20 : 5); // 20 fixtures per batch for Puppeteer (memory optimized)
+      options.concurrencyLimit || (options.usePuppeteer !== false ? 20 : 5); // 20 fixtures per batch (memory optimized)
     this.validationResults = [];
     // MEMORY OPTIMIZATION: Clear validation results after use to free memory
   }

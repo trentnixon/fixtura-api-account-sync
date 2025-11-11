@@ -616,14 +616,26 @@ class DataController {
           total: deleteResults.total,
         });
       } else {
-        logger.info(
-          "[CLEANUP] Deletion disabled - fixtures would be deleted but deletion is not enabled",
-          {
-            fixturesToDelete: comparisonResult.fixturesToDelete.length,
-            accountId: dataObj.ACCOUNT.ACCOUNTID,
-            deletionEnabled: deletionEnabled,
-          }
-        );
+        // No fixtures to delete OR deletion is disabled
+        if (comparisonResult.fixturesToDelete.length === 0) {
+          logger.info(
+            "[CLEANUP] No fixtures to delete - all fixtures are valid and up-to-date",
+            {
+              fixturesToDelete: 0,
+              accountId: dataObj.ACCOUNT.ACCOUNTID,
+              deletionEnabled: deletionEnabled,
+            }
+          );
+        } else {
+          logger.info(
+            "[CLEANUP] Deletion disabled - fixtures would be deleted but deletion is not enabled",
+            {
+              fixturesToDelete: comparisonResult.fixturesToDelete.length,
+              accountId: dataObj.ACCOUNT.ACCOUNTID,
+              deletionEnabled: deletionEnabled,
+            }
+          );
+        }
       }
 
       // Track cleanup results
