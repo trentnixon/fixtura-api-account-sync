@@ -213,7 +213,7 @@ class GameCRUD {
 
   /**
    * Fetches fixtures for a batch of team IDs (internal method)
-   * Only returns fixtures from the specified date onwards
+   * Only returns fixtures from the specified date onwards up to 14 days in the future
    * @param {Array<number>} teamIdsBatch - Batch of team database IDs
    * @param {string} endpoint - API endpoint
    * @param {Date} fromDate - Only fetch fixtures from this date onwards (default: today)
@@ -230,6 +230,12 @@ class GameCRUD {
       // Format date as ISO string for Strapi query
       const fromDateISO = fromDate.toISOString();
 
+      // Calculate end date (14 days from today)
+      const toDate = new Date(fromDate);
+      toDate.setDate(toDate.getDate() + 14); // Add 14 days
+      toDate.setHours(23, 59, 59, 999); // End of day
+      const toDateISO = toDate.toISOString();
+
       const query = qs.stringify(
         {
           filters: {
@@ -242,6 +248,7 @@ class GameCRUD {
               {
                 dayOne: {
                   $gte: fromDateISO,
+                  $lte: toDateISO, // Only fixtures within 14 days of today
                 },
               },
             ],
@@ -279,7 +286,7 @@ class GameCRUD {
 
   /**
    * Fetches all fixtures for given team IDs (batched to avoid URL length limits)
-   * Only returns fixtures from today onwards
+   * Only returns fixtures from today onwards up to 14 days in the future
    * @param {Array<number>} teamIds - Array of team database IDs
    * @param {number} batchSize - Number of team IDs per batch (default: 10)
    * @param {Date} fromDate - Only fetch fixtures from this date onwards (default: today)
@@ -307,13 +314,16 @@ class GameCRUD {
           fromDate
         );
         logger.info(
-          `Found ${fixtures.length} fixtures (from today onwards) for ${teamIds.length} teams`,
+          `Found ${fixtures.length} fixtures (from today onwards, up to 14 days) for ${teamIds.length} teams`,
           {
             method: "getFixturesForTeams",
             class: "GameCRUD",
             teamIdsCount: teamIds.length,
             fixtureCount: fixtures.length,
             fromDate: fromDate.toISOString(),
+            toDate: new Date(
+              fromDate.getTime() + 14 * 24 * 60 * 60 * 1000
+            ).toISOString(),
           }
         );
         return fixtures;
@@ -325,14 +335,22 @@ class GameCRUD {
         batches.push(teamIds.slice(i, i + batchSize));
       }
 
+      // Calculate date range for logging (14 days from fromDate)
+      const toDateForLogging = new Date(fromDate);
+      toDateForLogging.setDate(toDateForLogging.getDate() + 14);
+
       logger.info(
-        `Fetching fixtures for ${teamIds.length} teams in ${batches.length} batches (${batchSize} teams per batch)`,
+        `Fetching fixtures for ${teamIds.length} teams in ${
+          batches.length
+        } batches (${batchSize} teams per batch, date range: ${fromDate.toISOString()} to ${toDateForLogging.toISOString()})`,
         {
           method: "getFixturesForTeams",
           class: "GameCRUD",
           totalTeams: teamIds.length,
           batchCount: batches.length,
           batchSize: batchSize,
+          fromDate: fromDate.toISOString(),
+          toDate: toDateForLogging.toISOString(),
         }
       );
 
@@ -376,7 +394,7 @@ class GameCRUD {
       }
 
       logger.info(
-        `Found ${allFixtures.length} unique fixtures (from today onwards) for ${teamIds.length} teams`,
+        `Found ${allFixtures.length} unique fixtures (from today onwards, up to 14 days) for ${teamIds.length} teams`,
         {
           method: "getFixturesForTeams",
           class: "GameCRUD",
@@ -384,6 +402,7 @@ class GameCRUD {
           fixtureCount: allFixtures.length,
           batches: batches.length,
           fromDate: fromDate.toISOString(),
+          toDate: toDateForLogging.toISOString(),
         }
       );
 

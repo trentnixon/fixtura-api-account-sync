@@ -42,7 +42,7 @@ class FixtureValidationProcessor {
         accountType: this.dataObj.ACCOUNT.ACCOUNTTYPE,
       });
 
-      // Get team IDs and fetch fixtures (only from today onwards)
+      // Get team IDs and fetch fixtures (from today onwards, up to 14 days in the future)
       const teamIds = this.getTeamIds();
       if (!teamIds || teamIds.length === 0) {
         logger.warn("No team IDs found for fixture fetch");
@@ -56,15 +56,15 @@ class FixtureValidationProcessor {
         };
       }
 
-      // Fetch existing fixtures for teams (only from today onwards, with batching)
+      // Fetch existing fixtures for teams (from today onwards, up to 14 days, with batching)
       logger.info(
-        `Fetching existing fixtures (from today onwards) for ${teamIds.length} teams (batched)`
+        `Fetching existing fixtures (from today onwards, up to 14 days) for ${teamIds.length} teams (batched)`
       );
       const databaseFixtures = await this.gameCRUD.getFixturesForTeams(teamIds);
 
       if (!databaseFixtures || databaseFixtures.length === 0) {
         logger.info(
-          "No existing fixtures found in database (from today onwards)"
+          "No existing fixtures found in database (from today onwards, up to 14 days)"
         );
         this.processingTracker.itemFound("fixture-validation", 0);
         return {
@@ -77,7 +77,7 @@ class FixtureValidationProcessor {
       }
 
       logger.info(
-        `Found ${databaseFixtures.length} existing fixtures (from today onwards)`
+        `Found ${databaseFixtures.length} existing fixtures (from today onwards, up to 14 days)`
       );
       this.processingTracker.itemFound(
         "fixture-validation",
@@ -87,7 +87,7 @@ class FixtureValidationProcessor {
       // MEMORY OPTIMIZATION: Reduced logging - only log summary, not individual fixtures
       // Logging full fixture objects consumes significant memory
       logger.info(
-        `[VALIDATION] Found ${databaseFixtures.length} fixtures to validate (from today onwards)`
+        `[VALIDATION] Found ${databaseFixtures.length} fixtures to validate (from today onwards, up to 14 days)`
       );
 
       // ========================================
