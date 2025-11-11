@@ -19,8 +19,7 @@ class GetTeamsGameData {
   }
 
   async processGamesBatch(page, teamsBatch) {
-    console.log("Items in [teamsBatch]", teamsBatch.length);
-    //throw new Error("THROW ERROR IN processGamesBatch");
+    logger.info(`Processing games batch with ${teamsBatch.length} teams`);
     let storedGames = [];
     for (const team of teamsBatch) {
       try {
@@ -58,8 +57,9 @@ class GetTeamsGameData {
 
       fetchedGames = this.removeDuplicateGames(fetchedGames);
       if (fetchedGames.length === 0) {
-        console.log("No game data found");
-        //throw new Error("No game data found");
+        logger.warn("No game data found for team batch", {
+          teamsCount: this.teams?.length || 0,
+        });
       }
       this.processingTracker.itemFound("games", fetchedGames.length);
       return fetchedGames;

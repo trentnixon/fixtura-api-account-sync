@@ -27,7 +27,11 @@ class AssignCompetitions {
         logger.error(
           `Error processing competition ${competition.competitionName}:`
         );
-        console.log(error);
+        logger.error("Error in AssignCompetitions processCompetition", {
+          error: error.message,
+          stack: error.stack,
+          competition: competition?.name || competition?.id,
+        });
       }
     }
     return { success: true };

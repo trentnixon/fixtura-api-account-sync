@@ -38,7 +38,7 @@ class GameDataFetcher {
 
   async getGameDetails() {
     try {
-      console.log(`[getGameDetails] Fetching data from URL: ${this.href}`);
+      logger.debug(`Fetching game details from URL: ${this.href}`);
       const matchList = await this.page.$$(`xpath/${this.xpath}`); // Fetch match elements using XPath
       const gameData = [];
 
@@ -60,8 +60,7 @@ class GameDataFetcher {
   // Find a better way to grab this data!
   async extractMatchDetails(matchElement) {
     try {
-      console.log("[try to extractMatchDetails]");
-      // where is this div?
+      // Extract game divs from match element
       const gameDivs = await matchElement.$$("div.sc-1pr338c-0.cNVAcP");
       const gameDetails = [];
 
@@ -76,7 +75,6 @@ class GameDataFetcher {
         const dateObj = moment(date, "dddd, DD MMMM YYYY").toDate();
 
         const round = await scrapeRound(gameDiv);
-        console.log("[round]", round);
         const { type, time, ground, dateRangeObj, finalDaysPlay } =
           await scrapeTypeTimeGround(gameDiv);
         const status = await scrapeStatus(gameDiv);
@@ -104,8 +102,6 @@ class GameDataFetcher {
           teamAway: teams[1].name,
         });
       }
-
-      //console.log("[gameDetails]", gameDetails);
 
       return gameDetails;
     } catch (error) {

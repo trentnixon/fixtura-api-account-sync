@@ -33,7 +33,6 @@ class CompetitionProcessor {
         throw new Error("No competition data scraped.");
       }
 
-      //console.log("[scrapedCompetitions]", scrapedCompetitions);
       // Assign scraped data
       const assignCompetitionsObj = new AssignCompetitions(
         scrapedCompetitions,

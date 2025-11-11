@@ -7,6 +7,9 @@ This folder contains data processing services including CRUD operations, data se
 - `CRUDoperations.js`: CRUD operations for data entities
 - `dataService.js`: Data service layer functionality
 - `processingTracker.js`: Tracks data processing progress and status
+- `fixtureValidationService.js`: Validates fixture URLs for 404 errors
+- `fixtureComparisonService.js`: Compares scraped fixtures with database fixtures
+- `fixtureDeletionService.js`: Handles deletion of invalid or missing fixtures
 
 ## Relations
 

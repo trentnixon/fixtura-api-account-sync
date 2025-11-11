@@ -76,7 +76,6 @@ async function scrapeTypeTimeGround(matchElement) {
 
       // Extract time only if present
       else if (/^\d{1,2}:\d{2} [APM]{2}/.test(spanText)) {
-        //console.log("[spanText]", spanText);
         const match = spanText.match(/^\d{1,2}:\d{2} [APM]{2}/);
         time = match ? match[0] : null;
       }

@@ -184,8 +184,11 @@ class TeamFetcher {
     try {
       return await this.CRUDOperations.fetchClubIdByPlayHQId(playHQId);
     } catch (error) {
-      logger.error(`Error fetching club ID for PlayHQID: ${playHQId}`);
-      console.log(error);
+      logger.error(`Error fetching club ID for PlayHQID: ${playHQId}`, {
+        error: error.message,
+        stack: error.stack,
+        playHQId,
+      });
       return null;
     }
   }

@@ -15,16 +15,18 @@ class MemoryTracker {
         this.peakMemoryUsage = Math.max(this.peakMemoryUsage, totalMemoryMB);
 
         const memoryUsageInfo = Object.entries(memoryUsage)
-          .map(([key, value]) => `${key}: ${(value / 1024 / 1024).toFixed(2)} MB`)
+          .map(
+            ([key, value]) => `${key}: ${(value / 1024 / 1024).toFixed(2)} MB`
+          )
           .join(", ");
 
-        console.log(`Memory Usage: ${memoryUsageInfo}`);
+        logger.debug(`Memory Usage: ${memoryUsageInfo}`);
       }, this.interval);
     } catch (error) {
       logger.error("Error occurred in MemoryTracker.startTracking", {
         file: "memoryTracker.js",
         function: "startTracking",
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -39,7 +41,7 @@ class MemoryTracker {
       logger.error("Error occurred in MemoryTracker.stopTracking", {
         file: "memoryTracker.js",
         function: "stopTracking",
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -51,7 +53,7 @@ class MemoryTracker {
       logger.error("Error occurred in MemoryTracker.getPeakUsage", {
         file: "memoryTracker.js",
         function: "getPeakUsage",
-        error: error.message
+        error: error.message,
       });
       // Optionally return a default value or rethrow the error
       throw error;

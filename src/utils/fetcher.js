@@ -38,7 +38,100 @@ async function fetcher(PATH, method = "GET", body = {}, retryCount = null) {
     });
 
     clearTimeout(timeoutId);
-    const res = await response.json();
+
+    // Handle DELETE requests that may return 204 No Content or empty response
+    if (method === "DELETE") {
+      // For DELETE requests, handle empty responses gracefully
+      if (response.status === 204) {
+        // 204 No Content - successful deletion with no response body
+        logger.info(
+          `[DELETE] Data deleted successfully from ${PATH} (status: 204 No Content)`
+        );
+        return { deleted: true, status: 204 };
+      }
+
+      if (response.ok && response.status === 200) {
+        // 200 OK - check if there's a response body
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            const res = JSON.parse(responseText);
+            logger.info(
+              `[DELETE] Data deleted successfully from ${PATH} (status: 200)`
+            );
+            return res.data || { deleted: true, status: 200 };
+          }
+          logger.info(
+            `[DELETE] Data deleted successfully from ${PATH} (status: 200, empty response)`
+          );
+          return { deleted: true, status: 200 };
+        } catch (parseError) {
+          // Empty response is fine for DELETE
+          logger.info(
+            `[DELETE] Data deleted successfully from ${PATH} (status: 200)`
+          );
+          return { deleted: true, status: 200 };
+        }
+      }
+
+      // For error responses, try to parse JSON error message
+      if (!response.ok) {
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            try {
+              const res = JSON.parse(responseText);
+              const errorDetail = res.error
+                ? JSON.stringify(res.error)
+                : res.message || "Unknown error";
+              throw new Error(
+                `[fetcher.js] Failed to delete data from ${PATH}. Status: ${response.status}, Error: ${errorDetail}`
+              );
+            } catch (parseError) {
+              // Not JSON, use text as error message
+              throw new Error(
+                `[fetcher.js] Failed to delete data from ${PATH}. Status: ${response.status}, Error: ${responseText}`
+              );
+            }
+          } else {
+            // Empty response but error status
+            throw new Error(
+              `[fetcher.js] Failed to delete data from ${PATH}. Status: ${response.status}`
+            );
+          }
+        } catch (error) {
+          // Re-throw if it's already an Error, otherwise wrap it
+          if (error instanceof Error) {
+            throw error;
+          }
+          throw new Error(
+            `[fetcher.js] Failed to delete data from ${PATH}. Status: ${response.status}, Error: ${error}`
+          );
+        }
+      }
+    }
+
+    // For other methods (GET, POST, PUT), parse JSON response
+    const responseText = await response.text();
+    if (!responseText && (method === "POST" || method === "PUT")) {
+      // POST/PUT might have empty responses, but GET should have data
+      if (response.ok) {
+        logger.info(
+          `Data ${
+            method === "POST" ? "created" : "updated"
+          } successfully from ${PATH} (empty response)`
+        );
+        return { success: true, status: response.status };
+      }
+    }
+
+    if (!responseText) {
+      throw new Error(
+        `[fetcher.js] Empty response from ${PATH}. Status: ${response.status}`
+      );
+    }
+
+    const res = JSON.parse(responseText);
 
     if (!response.ok) {
       const errorDetail = res.error

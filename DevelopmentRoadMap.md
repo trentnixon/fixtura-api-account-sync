@@ -1,4 +1,10 @@
-# Development Roadmap – On-Demand Account Update Feature
+# Development Roadmap – ScrapeAccountSync Features
+
+This document tracks development progress for key features in the ScrapeAccountSync service.
+
+---
+
+# On-Demand Account Update Feature
 
 This feature adds a new queue option that allows triggering full account syncs on-demand. It performs the complete sync (competitions, teams, games, data collections) but does not hand off to another worker—it completes and notifies the CMS when done.
 
@@ -89,3 +95,188 @@ This feature adds a new queue option that allows triggering full account syncs o
 
 - Implemented via Strapi CMS endpoint
 - Admin FE button → Strapi → Redis Bull queue
+
+---
+
+# Fixture Deletion and 404 Error Handling
+
+This feature implements comprehensive handling for missing fixtures (404 errors) and automatic deletion of fixtures that no longer exist on the source website.
+
+---
+
+## ✅ Completed
+
+- [x] Roadmap created and feature scoped
+
+---
+
+## ⏳ To Do (easy → hard)
+
+### 1. 404 Error Handling in Fetcher and Scrapers (Easy)
+
+- [ ] Add 404-specific error handling in `src/utils/fetcher.js`
+  - Detect 404 status codes and return appropriate error codes
+  - Add option to handle 404s gracefully (return null vs throw error)
+  - Log 404 errors with context (endpoint, resource ID)
+- [ ] Update `GameCRUD.updateGame()` to handle 404 errors gracefully
+  - Catch 404 errors when updating non-existent games
+  - Log warning instead of throwing error
+  - Return appropriate status indicators
+- [ ] Update `api/Puppeteer/NoClubAssociations/getFixutreResults.js` to handle 404s
+  - Check HTTP status when navigating to scorecard URLs
+  - Handle 404 responses gracefully in `getFixtureScorecard()`
+  - Mark fixtures as unavailable if scorecard returns 404
+  - Log 404 errors with fixture ID and URL context
+- [ ] Update scrapers to detect 404 pages
+  - Add status code checking in `GameDataFetcher.fetchGameData()`
+  - Handle missing fixture pages gracefully
+  - Continue processing other fixtures when one returns 404
+
+### 2. Existing Fixture Validation (Moderate) - ✅ COMPLETED
+
+- [x] Add method to fetch existing fixtures from database in `GameCRUD.js`
+  - ✅ Created `getFixturesForTeams()` method with batching and date filtering
+  - ⏳ `getFixturesForCompetition()` - Not implemented (not needed)
+  - ⏳ `getFixturesForAccount()` - Not implemented (Strapi limitations)
+- [x] Create fixture URL validation service
+  - ✅ Created `FixtureValidationService.js` in `dataProcessing/services/`
+  - ✅ Implemented Puppeteer-based validation for accurate 404 detection
+  - ✅ Handles timeouts and network errors gracefully
+  - ✅ Returns validation result (valid, 404, error, timeout, http_403)
+- [x] Create batch URL validation processor
+  - ✅ Implemented `validateFixturesBatch()` with sequential processing
+  - ✅ Tracks validation results (valid, invalid, errors)
+  - ✅ Logs validation progress and results
+- [x] Create `FixtureValidationProcessor.js` in `dataProcessing/processors/`
+  - ✅ Fetches existing fixtures from database
+  - ✅ Validates all existing fixture URLs (test for 404s)
+  - ✅ Marks fixtures as invalid if URLs return 404
+  - ✅ Stores validation results for use in comparison phase
+- [x] Add new processing stage in `DataController.start()`
+  - ✅ Added `ProcessFixtureValidation` stage after data refresh
+  - ✅ Integrated validation into account sync sequence
+
+### 3. Comparison Logic for Missing Fixtures (Moderate) - ✅ COMPLETED
+
+- [x] Create fixture comparison service
+  - ✅ Created `FixtureComparisonService.js` in `dataProcessing/services/`
+  - ✅ Implemented `compareFixtures()` method that compares scraped vs database fixtures
+  - ✅ Uses validation results from Phase 2 to identify invalid fixtures
+  - ✅ Returns list of fixtures that:
+    - ✅ Exist in DB but not in scraped data (missing from source)
+    - ✅ Exist in DB but have invalid URLs (404 errors)
+  - ✅ Handles edge cases (empty scraped data, empty database data)
+- [x] Integrate comparison into processing flow
+  - ✅ After validation, runs comparison to identify fixtures to delete
+  - ✅ Combines validation results (404s) with comparison results (missing)
+  - ✅ Passes invalid and missing fixtures to deletion handler
+  - ✅ Logs comparison results (found, missing, invalid, new)
+
+### 4. Deletion Functionality (Hard) - ✅ COMPLETED
+
+- [x] Add deletion method to `GameCRUD.js`
+  - ✅ Created `deleteGame()` method that deletes fixture by ID (hard delete)
+  - ✅ Created `softDeleteGame()` method that marks fixture as deleted (soft delete)
+  - ✅ Supports hard delete and soft delete
+  - ✅ Handles deletion errors gracefully
+  - ✅ Logs deletion operations with fixture details
+- [x] Create fixture deletion service
+  - ✅ Created `FixtureDeletionService.js` in `dataProcessing/services/`
+  - ✅ Implemented batch deletion functionality (batches of 10)
+  - ✅ Added configuration for hard vs soft delete
+  - ✅ Tracks deleted fixtures in processing tracker
+- [x] Add deletion configuration
+  - ✅ Added config option to enable/disable automatic deletion (`deletionEnabled`)
+  - ✅ Added config for hard vs soft delete preference (`deleteMode`)
+  - ✅ Added config for deletion batch size (`batchSize: 10`)
+  - ✅ Configuration documented in code comments
+  - ✅ Currently enabled with soft delete mode
+
+### 5. Integration and Testing (Complex) - ⏳ PARTIALLY COMPLETED
+
+- [x] Integrate validation and deletion into `DataController.start()`
+  - ✅ Added new processing stage: `ProcessFixtureValidation` (after data refresh)
+  - ✅ Updated `DataController` to include validation step in sequence
+  - ✅ Added fixture comparison step after validation (`ProcessFixtureCleanup`)
+  - ✅ Added deletion step for invalid and missing fixtures
+  - ✅ Added error handling for validation and deletion failures
+  - ✅ Updated processing tracker with validation and deletion metrics
+  - ⏳ ProcessGames currently commented out (needs re-enabling for full flow)
+- [x] Add comprehensive logging
+  - ✅ Added log prefix system ([VALIDATION], [CLEANUP], [STAGE], etc.)
+  - ✅ Logs 404 errors with full context (fixture ID, URL, team, account)
+  - ✅ Logs validation results (valid, invalid, errors, timeouts)
+  - ✅ Logs comparison results (fixtures found, missing, invalid, new)
+  - ✅ Logs deletion operations (which fixtures deleted, why - 404 or missing)
+  - ✅ Added metrics to processing tracker (validated count, invalid count, deleted count)
+- [ ] Create unit tests
+  - ⏳ Test 404 error handling in fetcher
+  - ⏳ Test URL validation logic (404 detection, timeout handling)
+  - ⏳ Test fixture comparison logic
+  - ⏳ Test deletion functionality
+  - ⏳ Test integration in processors
+- [ ] Create integration tests
+  - ⏳ Test full flow: scrape → validate → compare → delete (needs ProcessGames enabled)
+  - ✅ Tested with fixtures that return 404 (existing DB fixtures) - WORKING
+  - ⏳ Test with fixtures removed from source (not in scraped data) - Needs ProcessGames enabled
+  - ⏳ Test with fixtures that have changed URLs
+  - ✅ Tested validation batch processing - WORKING
+  - ✅ Tested error handling and recovery - WORKING
+- [ ] Update documentation
+  - ⏳ Update `readMe.md` files in relevant folders
+  - ✅ Documented deletion functionality (code comments, NEXT_STEPS.md)
+  - ✅ Documented configuration options (code comments)
+  - ⏳ Document 404 error handling behavior in readMe files
+
+---
+
+## 💡 Recommendations
+
+- **Validation as Separate Step**: Make fixture validation a distinct step in the sync process. This allows us to identify stale URLs before comparison, making the deletion logic more accurate.
+
+- **Soft Delete First**: Start with soft delete implementation to allow data recovery if needed. Hard delete can be added later as an option.
+
+- **Configuration Flags**: Add feature flags to enable/disable validation and deletion per account or globally, allowing gradual rollout and easy rollback.
+
+- **404 Retry Logic**: Consider implementing retry logic for 404 errors, as they might be temporary (network issues, server downtime). Only delete after multiple consecutive 404s across multiple syncs.
+
+- **Batch Validation**: Process fixture URL validation in batches with concurrency limits to avoid overwhelming the source website and manage memory usage.
+
+- **Audit Trail**: Maintain detailed logs of all validation and deletion operations for audit purposes and data recovery if needed.
+
+- **Performance Optimization**: For large datasets, consider batching validation, comparison, and deletion operations to avoid memory issues and API rate limits.
+
+- **Testing Strategy**: Test extensively with real-world scenarios, including fixtures that are temporarily unavailable vs permanently removed, and fixtures with changed URLs.
+
+---
+
+## 📋 Questions to Resolve
+
+1. **Soft Delete vs Hard Delete?**
+
+   - Should we implement soft delete (mark as deleted) or hard delete (actual removal)?
+   - Does Strapi schema support soft delete fields (deletedAt, isDeleted)?
+   - Recommendation: Start with soft delete for safety
+
+2. **404 Retry Strategy?**
+
+   - How many 404 attempts before considering fixture deleted?
+   - Should we retry 404s on next sync or mark immediately?
+   - Recommendation: Mark after 2-3 consecutive 404s
+
+3. **Deletion Scope?**
+
+   - Should deletion be per-team, per-competition, or per-account?
+   - Should we validate all fixtures or only recent ones?
+   - Recommendation: Per-team scope for validation and deletion accuracy
+
+4. **Validation Timing?**
+
+   - Should validation happen during every sync or on a schedule?
+   - Should we validate all fixtures or only ones that haven't been validated recently?
+   - Recommendation: Validate during every sync, but consider caching validation results
+
+5. **Configuration Management?**
+   - Should deletion be enabled by default or opt-in?
+   - Should it be configurable per account or globally?
+   - Recommendation: Opt-in with per-account configuration

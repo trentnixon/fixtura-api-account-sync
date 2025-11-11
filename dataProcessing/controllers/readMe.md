@@ -5,8 +5,14 @@ This folder contains data processing controllers that manage the overall data pr
 ## Files
 
 - `dataController.js`: Main data processing controller
-  - `start()`: Full processing pipeline (competitions, teams, games)
+  - `start()`: Full processing pipeline (competitions, teams, games, fixture validation, fixture cleanup)
   - `updateAccountOnly()`: On-demand account update only (fetches data, no processing)
+  - `ProcessCompetitions()`: Processes and assigns competitions
+  - `ProcessTeams()`: Processes and assigns teams
+  - `ProcessGames()`: Processes and assigns games/fixtures
+  - `ProcessFixtureValidation()`: Validates existing database fixtures for URL validity (404 detection)
+  - `ProcessFixtureCleanup()`: Compares scraped vs database fixtures and deletes invalid/missing fixtures
+  - `ProcessTracking()`: Updates processing tracking data
 
 ## Relations
 

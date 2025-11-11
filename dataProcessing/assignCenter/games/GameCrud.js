@@ -16,8 +16,6 @@ class GameCRUD {
 
   getSportType() {
     // Retrieve the sport type from dataObj and return the corresponding endpoint
-    //console.log("this.dataObj.DETAILS")
-    //console.log(this.dataObj.DETAILS.Sport)
     const sportType = this.dataObj.DETAILS.Sport;
     return this.endpoints[sportType] || "game-meta-datas"; // Default to 'game-meta-datas' if not specified
   }
@@ -210,6 +208,355 @@ class GameCRUD {
     } catch (error) {
       logger.error(`Error checking teamIDs ${teamIDs}:`, error);
       return [false, false];
+    }
+  }
+
+  /**
+   * Fetches fixtures for a batch of team IDs (internal method)
+   * Only returns fixtures from the specified date onwards
+   * @param {Array<number>} teamIdsBatch - Batch of team database IDs
+   * @param {string} endpoint - API endpoint
+   * @param {Date} fromDate - Only fetch fixtures from this date onwards (default: today)
+   * @returns {Promise<Array>} Array of fixture objects
+   */
+  async getFixturesForTeamsBatch(teamIdsBatch, endpoint, fromDate = null) {
+    try {
+      // Set fromDate to today at midnight if not provided
+      if (!fromDate) {
+        fromDate = new Date();
+        fromDate.setHours(0, 0, 0, 0); // Start of today
+      }
+
+      // Format date as ISO string for Strapi query
+      const fromDateISO = fromDate.toISOString();
+
+      const query = qs.stringify(
+        {
+          filters: {
+            $and: [
+              {
+                teams: {
+                  id: { $in: teamIdsBatch },
+                },
+              },
+              {
+                dayOne: {
+                  $gte: fromDateISO,
+                },
+              },
+            ],
+          },
+          populate: ["teams"],
+        },
+        { encodeValuesOnly: true }
+      );
+
+      const response = await fetcher(`${endpoint}?${query}`);
+
+      if (!response) {
+        logger.warn(
+          `Fetcher returned null for ${endpoint} fixtures query batch`,
+          {
+            method: "getFixturesForTeamsBatch",
+            class: "GameCRUD",
+            teamIdsCount: teamIdsBatch.length,
+          }
+        );
+        return [];
+      }
+
+      return Array.isArray(response) ? response : response.data || [];
+    } catch (error) {
+      logger.error(`Error fetching fixtures for team batch: ${error}`, {
+        method: "getFixturesForTeamsBatch",
+        class: "GameCRUD",
+        teamIdsCount: teamIdsBatch.length,
+      });
+      // Don't throw - return empty array to allow other batches to continue
+      return [];
+    }
+  }
+
+  /**
+   * Fetches all fixtures for given team IDs (batched to avoid URL length limits)
+   * Only returns fixtures from today onwards
+   * @param {Array<number>} teamIds - Array of team database IDs
+   * @param {number} batchSize - Number of team IDs per batch (default: 10)
+   * @param {Date} fromDate - Only fetch fixtures from this date onwards (default: today)
+   * @returns {Promise<Array>} Array of fixture objects (deduplicated)
+   */
+  async getFixturesForTeams(teamIds, batchSize = 10, fromDate = null) {
+    const endpoint = this.getSportType();
+    if (!teamIds || teamIds.length === 0) {
+      logger.warn("No team IDs provided for getFixturesForTeams");
+      return [];
+    }
+
+    // Set fromDate to today at midnight if not provided
+    if (!fromDate) {
+      fromDate = new Date();
+      fromDate.setHours(0, 0, 0, 0); // Start of today
+    }
+
+    try {
+      // If we have a small number of teams, fetch directly without batching
+      if (teamIds.length <= batchSize) {
+        const fixtures = await this.getFixturesForTeamsBatch(
+          teamIds,
+          endpoint,
+          fromDate
+        );
+        logger.info(
+          `Found ${fixtures.length} fixtures (from today onwards) for ${teamIds.length} teams`,
+          {
+            method: "getFixturesForTeams",
+            class: "GameCRUD",
+            teamIdsCount: teamIds.length,
+            fixtureCount: fixtures.length,
+            fromDate: fromDate.toISOString(),
+          }
+        );
+        return fixtures;
+      }
+
+      // Batch the team IDs to avoid URL length limits
+      const batches = [];
+      for (let i = 0; i < teamIds.length; i += batchSize) {
+        batches.push(teamIds.slice(i, i + batchSize));
+      }
+
+      logger.info(
+        `Fetching fixtures for ${teamIds.length} teams in ${batches.length} batches (${batchSize} teams per batch)`,
+        {
+          method: "getFixturesForTeams",
+          class: "GameCRUD",
+          totalTeams: teamIds.length,
+          batchCount: batches.length,
+          batchSize: batchSize,
+        }
+      );
+
+      // Fetch fixtures for each batch
+      const allFixtures = [];
+      const fixtureMap = new Map(); // Use Map to deduplicate by fixture ID
+
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        logger.info(
+          `Fetching batch ${batchIndex + 1}/${batches.length} (${
+            batch.length
+          } teams)`
+        );
+
+        const batchFixtures = await this.getFixturesForTeamsBatch(
+          batch,
+          endpoint,
+          fromDate
+        );
+
+        // Deduplicate fixtures by their ID
+        batchFixtures.forEach((fixture) => {
+          const fixtureId = fixture.id || fixture.attributes?.id;
+          if (fixtureId && !fixtureMap.has(fixtureId)) {
+            fixtureMap.set(fixtureId, fixture);
+            allFixtures.push(fixture);
+          }
+        });
+
+        logger.info(
+          `Batch ${batchIndex + 1} complete: ${
+            batchFixtures.length
+          } fixtures (${allFixtures.length} total unique)`
+        );
+
+        // Small delay between batches to avoid overwhelming the API
+        if (batchIndex < batches.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+
+      logger.info(
+        `Found ${allFixtures.length} unique fixtures (from today onwards) for ${teamIds.length} teams`,
+        {
+          method: "getFixturesForTeams",
+          class: "GameCRUD",
+          teamIdsCount: teamIds.length,
+          fixtureCount: allFixtures.length,
+          batches: batches.length,
+          fromDate: fromDate.toISOString(),
+        }
+      );
+
+      return allFixtures;
+    } catch (error) {
+      logger.error(`Error fetching fixtures for teams: ${error}`, {
+        method: "getFixturesForTeams",
+        class: "GameCRUD",
+        teamIdsCount: teamIds?.length || 0,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches all fixtures for an account
+   * @param {number} accountId - Account database ID
+   * @returns {Promise<Array>} Array of fixture objects
+   */
+  async getFixturesForAccount(accountId) {
+    const endpoint = this.getSportType();
+    if (!accountId) {
+      logger.warn("No account ID provided for getFixturesForAccount");
+      return [];
+    }
+
+    try {
+      // Note: This assumes fixtures are linked to teams, which are linked to accounts
+      // You may need to adjust this query based on your actual data structure
+      const query = qs.stringify(
+        {
+          filters: {
+            teams: {
+              club: {
+                account: { id: { $eq: accountId } },
+              },
+            },
+          },
+          populate: ["teams"],
+        },
+        { encodeValuesOnly: true }
+      );
+
+      const response = await fetcher(`${endpoint}?${query}`);
+
+      if (!response) {
+        logger.warn(
+          `Fetcher returned null for ${endpoint} fixtures query for account ${accountId}`,
+          {
+            method: "getFixturesForAccount",
+            class: "GameCRUD",
+            accountId: accountId,
+          }
+        );
+        return [];
+      }
+
+      const fixtures = Array.isArray(response) ? response : response.data || [];
+      logger.info(
+        `Found ${fixtures.length} fixtures for account ${accountId}`,
+        {
+          method: "getFixturesForAccount",
+          class: "GameCRUD",
+          accountId: accountId,
+          fixtureCount: fixtures.length,
+        }
+      );
+
+      return fixtures;
+    } catch (error) {
+      logger.error(`Error fetching fixtures for account: ${error}`, {
+        method: "getFixturesForAccount",
+        class: "GameCRUD",
+        accountId: accountId,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Deletes a fixture (hard delete)
+   * @param {number} fixtureId - Database ID of the fixture to delete
+   * @returns {Promise<Object>} Deletion result
+   */
+  async deleteGame(fixtureId) {
+    const endpoint = this.getSportType();
+    try {
+      logger.warn(
+        `[HARD DELETE] Attempting to PERMANENTLY delete fixture ${fixtureId} from ${endpoint} - This action cannot be undone`,
+        {
+          method: "deleteGame",
+          class: "GameCRUD",
+          fixtureId: fixtureId,
+          endpoint: endpoint,
+          mode: "hard",
+          warning: "PERMANENT DELETION - DATA CANNOT BE RECOVERED",
+        }
+      );
+
+      const result = await fetcher(`${endpoint}/${fixtureId}`, "DELETE");
+      logger.info(
+        `[HARD DELETE] ✅ Fixture PERMANENTLY deleted from ${endpoint}: ${fixtureId}`,
+        {
+          method: "deleteGame",
+          class: "GameCRUD",
+          fixtureId: fixtureId,
+          endpoint: endpoint,
+          result: result,
+        }
+      );
+      return { deleted: true, fixtureId, mode: "hard", permanent: true };
+    } catch (error) {
+      logger.error(
+        `[HARD DELETE] ❌ Error deleting fixture from ${endpoint}: ${error}`,
+        {
+          method: "deleteGame",
+          class: "GameCRUD",
+          fixtureId: fixtureId,
+          endpoint: endpoint,
+          error: error.message,
+          stack: error.stack,
+        }
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Soft deletes a fixture (marks as deleted)
+   * @param {number} fixtureId - Database ID of the fixture to soft delete
+   * @param {string} reason - Reason for deletion
+   * @returns {Promise<Object>} Deletion result
+   */
+  async softDeleteGame(fixtureId, reason) {
+    const endpoint = this.getSportType();
+    try {
+      logger.info(
+        `Attempting to soft delete fixture ${fixtureId} from ${endpoint}`,
+        {
+          method: "softDeleteGame",
+          class: "GameCRUD",
+          fixtureId: fixtureId,
+          reason: reason,
+          endpoint: endpoint,
+        }
+      );
+
+      // Update fixture with deleted flag and reason
+      // Note: This assumes your Strapi schema has isDeleted and deletedAt fields
+      // Adjust the fields based on your actual schema
+      await fetcher(`${endpoint}/${fixtureId}`, "PUT", {
+        data: {
+          isDeleted: true,
+          deletedAt: new Date().toISOString(),
+          deletionReason: reason,
+        },
+      });
+
+      logger.info(`Fixture soft deleted from ${endpoint}: ${fixtureId}`, {
+        method: "softDeleteGame",
+        class: "GameCRUD",
+        fixtureId: fixtureId,
+        reason: reason,
+      });
+      return { deleted: true, fixtureId, mode: "soft" };
+    } catch (error) {
+      logger.error(`Error soft deleting fixture from ${endpoint}: ${error}`, {
+        method: "softDeleteGame",
+        class: "GameCRUD",
+        fixtureId: fixtureId,
+        endpoint: endpoint,
+      });
+      throw error;
     }
   }
   // Implement any additional CRUD methods needed for game operations

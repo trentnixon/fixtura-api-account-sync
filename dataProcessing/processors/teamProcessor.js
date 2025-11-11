@@ -23,7 +23,11 @@ class TeamProcessor {
       const grades = this.dataObj.Grades;
       let gradeCount = 1;
       for (const grade of grades) {
-        console.log("Processing ", gradeCount, " of ", grades.length);
+        logger.info(`Processing grade ${gradeCount} of ${grades.length}`, {
+          gradeCount,
+          totalGrades: grades.length,
+          gradeName: grade?.name || grade?.id,
+        });
         // Initialize GetTeams with a single grade
         const getTeamsObj = new GetTeamsFromLadder({
           ...this.dataObj,
@@ -69,8 +73,6 @@ class TeamProcessor {
         this.processingTracker.errorDetected("teams");
         //throw new Error("No team data scraped.");
       }
-
-      //console.log("[scrapedTeams]", scrapedTeams);
       // Assign scraped data
       const assignTeamsObj = new AssignTeamsToCompsAndGrades(
         scrapedTeams,

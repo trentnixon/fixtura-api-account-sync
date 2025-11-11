@@ -40,10 +40,11 @@ class AssignGameData {
           logger.error(`Team IDs not found for game ${game.gameID}`);
         }
       } catch (error) {
-        logger.error(
-          `Error in AssignGameData processBatch method for game ${game.gameID}:`
-        );
-        console.log(error);
+        logger.error("Error in AssignGameData processBatch", {
+          error: error.message,
+          stack: error.stack,
+          gameID: game?.gameID,
+        });
         this.processingTracker.errorDetected("games");
       }
     }
@@ -83,8 +84,11 @@ class AssignGameData {
         await this.gameCRUD.createGame(game);
       }
     } catch (error) {
-      logger.error(`Error processing individual game ${game.gameID}:`);
-      console.log(error);
+      logger.error(`Error processing individual game ${game.gameID}`, {
+        error: error.message,
+        stack: error.stack,
+        gameID: game.gameID,
+      });
       throw error;
     }
   }

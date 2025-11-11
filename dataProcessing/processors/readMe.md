@@ -7,6 +7,7 @@ This folder contains specialized data processors for competitions, game data, an
 - `competitionProcessor.js`: Processes competition data
 - `gameDataProcessor.js`: Processes game and fixture data
 - `teamProcessor.js`: Processes team data
+- `fixtureValidationProcessor.js`: Validates existing database fixtures for URL validity
 
 ## Relations
 

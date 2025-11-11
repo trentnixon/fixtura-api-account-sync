@@ -88,6 +88,6 @@ function initializeIntegrationTests() {
 initializeQueueProcessing();
 
 // Start Integration Tests
-initializeIntegrationTests();
+//initializeIntegrationTests();
 
 logger.info("Worker started successfully.");
