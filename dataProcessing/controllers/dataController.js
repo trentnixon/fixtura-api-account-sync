@@ -432,14 +432,20 @@ class DataController {
         }
       );
 
-      // Store validation results and fixtures
+      // Store validation results and fixtures (minimal data only)
       this.fixtureValidationResults = validationResult.results || [];
-      this.fetchedFixtures = validationResult.fixtures || [];
-      logger.info("[VALIDATION] Stored validation results and fixtures", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-        validationResultsCount: this.fixtureValidationResults.length,
-        fetchedFixturesCount: this.fetchedFixtures.length,
-      });
+      this.fetchedFixtures = validationResult.fixtures || []; // Now contains only { id, gameID }
+      logger.info(
+        "[VALIDATION] Stored validation results and fixtures (minimal data)",
+        {
+          accountId: dataObj.ACCOUNT.ACCOUNTID,
+          validationResultsCount: this.fixtureValidationResults.length,
+          fetchedFixturesCount: this.fetchedFixtures.length,
+        }
+      );
+
+      // MEMORY OPTIMIZATION: Clear validation results after cleanup if not needed
+      // The cleanup phase will use these, then we can clear them
 
       logger.info("[VALIDATION] Fixture validation complete", {
         fixturesFound: this.fetchedFixtures.length,
@@ -638,6 +644,15 @@ class DataController {
         fixturesToDelete: comparisonResult.fixturesToDelete.length,
         fixturesToKeep: comparisonResult.fixturesToKeep.length,
       });
+
+      // MEMORY OPTIMIZATION: Clear fixture data after cleanup to free memory
+      // These arrays can be large (289+ fixtures), so clear them after use
+      this.fixtureValidationResults = [];
+      this.fetchedFixtures = [];
+      // Don't clear scrapedFixtures here - it might be used by other stages
+      logger.debug(
+        "[CLEANUP] Cleared fixture validation data from memory after cleanup"
+      );
     } catch (error) {
       logger.error("[CLEANUP] Error in ProcessFixtureCleanup:", error);
 

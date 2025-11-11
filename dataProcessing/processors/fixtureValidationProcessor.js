@@ -11,12 +11,15 @@ class FixtureValidationProcessor {
   constructor(dataObj, options = {}) {
     this.dataObj = dataObj;
     this.gameCRUD = new GameCRUD(dataObj);
-    // Use Puppeteer for accurate validation (default: true)
-    // MEMORY OPTIMIZATION: Process in smaller batches (25 fixtures per batch)
-    // Browser is closed and restarted between batches to free memory
+    // PlayHQ blocks HTTP requests (403), so we MUST use Puppeteer for all validations
+    // MEMORY OPTIMIZATION: Process in smaller batches, browser closed between batches
     this.validationService = new FixtureValidationService({
-      usePuppeteer: options.usePuppeteer !== false, // Default to true
+      usePuppeteer: options.usePuppeteer !== false, // Default to true (required for PlayHQ)
       timeout: options.timeout || 15000, // Reduced to 15 seconds for faster validation and less memory
+      skipHttpValidation:
+        options.skipHttpValidation !== undefined
+          ? options.skipHttpValidation
+          : true, // Default: true (skip HTTP for PlayHQ, we know it blocks HTTP)
     });
     this.processingTracker = ProcessingTracker.getInstance();
     // Batch size for processing (browser cleanup between batches)
@@ -25,6 +28,7 @@ class FixtureValidationProcessor {
     this.concurrencyLimit =
       options.concurrencyLimit || (options.usePuppeteer !== false ? 20 : 5); // 20 fixtures per batch for Puppeteer (memory optimized)
     this.validationResults = [];
+    // MEMORY OPTIMIZATION: Clear validation results after use to free memory
   }
 
   /**
@@ -80,89 +84,20 @@ class FixtureValidationProcessor {
         databaseFixtures.length
       );
 
-      // Log first fixture structure to understand the format
-      if (databaseFixtures.length > 0) {
-        try {
-          const firstFixtureStr = JSON.stringify(databaseFixtures[0], null, 2);
-          logger.info(
-            `Sample fixture structure (first 1000 chars): ${firstFixtureStr.substring(
-              0,
-              1000
-            )}`
-          );
-        } catch (error) {
-          logger.info(
-            `Sample fixture structure (could not stringify): ${Object.keys(
-              databaseFixtures[0]
-            ).join(", ")}`
-          );
-        }
-      }
-
-      // Log each fixture with key details
-      logger.info("=== FIXTURES FOUND ===");
-      databaseFixtures.forEach((fixture, index) => {
-        // Handle Strapi v4 structure: id at root, other fields in attributes
-        // Also handle direct structure (if attributes don't exist)
-        const fixtureId = fixture.id;
-        const attributes = fixture.attributes || fixture;
-
-        const gameID = attributes.gameID || fixture.gameID;
-        const urlToScoreCard =
-          attributes.urlToScoreCard || fixture.urlToScoreCard;
-        const dayOne = attributes.dayOne || fixture.dayOne;
-        const round = attributes.round || fixture.round;
-        const status = attributes.status || fixture.status;
-        const teams =
-          attributes.teams?.data ||
-          attributes.teams ||
-          fixture.teams?.data ||
-          fixture.teams;
-
-        // Extract team names if available
-        let teamNames = "N/A";
-        if (teams && Array.isArray(teams)) {
-          teamNames = teams
-            .map((team) => {
-              const teamData = team.attributes || team;
-              return teamData.teamName || teamData.name || teamData.id;
-            })
-            .join(" vs ");
-        }
-
-        // Format URL for display
-        const urlDisplay = urlToScoreCard
-          ? urlToScoreCard.length > 60
-            ? urlToScoreCard.substring(0, 60) + "..."
-            : urlToScoreCard
-          : "N/A";
-
-        // Format dayOne for display
-        const dayOneDisplay = dayOne
-          ? typeof dayOne === "string"
-            ? dayOne
-            : new Date(dayOne).toISOString().split("T")[0]
-          : "N/A";
-
-        // Build log message with all data
-        logger.info(
-          `Fixture ${index + 1}/${databaseFixtures.length} - ID: ${
-            fixtureId || "N/A"
-          }, GameID: ${gameID || "N/A"}, Date: ${dayOneDisplay}, Round: ${
-            round || "N/A"
-          }, Status: ${
-            status || "N/A"
-          }, Teams: ${teamNames}, URL: ${urlDisplay}`
-        );
-      });
-      logger.info("=== END OF FIXTURES ===");
+      // MEMORY OPTIMIZATION: Reduced logging - only log summary, not individual fixtures
+      // Logging full fixture objects consumes significant memory
+      logger.info(
+        `[VALIDATION] Found ${databaseFixtures.length} fixtures to validate (from today onwards)`
+      );
 
       // ========================================
       // STEP 2: VALIDATE FIXTURE URLs
       // ========================================
       logger.info("Starting URL validation for fixtures...");
 
-      // Prepare fixtures for validation
+      // Prepare fixtures for validation - ONLY store minimal data to reduce memory
+      // MEMORY OPTIMIZATION: Don't store full fixture objects, only essential fields
+      // Extract minimal data immediately to allow garbage collection of full objects
       const fixturesToValidate = databaseFixtures.map((fixture) => {
         const fixtureId = fixture.id;
         const attributes = fixture.attributes || fixture;
@@ -170,13 +105,17 @@ class FixtureValidationProcessor {
           id: fixtureId,
           gameID: attributes.gameID || fixture.gameID,
           urlToScoreCard: attributes.urlToScoreCard || fixture.urlToScoreCard,
-          attributes: attributes, // Keep full attributes for reference
+          // REMOVED: attributes - saves significant memory (5-10KB per fixture)
         };
       });
 
+      // Note: databaseFixtures will be garbage collected after this function returns
+      // We've extracted all needed data into fixturesToValidate (minimal data only)
+
       // Validate fixtures in batches
+      // PlayHQ blocks HTTP requests, so we use Puppeteer directly for all validations
       logger.info(
-        `Validating ${fixturesToValidate.length} fixture URLs using Puppeteer (concurrency: ${this.concurrencyLimit}, timeout: ${this.validationService.timeout}ms)`
+        `Validating ${fixturesToValidate.length} fixture URLs using Puppeteer (PlayHQ blocks HTTP requests, concurrency: ${this.concurrencyLimit}, timeout: ${this.validationService.timeout}ms)`
       );
       const validationResults =
         await this.validationService.validateFixturesBatch(
@@ -195,59 +134,36 @@ class FixtureValidationProcessor {
       this.processingTracker.itemUpdated("fixture-validation", validCount);
       this.processingTracker.itemDeleted("fixture-validation", invalidCount);
 
-      // Log validation results
-      logger.info("[VALIDATION] === VALIDATION RESULTS ===");
-      validationResults.forEach((result, index) => {
-        const statusEmoji = result.valid ? "✅" : "❌";
-        const urlDisplay = result.url
-          ? result.url.length > 80
-            ? result.url.substring(0, 80) + "..."
-            : result.url
-          : "N/A";
-
-        const httpStatusDisplay = result.httpStatus
-          ? `, HTTP: ${result.httpStatus}`
-          : "";
-        const finalUrlDisplay =
-          result.finalUrl && result.finalUrl !== result.url
-            ? `, Final URL: ${result.finalUrl.substring(0, 60)}...`
-            : "";
-
+      // MEMORY OPTIMIZATION: Only log summary, not individual results (reduces memory usage)
+      // Log validation results (only invalid ones to reduce memory)
+      const invalidResults = validationResults.filter((r) => !r.valid);
+      if (invalidResults.length > 0) {
         logger.info(
-          `[VALIDATION] ${statusEmoji} Fixture ${index + 1}/${
-            validationResults.length
-          } - GameID: ${result.gameID || "N/A"}, Status: ${
-            result.status
-          }, Valid: ${
-            result.valid
-          }${httpStatusDisplay}${finalUrlDisplay}, URL: ${urlDisplay}${
-            result.error ? `, Error: ${result.error}` : ""
-          }`
+          `[VALIDATION] Found ${invalidResults.length} invalid fixtures (out of ${validationResults.length} total)`
         );
-      });
-      logger.info("[VALIDATION] === END OF VALIDATION RESULTS ===");
-
-      // Log summary of invalid fixtures
-      const invalidFixtures = validationResults.filter((r) => !r.valid);
-      if (invalidFixtures.length > 0) {
-        logger.info(
-          `[VALIDATION] === INVALID FIXTURES SUMMARY (${invalidFixtures.length} total) ===`
-        );
-        invalidFixtures.forEach((result, index) => {
+        // Only log first 10 invalid fixtures to reduce memory
+        invalidResults.slice(0, 10).forEach((result, index) => {
           logger.info(
-            `[VALIDATION] ❌ Invalid Fixture ${index + 1}/${
-              invalidFixtures.length
+            `[VALIDATION] ❌ Invalid ${index + 1}/${
+              invalidResults.length
             } - GameID: ${result.gameID || "N/A"}, Status: ${
               result.status
-            }, URL: ${result.url || "N/A"}`
+            }, URL: ${result.url ? result.url.substring(0, 60) + "..." : "N/A"}`
           );
         });
-        logger.info("[VALIDATION] === END OF INVALID FIXTURES SUMMARY ===");
+        if (invalidResults.length > 10) {
+          logger.info(
+            `[VALIDATION] ... and ${
+              invalidResults.length - 10
+            } more invalid fixtures (not logged to save memory)`
+          );
+        }
       }
 
       // Summary log
+      const totalFixtures = fixturesToValidate.length;
       logger.info("[VALIDATION] Fixture validation complete", {
-        total: databaseFixtures.length,
+        total: totalFixtures,
         validated: validationResults.length,
         valid: validCount,
         invalid: invalidCount,
@@ -255,19 +171,30 @@ class FixtureValidationProcessor {
         teamIdsCount: teamIds.length,
       });
 
-      logger.info("[VALIDATION] Returning validation results", {
+      // MEMORY OPTIMIZATION: Return only minimal data
+      // Don't return full fixture objects - only validation results with IDs
+      // The comparison service only needs ID and gameID, not full fixture objects
+      const minimalFixtures = fixturesToValidate.map((f) => ({
+        id: f.id,
+        gameID: f.gameID,
+      }));
+
+      // Clear fixturesToValidate to free memory
+      fixturesToValidate.length = 0;
+
+      logger.info("[VALIDATION] Returning validation results (minimal data)", {
         accountId: this.dataObj.ACCOUNT.ACCOUNTID,
         resultsCount: validationResults.length,
-        fixturesCount: databaseFixtures.length,
+        fixturesCount: minimalFixtures.length,
       });
 
-      // Return validation results
+      // Return validation results with minimal fixture data
       return {
         validated: validationResults.length,
         valid: validCount,
         invalid: invalidCount,
-        results: validationResults,
-        fixtures: databaseFixtures,
+        results: validationResults, // Keep validation results (needed for comparison)
+        fixtures: minimalFixtures, // Only minimal data (id, gameID) - saves memory
       };
     } catch (error) {
       this.processingTracker.errorDetected("fixture-validation");

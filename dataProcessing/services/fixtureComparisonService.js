@@ -46,9 +46,11 @@ class FixtureComparisonService {
       const invalidFixtures = [];
       const missingFixtures = [];
 
+      // MEMORY OPTIMIZATION: databaseFixtures now contains minimal data { id, gameID }
+      // No need to check attributes - data is already minimal
       databaseFixtures.forEach((dbFixture) => {
-        const gameID = dbFixture.gameID || dbFixture.attributes?.gameID;
-        const fixtureId = dbFixture.id || dbFixture.attributes?.id;
+        const gameID = dbFixture.gameID;
+        const fixtureId = dbFixture.id;
 
         if (!gameID) {
           logger.warn(
@@ -68,12 +70,13 @@ class FixtureComparisonService {
         // If URL is invalid (404), delete it regardless of scraped status
         if (hasInvalidUrl) {
           // Fixture has invalid URL (404 or other error)
+          // MEMORY OPTIMIZATION: Don't store full validationResult or dbFixture
+          // Only store minimal data needed for deletion
           invalidFixtures.push({
             fixtureId,
             gameID,
             reason: `Invalid URL: ${validationResult.status}`,
-            validationResult,
-            dbFixture,
+            status: validationResult.status, // Only store status, not full result
           });
           fixturesToDelete.push({
             fixtureId,
@@ -84,11 +87,11 @@ class FixtureComparisonService {
         } else if (!existsInScraped && scrapedFixtures.length > 0) {
           // Only mark as missing if we actually scraped fixtures
           // If no fixtures were scraped, we can't determine if it's missing
+          // MEMORY OPTIMIZATION: Don't store dbFixture
           missingFixtures.push({
             fixtureId,
             gameID,
             reason: "missing_from_scraped_data",
-            dbFixture,
           });
           fixturesToDelete.push({
             fixtureId,
@@ -98,10 +101,10 @@ class FixtureComparisonService {
         } else {
           // Fixture exists in scraped data and has valid URL
           // OR no scraped data available and no invalid URL found
+          // MEMORY OPTIMIZATION: Don't store dbFixture
           fixturesToKeep.push({
             fixtureId,
             gameID,
-            dbFixture,
           });
         }
       });
