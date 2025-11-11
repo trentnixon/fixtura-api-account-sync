@@ -9,7 +9,7 @@ const PuppeteerManager = require("../../dataProcessing/puppeteer/PuppeteerManage
 class FixtureValidationService {
   constructor(options = {}) {
     this.domain = "https://www.playhq.com";
-    this.timeout = options.timeout || 10000; // Reduced from 15000 to 10000
+    this.timeout = options.timeout || 8000; // Optimized: 8 seconds (reduced from 10000)
     this.skipHttpValidation = options.skipHttpValidation !== false; // Default: true (PlayHQ blocks HTTP)
     this.usePuppeteer = options.usePuppeteer !== false; // Default: true
     this.puppeteerManager = null;
@@ -56,12 +56,13 @@ class FixtureValidationService {
         throw new Error("Page instance is required for Puppeteer validation");
       }
 
-      // OPTIMIZATION: Use domcontentloaded (like other scrapers) - MUCH faster than networkidle0
+      // OPTIMIZED: Use domcontentloaded (like other scrapers) - MUCH faster than networkidle0
+      // Reduced timeout for faster failure detection
       let response;
       try {
         response = await page.goto(fullUrl, {
           waitUntil: "domcontentloaded", // Fast - same as other scrapers
-          timeout: this.timeout,
+          timeout: this.timeout, // 8 seconds (optimized)
         });
       } catch (navError) {
         // Navigation errors usually mean 404
@@ -97,17 +98,31 @@ class FixtureValidationService {
         }
       }
 
-      // Wait for page to render (PlayHQ is a SPA - needs time for content to load)
-      // Wait for body and then give SPA time to render content
+      // OPTIMIZED: Wait for page content efficiently (PlayHQ is a SPA)
+      // Use waitForFunction to wait for actual content instead of fixed delays
       try {
         // Check if page is still connected
         if (page.isClosed()) {
           throw new Error("Page is closed");
         }
-        // Wait for body to exist first
-        await page.waitForSelector("body", { timeout: 3000 });
-        // Wait for content to render (SPA needs time, especially for game pages)
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        // Wait for body to exist (quick check)
+        await page.waitForSelector("body", { timeout: 2000 });
+
+        // OPTIMIZED: Wait for content to load using waitForFunction (faster than fixed delay)
+        // Wait for body to have some content (indicating page has rendered)
+        try {
+          await page.waitForFunction(
+            () => {
+              const body = document.body;
+              return body && body.innerText && body.innerText.length > 100;
+            },
+            { timeout: 2000 }
+          );
+        } catch (waitFuncError) {
+          // If waitForFunction times out, give a short delay and continue
+          // (page might still be loading but we can check what's there)
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       } catch (waitError) {
         // If body doesn't load or page is closed, return error result
         if (
@@ -116,7 +131,7 @@ class FixtureValidationService {
         ) {
           throw new Error(`Page closed during wait: ${waitError.message}`);
         }
-        // If timeout, continue to check content anyway
+        // If timeout, continue to check content anyway (page might still have content)
         logger.debug(
           `[VALIDATION] Wait error for ${fullUrl}: ${waitError.message}`
         );
@@ -537,9 +552,10 @@ class FixtureValidationService {
 
               results.push(result);
 
-              // Small delay between validations
+              // OPTIMIZED: Minimal delay between validations (reduced from 100ms to 50ms)
+              // Small delay to prevent overwhelming the page
               if (i < batch.length - 1) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                await new Promise((resolve) => setTimeout(resolve, 50));
               }
             } catch (error) {
               // Log error with full details
@@ -674,12 +690,10 @@ class FixtureValidationService {
             global.gc();
           }
 
-          // Wait between batches for memory cleanup (longer delay for Heroku)
+          // OPTIMIZED: Reduced wait between batches (memory issue is fixed)
+          // Short delay to allow browser cleanup to complete
           if (batchIndex < batches.length - 1) {
-            logger.info(
-              `[VALIDATION] Waiting 3 seconds before next batch for memory cleanup...`
-            );
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
           }
         }
       }
