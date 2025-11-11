@@ -97,78 +97,186 @@ class FixtureValidationService {
         }
       }
 
-      // OPTIMIZATION: Wait for body to have content (quick check, max 2s)
-      // This is much faster than networkidle0 or fixed delays
+      // Wait for page to render (PlayHQ is a SPA - needs time for content to load)
+      // Wait for body and then give SPA time to render content
       try {
-        await page.waitForFunction(
-          () => document.body && document.body.innerText.length > 50,
-          { timeout: 2000 }
-        );
+        // Check if page is still connected
+        if (page.isClosed()) {
+          throw new Error("Page is closed");
+        }
+        // Wait for body to exist first
+        await page.waitForSelector("body", { timeout: 3000 });
+        // Wait for content to render (SPA needs time, especially for game pages)
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       } catch (waitError) {
-        // If body doesn't load in 2s, likely a problem - check anyway
+        // If body doesn't load or page is closed, return error result
+        if (
+          waitError.message.includes("closed") ||
+          waitError.message.includes("Target closed")
+        ) {
+          throw new Error(`Page closed during wait: ${waitError.message}`);
+        }
+        // If timeout, continue to check content anyway
+        logger.debug(
+          `[VALIDATION] Wait error for ${fullUrl}: ${waitError.message}`
+        );
+      }
+
+      // Check if page is still connected before evaluation
+      if (page.isClosed()) {
+        throw new Error("Page closed before evaluation");
       }
 
       const httpStatus = response ? response.status() : "unknown";
-      const finalUrl = page.url();
+      let finalUrl;
+      try {
+        finalUrl = page.url();
+      } catch (urlError) {
+        logger.debug(
+          `[VALIDATION] Could not get page URL: ${urlError.message}`
+        );
+        finalUrl = fullUrl;
+      }
 
       // Check page content for 404 indicators and game content
       let pageInfo = {};
       try {
+        // Check if page is still connected before evaluate
+        if (page.isClosed()) {
+          throw new Error("Page closed before evaluate");
+        }
         pageInfo = await page.evaluate(() => {
           const bodyText = document.body
             ? document.body.innerText.toLowerCase()
             : "";
+          const htmlContent = document.body
+            ? document.body.innerHTML.toLowerCase()
+            : "";
 
-          // PlayHQ 404 page has: <h1>Oops, not another 404!</h1>
+          // PlayHQ 404 page structure (EXPLICIT indicators only):
+          // <h1>Oops, not another 404!</h1>
+          // <p>Sorry you have arrived here...</p>
           const h1Elements = Array.from(document.querySelectorAll("h1"));
           const hasPlayHQ404H1 = h1Elements.some(
             (h1) =>
               h1.innerText &&
               h1.innerText.toLowerCase().includes("oops, not another 404")
           );
+
+          // Check for PlayHQ 404 text (EXPLICIT only - don't use generic "404" or "not found")
           const hasPlayHQ404Text =
             bodyText.includes("sorry you have arrived here") ||
             bodyText.includes("oops, not another 404");
 
-          // Check for 404 indicators
-          const has404Text =
-            hasPlayHQ404H1 ||
-            hasPlayHQ404Text ||
-            bodyText.includes("404") ||
-            bodyText.includes("not found") ||
-            bodyText.includes("page not found");
+          // ONLY use explicit PlayHQ 404 indicators - don't use generic "404" or "not found"
+          // as these can appear in valid pages (URLs, error codes in content, etc.)
+          const hasExplicit404 = hasPlayHQ404H1 || hasPlayHQ404Text;
 
-          // Check for game content (teams, scores, dates, etc.)
-          const hasGameContent =
-            bodyText.match(/\b(vs|versus|team)\b/i) !== null ||
-            bodyText.match(/\d+\s*-\s*\d+/) !== null || // Score pattern
+          // Check for game page elements (more specific than generic patterns)
+          // Look for actual game page structure elements
+          const hasScorecardSection =
+            document.querySelector('[class*="scorecard"]') !== null ||
+            document.querySelector('[class*="score-card"]') !== null ||
+            document.querySelector('[id*="scorecard"]') !== null;
+
+          const hasTeamElements =
+            document.querySelector('[class*="team"]') !== null ||
+            document.querySelector('[class*="home-team"]') !== null ||
+            document.querySelector('[class*="away-team"]') !== null;
+
+          const hasGameDetails =
+            document.querySelector('[class*="game-detail"]') !== null ||
+            document.querySelector('[class*="match-detail"]') !== null ||
+            document.querySelector('[class*="fixture"]') !== null;
+
+          // Check for game content in text (teams, scores, dates, etc.)
+          const hasTeamVs = bodyText.match(/\b(vs|versus|v\.)\b/i) !== null;
+          const hasScorePattern = bodyText.match(/\d+\s*-\s*\d+/) !== null;
+          const hasGameTerms =
+            bodyText.includes("scorecard") ||
             bodyText.includes("score") ||
             bodyText.includes("round") ||
             bodyText.includes("ground") ||
-            bodyText.length > 1000; // Substantial content
+            bodyText.includes("inning") ||
+            bodyText.includes("over") ||
+            bodyText.includes("wicket") ||
+            bodyText.includes("batting") ||
+            bodyText.includes("bowling");
+
+          // Check for substantial content (404 pages are usually minimal - < 500 chars)
+          const hasSubstantialContent = bodyText.length > 500;
+
+          // Check for date patterns (games have dates)
+          const hasDatePattern =
+            /\b(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{1,2}\s+\w+\s+\d{4}|\w+day,?\s+\d{1,2}\s+\w+)\b/i.test(
+              bodyText
+            );
+
+          // Game content exists if we have page elements OR text patterns OR substantial content
+          const hasGameContent =
+            hasScorecardSection ||
+            hasTeamElements ||
+            hasGameDetails ||
+            hasTeamVs ||
+            hasScorePattern ||
+            hasGameTerms ||
+            hasDatePattern ||
+            (hasSubstantialContent && bodyText.length > 800);
 
           return {
-            has404Text,
+            hasExplicit404,
+            hasPlayHQ404H1,
+            hasPlayHQ404Text,
             hasGameContent,
             bodyLength: bodyText.length,
+            hasSubstantialContent,
+            hasScorecardSection,
+            hasTeamElements,
+            hasGameDetails,
           };
         });
       } catch (contentError) {
-        // If we can't check content, assume invalid
-        logger.debug(`Could not check page content: ${contentError.message}`);
+        // If we can't check content, log and return error result
+        const errorMsg = contentError.message || String(contentError);
+        logger.error(
+          `[VALIDATION] Could not evaluate page content for ${fullUrl}: ${errorMsg}`,
+          {
+            fixtureId,
+            gameID,
+            error: errorMsg,
+            stack: contentError.stack,
+          }
+        );
+
+        // If page is closed or disconnected, throw to be caught by outer catch
+        if (
+          errorMsg.includes("closed") ||
+          errorMsg.includes("Target closed") ||
+          errorMsg.includes("Session closed") ||
+          errorMsg.includes("Protocol error")
+        ) {
+          throw new Error(`Page disconnected during evaluation: ${errorMsg}`);
+        }
+
+        // For other errors, return error result
         return {
           valid: false,
           status: "error",
           fixtureId,
           gameID,
           url: fullUrl,
-          error: contentError.message,
+          error: errorMsg,
         };
       }
 
-      // Check for 404 indicators first
-      if (pageInfo.has404Text || httpStatus === 404) {
-        logger.info(`[VALIDATION] 404: ${fullUrl}`);
+      // PRIORITY 1: Check for EXPLICIT PlayHQ 404 indicators ONLY
+      // Only mark as 404 if we see the specific PlayHQ 404 page structure
+      if (pageInfo.hasExplicit404 || httpStatus === 404) {
+        logger.info(`[VALIDATION] 404 detected (explicit): ${fullUrl}`, {
+          hasPlayHQ404H1: pageInfo.hasPlayHQ404H1,
+          hasPlayHQ404Text: pageInfo.hasPlayHQ404Text,
+          httpStatus,
+        });
         return {
           valid: false,
           status: "404",
@@ -180,26 +288,46 @@ class FixtureValidationService {
         };
       }
 
-      // For game center URLs, must have game content
+      // PRIORITY 2: For game center URLs, check if page has minimal content
+      // (PlayHQ 404 pages are usually < 500 chars, valid game pages are much larger)
       const isGameCenterUrl =
         finalUrl.includes("/game-centre/") ||
         finalUrl.includes("/game-center/");
 
-      if (isGameCenterUrl && !pageInfo.hasGameContent) {
-        logger.info(`[VALIDATION] 404: ${fullUrl} (no game content)`);
-        return {
-          valid: false,
-          status: "404",
-          fixtureId,
-          gameID,
-          url: fullUrl,
-          httpStatus,
-          method: "puppeteer",
-        };
+      if (isGameCenterUrl) {
+        // If page has very little content (< 300 chars), likely a 404 or error page
+        if (pageInfo.bodyLength < 300 && !pageInfo.hasGameContent) {
+          logger.info(
+            `[VALIDATION] 404: ${fullUrl} (game center URL but minimal content: ${pageInfo.bodyLength} chars)`
+          );
+          return {
+            valid: false,
+            status: "404",
+            fixtureId,
+            gameID,
+            url: fullUrl,
+            httpStatus,
+            method: "puppeteer",
+          };
+        }
+
+        // If we have game content OR substantial content, it's valid
+        if (pageInfo.hasGameContent || pageInfo.bodyLength > 500) {
+          return {
+            valid: true,
+            status: httpStatus === 403 ? "valid_403" : "valid",
+            fixtureId,
+            gameID,
+            url: fullUrl,
+            httpStatus,
+            method: "puppeteer",
+          };
+        }
       }
 
-      // Valid if has game content or substantial content
-      if (pageInfo.hasGameContent || pageInfo.bodyLength > 800) {
+      // PRIORITY 3: For non-game-center URLs or if we have substantial content, assume valid
+      // (Be lenient - if we don't see explicit 404 indicators, assume page is valid)
+      if (pageInfo.hasSubstantialContent || pageInfo.bodyLength > 500) {
         return {
           valid: true,
           status: httpStatus === 403 ? "valid_403" : "valid",
@@ -211,11 +339,48 @@ class FixtureValidationService {
         };
       }
 
-      // Default: treat as invalid if uncertain
-      logger.info(`[VALIDATION] 404: ${fullUrl} (uncertain - no game content)`);
+      // PRIORITY 4: If page loaded successfully (200/403) and has content, assume valid
+      // (Don't be too strict - if page loads and has some content, it's probably valid)
+      if (
+        (httpStatus === 200 || httpStatus === 403) &&
+        pageInfo.bodyLength > 200
+      ) {
+        return {
+          valid: true,
+          status: httpStatus === 403 ? "valid_403" : "valid",
+          fixtureId,
+          gameID,
+          url: fullUrl,
+          httpStatus,
+          method: "puppeteer",
+        };
+      }
+
+      // DEFAULT: Only mark as invalid if we have very strong indicators
+      // (Very minimal content AND no game content AND not a successful HTTP status)
+      if (
+        pageInfo.bodyLength < 200 &&
+        httpStatus !== 200 &&
+        httpStatus !== 403
+      ) {
+        logger.info(
+          `[VALIDATION] 404: ${fullUrl} (minimal content: ${pageInfo.bodyLength} chars, HTTP: ${httpStatus})`
+        );
+        return {
+          valid: false,
+          status: "404",
+          fixtureId,
+          gameID,
+          url: fullUrl,
+          httpStatus,
+          method: "puppeteer",
+        };
+      }
+
+      // If we get here, assume valid (be lenient)
       return {
-        valid: false,
-        status: "404",
+        valid: true,
+        status: httpStatus === 403 ? "valid_403" : "valid",
         fixtureId,
         gameID,
         url: fullUrl,
@@ -237,180 +402,284 @@ class FixtureValidationService {
 
   /**
    * Validates multiple fixture URLs in batches
-   * OPTIMIZED: Reuse browser across batches, process sequentially on single page
+   * MEMORY OPTIMIZED: Process in small batches with browser cleanup between batches
    */
-  async validateFixturesBatch(fixtures, concurrencyLimit = 20) {
+  async validateFixturesBatch(fixtures, concurrencyLimit = 5) {
     const results = [];
 
     if (!this.usePuppeteer || this.skipHttpValidation) {
-      logger.info(
-        `[VALIDATION] Validating ${fixtures.length} fixtures using Puppeteer`
-      );
-
-      // OPTIMIZATION: Initialize browser once, reuse for all batches
-      await this.initializeBrowser();
-      if (!this.puppeteerManager) {
-        throw new Error("PuppeteerManager not initialized");
+      // MEMORY OPTIMIZATION: Process in small batches (5 fixtures) with browser cleanup
+      const batchSize = concurrencyLimit;
+      const batches = [];
+      for (let i = 0; i < fixtures.length; i += batchSize) {
+        batches.push(fixtures.slice(i, i + batchSize));
       }
 
-      let page = null;
-      try {
-        // Create a single page to reuse for all validations
-        page = await this.puppeteerManager.createPageInNewContext();
+      logger.info(
+        `[VALIDATION] Validating ${fixtures.length} fixtures in ${batches.length} batches (${batchSize} per batch)`
+      );
 
-        // Set user agent
+      // Process each batch separately with browser cleanup between batches
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        let page = null;
+
         try {
-          await page.setUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          );
-        } catch (uaError) {
-          // Ignore
-        }
+          // Initialize browser for this batch
+          await this.initializeBrowser();
+          if (!this.puppeteerManager) {
+            throw new Error("PuppeteerManager not initialized");
+          }
 
-        // OPTIMIZATION: Block non-essential resources to speed up page loads
-        try {
-          await page.setRequestInterception(true);
-          page.on("request", (request) => {
-            const resourceType = request.resourceType();
-            // Block images, fonts, media, stylesheets for faster loading
-            if (
-              [
-                "image",
-                "font",
-                "media",
-                "websocket",
-                "manifest",
-                "stylesheet",
-              ].includes(resourceType)
-            ) {
-              request.abort();
-            } else {
-              request.continue();
-            }
-          });
-        } catch (interceptError) {
-          // Ignore - request interception not critical
-        }
+          // Create a new page for this batch
+          page = await this.puppeteerManager.createPageInNewContext();
 
-        // Process all fixtures sequentially on the same page
-        // OPTIMIZATION: No batch cleanup - just process all fixtures on one page
-        for (let i = 0; i < fixtures.length; i++) {
-          const fixture = fixtures[i];
-          const fixtureUrl =
-            fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard;
-          const fixtureId = fixture.id || fixture.attributes?.id;
-          const fixtureGameID = fixture.gameID || fixture.attributes?.gameID;
-          const fullUrl = fixtureUrl?.startsWith("http")
-            ? fixtureUrl
-            : `${this.domain}${fixtureUrl}`;
-
-          // Log iteration start with URL
-          logger.info(
-            `[VALIDATION] Iteration ${i + 1}/${
-              fixtures.length
-            } - Processing URL: ${fullUrl}`
-          );
-
+          // Set user agent
           try {
-            const result = await this.validateFixtureUrlWithPuppeteer(
-              fixtureUrl,
-              fixtureId,
-              fixtureGameID,
-              page
+            await page.setUserAgent(
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             );
-            result.method = "puppeteer";
+          } catch (uaError) {
+            // Ignore
+          }
 
-            // Log detailed result for every iteration: URL, Response, Verdict
+          // MEMORY OPTIMIZATION: Block non-essential resources aggressively
+          try {
+            await page.setRequestInterception(true);
+            page.on("request", (request) => {
+              const resourceType = request.resourceType();
+              // Block everything except document and script (needed for SPA)
+              if (
+                [
+                  "image",
+                  "font",
+                  "media",
+                  "websocket",
+                  "manifest",
+                  "stylesheet",
+                ].includes(resourceType)
+              ) {
+                request.abort();
+              } else {
+                request.continue();
+              }
+            });
+          } catch (interceptError) {
+            // Ignore - request interception not critical
+          }
+
+          logger.info(
+            `[VALIDATION] Processing batch ${batchIndex + 1}/${
+              batches.length
+            } (${batch.length} fixtures)`
+          );
+
+          // Process fixtures in this batch sequentially
+          for (let i = 0; i < batch.length; i++) {
+            const fixture = batch[i];
+            const globalIndex = batchIndex * batchSize + i;
+            const fixtureUrl =
+              fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard;
+            const fixtureId = fixture.id || fixture.attributes?.id;
+            const fixtureGameID = fixture.gameID || fixture.attributes?.gameID;
+            const fullUrl = fixtureUrl?.startsWith("http")
+              ? fixtureUrl
+              : `${this.domain}${fixtureUrl}`;
+
+            // Log iteration start with URL
             logger.info(
-              `[VALIDATION] Iteration ${i + 1}/${fixtures.length} - RESULT`,
-              {
-                url: fullUrl,
+              `[VALIDATION] Iteration ${globalIndex + 1}/${
+                fixtures.length
+              } - Processing URL: ${fullUrl}`
+            );
+
+            try {
+              // Check if page is still valid before validation
+              if (!page || page.isClosed()) {
+                throw new Error("Page is closed or invalid - cannot validate");
+              }
+
+              const result = await this.validateFixtureUrlWithPuppeteer(
+                fixtureUrl,
+                fixtureId,
+                fixtureGameID,
+                page
+              );
+              result.method = "puppeteer";
+
+              // Log detailed result for every iteration: URL, Response, Verdict
+              logger.info(
+                `[VALIDATION] Iteration ${globalIndex + 1}/${
+                  fixtures.length
+                } - RESULT`,
+                {
+                  url: fullUrl,
+                  fixtureId,
+                  gameID: fixtureGameID,
+                  httpStatus: result.httpStatus || "N/A",
+                  responseStatus: result.status,
+                  valid: result.valid,
+                  verdict: result.valid ? "VALID" : "INVALID",
+                  method: result.method,
+                  error: result.error || null,
+                }
+              );
+
+              // Also log a concise one-liner for easy reading
+              const verdict = result.valid ? "✓ VALID" : "✗ INVALID";
+              logger.info(
+                `[VALIDATION] ${globalIndex + 1}/${
+                  fixtures.length
+                } - ${verdict} | URL: ${fullUrl} | HTTP: ${
+                  result.httpStatus || "N/A"
+                } | Status: ${result.status}`
+              );
+
+              results.push(result);
+
+              // Small delay between validations
+              if (i < batch.length - 1) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+              }
+            } catch (error) {
+              // Log error with full details
+              const errorMsg = error.message || String(error);
+              logger.error(
+                `[VALIDATION] Iteration ${globalIndex + 1}/${
+                  fixtures.length
+                } - ERROR`,
+                {
+                  url: fullUrl,
+                  fixtureId,
+                  gameID: fixtureGameID,
+                  error: errorMsg,
+                  stack: error.stack,
+                }
+              );
+
+              const errorResult = {
+                valid: false,
+                status: "error",
                 fixtureId,
                 gameID: fixtureGameID,
-                httpStatus: result.httpStatus || "N/A",
-                responseStatus: result.status,
-                valid: result.valid,
-                verdict: result.valid ? "VALID" : "INVALID",
-                method: result.method,
-                error: result.error || null,
-              }
-            );
+                url: fixtureUrl,
+                error: errorMsg,
+              };
+              results.push(errorResult);
 
-            // Also log a concise one-liner for easy reading
-            const verdict = result.valid ? "✓ VALID" : "✗ INVALID";
-            logger.info(
-              `[VALIDATION] ${i + 1}/${
-                fixtures.length
-              } - ${verdict} | URL: ${fullUrl} | HTTP: ${
-                result.httpStatus || "N/A"
-              } | Status: ${result.status}`
-            );
-
-            results.push(result);
-
-            // OPTIMIZATION: Minimal delay between validations (reduced to 25ms)
-            if (i < fixtures.length - 1) {
-              await new Promise((resolve) => setTimeout(resolve, 25));
-            }
-
-            // Log progress every 50 fixtures
-            if ((i + 1) % 50 === 0) {
-              const validCount = results.filter((r) => r.valid).length;
-              const invalidCount = results.length - validCount;
+              // Log error result
               logger.info(
-                `[VALIDATION] Progress Summary: ${i + 1}/${
+                `[VALIDATION] ${globalIndex + 1}/${
                   fixtures.length
-                } fixtures processed (${validCount} valid, ${invalidCount} invalid)`
+                } - ✗ ERROR | URL: ${fullUrl} | Error: ${errorMsg}`
+              );
+
+              // If page is closed/disconnected, we need to break and recreate the browser
+              if (
+                errorMsg.includes("closed") ||
+                errorMsg.includes("Target closed") ||
+                errorMsg.includes("Session closed") ||
+                errorMsg.includes("Protocol error") ||
+                errorMsg.includes("Page disconnected") ||
+                errorMsg.includes("Navigation failed")
+              ) {
+                logger.warn(
+                  `[VALIDATION] Page disconnected for iteration ${
+                    globalIndex + 1
+                  }, breaking batch to recreate browser`
+                );
+                // Break out of inner loop to trigger browser cleanup
+                break;
+              }
+            }
+          }
+
+          // Close page after batch (safely)
+          try {
+            if (page && !page.isClosed()) {
+              await page.close().catch(() => {
+                // Ignore close errors - page might already be closed
+              });
+            }
+            page = null;
+          } catch (pageCloseError) {
+            // Ignore - page might already be closed
+            logger.debug(
+              `[VALIDATION] Page close error (ignored): ${pageCloseError.message}`
+            );
+          }
+        } catch (batchError) {
+          const errorMsg = batchError.message || String(batchError);
+          logger.error(
+            `[VALIDATION] Batch ${batchIndex + 1}/${
+              batches.length
+            } error: ${errorMsg}`,
+            {
+              error: errorMsg,
+              stack: batchError.stack,
+              batchSize: batch.length,
+              batchIndex: batchIndex + 1,
+              totalBatches: batches.length,
+            }
+          );
+
+          // Add error results for all fixtures in this batch that weren't processed yet
+          // Calculate how many fixtures in this batch were already processed
+          const fixturesProcessedBeforeBatch = batchIndex * batchSize;
+          const fixturesProcessedInBatch =
+            results.length - fixturesProcessedBeforeBatch;
+          const remainingFixtures = batch.slice(
+            Math.max(0, fixturesProcessedInBatch)
+          );
+
+          logger.warn(
+            `[VALIDATION] Adding error results for ${
+              remainingFixtures.length
+            } unprocessed fixtures in batch ${
+              batchIndex + 1
+            } (${fixturesProcessedInBatch} already processed)`
+          );
+
+          remainingFixtures.forEach((fixture) => {
+            results.push({
+              valid: false,
+              status: "batch_error",
+              fixtureId: fixture.id || fixture.attributes?.id,
+              gameID: fixture.gameID || fixture.attributes?.gameID,
+              url: fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard,
+              error: errorMsg,
+            });
+          });
+        } finally {
+          // MEMORY OPTIMIZATION: Cleanup browser after each batch
+          if (this.puppeteerManager) {
+            try {
+              logger.info(
+                `[VALIDATION] Cleaning up browser after batch ${
+                  batchIndex + 1
+                }/${batches.length}`
+              );
+              await this.puppeteerManager.dispose();
+              this.puppeteerManager = null;
+              this.browser = null;
+            } catch (disposeError) {
+              logger.warn(
+                `[VALIDATION] Dispose error: ${disposeError.message}`
               );
             }
-          } catch (error) {
-            // Log error with full details
-            logger.error(
-              `[VALIDATION] Iteration ${i + 1}/${fixtures.length} - ERROR`,
-              {
-                url: fullUrl,
-                fixtureId,
-                gameID: fixtureGameID,
-                error: error.message,
-                stack: error.stack,
-              }
-            );
+          }
 
-            const errorResult = {
-              valid: false,
-              status: "error",
-              fixtureId,
-              gameID: fixtureGameID,
-              url: fixtureUrl,
-              error: error.message,
-            };
-            results.push(errorResult);
+          // Force garbage collection if available
+          if (global.gc) {
+            global.gc();
+          }
 
-            // Log error result
+          // Wait between batches for memory cleanup (longer delay for Heroku)
+          if (batchIndex < batches.length - 1) {
             logger.info(
-              `[VALIDATION] ${i + 1}/${
-                fixtures.length
-              } - ✗ ERROR | URL: ${fullUrl} | Error: ${error.message}`
+              `[VALIDATION] Waiting 3 seconds before next batch for memory cleanup...`
             );
-          }
-        }
-      } finally {
-        // Cleanup: Close page and browser only once at the end
-        try {
-          if (page) {
-            await page.close();
-          }
-        } catch (pageCloseError) {
-          // Ignore
-        }
-
-        if (this.puppeteerManager) {
-          try {
-            await this.puppeteerManager.dispose();
-            this.puppeteerManager = null;
-            this.browser = null;
-          } catch (disposeError) {
-            logger.warn(`[VALIDATION] Dispose error: ${disposeError.message}`);
+            await new Promise((resolve) => setTimeout(resolve, 3000));
           }
         }
       }

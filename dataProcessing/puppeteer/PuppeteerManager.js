@@ -16,7 +16,10 @@ class PuppeteerManager {
     }
     try {
       this.browser = await puppeteer.launch({
-        headless: process.env.NODE_ENV === "development" ? false : "shell",
+        headless:
+          process.env.NODE_ENV && process.env.NODE_ENV.trim() === "development"
+            ? false
+            : "shell",
         //headless: 'new', // Consider setting to true for production
         args: [
           "--disable-setuid-sandbox",
@@ -34,6 +37,10 @@ class PuppeteerManager {
           "--disable-sync",
           "--disable-images", // Disable images to save memory
           "--blink-settings=imagesEnabled=false", // Disable images in Blink engine
+          "--disable-backgrounding-occluded-windows",
+          "--disable-renderer-backgrounding", // CRITICAL: Prevents throttling React rendering
+          "--disable-features=IsolateOrigins,site-per-process",
+          "--disable-blink-features=AutomationControlled",
         ],
       });
       logger.info("Puppeteer browser launched");
