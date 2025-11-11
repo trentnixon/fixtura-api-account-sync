@@ -22,10 +22,11 @@ class FixtureValidationProcessor {
           : true, // Default: true (skip HTTP for PlayHQ, we know it blocks HTTP)
     });
     this.processingTracker = ProcessingTracker.getInstance();
-    // OPTIMIZED: Increased batch size now that memory issue is fixed
-    // Larger batches = fewer browser restarts = faster processing
+    // Batch size for processing (browser cleanup between batches)
+    // MEMORY OPTIMIZATION: 5 fixtures per batch for Heroku memory constraints (reduced from 20)
+    // Smaller batches = more frequent browser cleanup = lower memory usage
     this.concurrencyLimit =
-      options.concurrencyLimit || (options.usePuppeteer !== false ? 10 : 10); // 10 fixtures per batch (optimized for speed)
+      options.concurrencyLimit || (options.usePuppeteer !== false ? 5 : 5); // 5 fixtures per batch (memory optimized for Heroku)
     this.validationResults = [];
     // MEMORY OPTIMIZATION: Clear validation results after use to free memory
   }

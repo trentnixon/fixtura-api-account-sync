@@ -9,7 +9,7 @@ const PuppeteerManager = require("../../dataProcessing/puppeteer/PuppeteerManage
 class FixtureValidationService {
   constructor(options = {}) {
     this.domain = "https://www.playhq.com";
-    this.timeout = options.timeout || 8000; // Optimized: 8 seconds (reduced from 10000)
+    this.timeout = options.timeout || 1000; // 10 seconds
     this.skipHttpValidation = options.skipHttpValidation !== false; // Default: true (PlayHQ blocks HTTP)
     this.usePuppeteer = options.usePuppeteer !== false; // Default: true
     this.puppeteerManager = null;
@@ -98,31 +98,17 @@ class FixtureValidationService {
         }
       }
 
-      // OPTIMIZED: Wait for page content efficiently (PlayHQ is a SPA)
-      // Use waitForFunction to wait for actual content instead of fixed delays
+      // Wait for page to render (PlayHQ is a SPA - needs time for content to load)
+      // Wait longer to ensure 404 page content is fully rendered
       try {
         // Check if page is still connected
         if (page.isClosed()) {
           throw new Error("Page is closed");
         }
-        // Wait for body to exist (quick check)
-        await page.waitForSelector("body", { timeout: 2000 });
-
-        // OPTIMIZED: Wait for content to load using waitForFunction (faster than fixed delay)
-        // Wait for body to have some content (indicating page has rendered)
-        try {
-          await page.waitForFunction(
-            () => {
-              const body = document.body;
-              return body && body.innerText && body.innerText.length > 100;
-            },
-            { timeout: 2000 }
-          );
-        } catch (waitFuncError) {
-          // If waitForFunction times out, give a short delay and continue
-          // (page might still be loading but we can check what's there)
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
+        // Wait for body to exist first
+        await page.waitForSelector("body", { timeout: 3000 });
+        // Then wait for content to render (SPA needs time)
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       } catch (waitError) {
         // If body doesn't load or page is closed, return error result
         if (
@@ -131,7 +117,7 @@ class FixtureValidationService {
         ) {
           throw new Error(`Page closed during wait: ${waitError.message}`);
         }
-        // If timeout, continue to check content anyway (page might still have content)
+        // If timeout, continue to check content anyway
         logger.debug(
           `[VALIDATION] Wait error for ${fullUrl}: ${waitError.message}`
         );
@@ -552,10 +538,9 @@ class FixtureValidationService {
 
               results.push(result);
 
-              // OPTIMIZED: Minimal delay between validations (reduced from 100ms to 50ms)
-              // Small delay to prevent overwhelming the page
+              // Small delay between validations
               if (i < batch.length - 1) {
-                await new Promise((resolve) => setTimeout(resolve, 50));
+                await new Promise((resolve) => setTimeout(resolve, 100));
               }
             } catch (error) {
               // Log error with full details
@@ -690,10 +675,12 @@ class FixtureValidationService {
             global.gc();
           }
 
-          // OPTIMIZED: Reduced wait between batches (memory issue is fixed)
-          // Short delay to allow browser cleanup to complete
+          // Wait between batches for memory cleanup (longer delay for Heroku)
           if (batchIndex < batches.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            logger.info(
+              `[VALIDATION] Waiting 3 seconds before next batch for memory cleanup...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, 3000));
           }
         }
       }
