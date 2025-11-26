@@ -37,6 +37,9 @@ class PuppeteerManager {
           "--disable-background-timer-throttling", // Prevents memory leaks
           "--disable-backgrounding-occluded-windows", // Memory optimization
           "--disable-renderer-backgrounding", // Prevents memory accumulation
+          "--disable-blink-features=AutomationControlled", // Hide automation (testing if safe)
+          "--disable-images", // Disable images to save memory
+          "--blink-settings=imagesEnabled=false", // Disable images in Blink engine
           "--disable-component-extensions-with-background-pages", // Reduces extension overhead
           "--disable-ipc-flooding-protection", // Better for automation
           "--metrics-recording-only", // Reduce telemetry overhead
