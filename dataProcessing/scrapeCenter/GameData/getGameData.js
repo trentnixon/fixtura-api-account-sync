@@ -8,7 +8,8 @@ class GetTeamsGameData {
     this.teams = dataObj.TEAMS;
     this.accountId = dataObj.ACCOUNT.ACCOUNTID;
     this.accountType = dataObj.ACCOUNT.ACCOUNTTYPE;
-    this.puppeteerManager = new PuppeteerManager();
+    // Use singleton to share browser instance across services (memory optimization)
+    this.puppeteerManager = PuppeteerManager.getInstance();
     this.processingTracker = ProcessingTracker.getInstance();
     this.domain = "https://www.playhq.com";
   }

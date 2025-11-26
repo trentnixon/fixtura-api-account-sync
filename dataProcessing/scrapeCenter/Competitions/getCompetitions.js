@@ -15,7 +15,8 @@ class GetCompetitions {
     this.URL = TYPEOBJ.TYPEURL;
     this.ACCOUNTTYPE = ACCOUNT.ACCOUNTTYPE;
     this.processingTracker = ProcessingTracker.getInstance();
-    this.puppeteerManager = new PuppeteerManager();
+    // Use singleton to share browser instance across services (memory optimization)
+    this.puppeteerManager = PuppeteerManager.getInstance();
     this.CRUDOperations = new CRUDOperations();
   }
 

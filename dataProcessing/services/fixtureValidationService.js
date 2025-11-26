@@ -18,7 +18,8 @@ class FixtureValidationService {
 
   async initializeBrowser() {
     if (!this.usePuppeteer || this.puppeteerManager) return;
-    this.puppeteerManager = new PuppeteerManager();
+    // Use singleton to share browser instance across services (memory optimization)
+    this.puppeteerManager = PuppeteerManager.getInstance();
     await this.puppeteerManager.launchBrowser();
     this.browser = this.puppeteerManager.browser;
   }
@@ -610,7 +611,7 @@ class FixtureValidationService {
             );
           }
 
-          // Cleanup orphaned pages and check for browser restart
+          // Cleanup orphaned pages
           if (this.puppeteerManager) {
             await this.puppeteerManager.cleanupOrphanedPages();
           }
@@ -680,14 +681,26 @@ class FixtureValidationService {
             global.gc();
           }
 
-          // Wait between batches for memory cleanup (longer delay for Heroku)
+          // Wait between batches for memory cleanup
           if (batchIndex < batches.length - 1) {
             logger.info(
-              `[VALIDATION] Waiting 3 seconds before next batch for memory cleanup...`
+              `[VALIDATION] Waiting 2 seconds before next batch for memory cleanup...`
             );
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         }
+      }
+    }
+
+    // Final cleanup - dispose browser completely
+    if (this.puppeteerManager) {
+      try {
+        logger.info("[VALIDATION] Final cleanup - disposing browser");
+        await this.puppeteerManager.dispose();
+        this.puppeteerManager = null;
+        this.browser = null;
+      } catch (error) {
+        logger.warn(`[VALIDATION] Final cleanup error: ${error.message}`);
       }
     }
 

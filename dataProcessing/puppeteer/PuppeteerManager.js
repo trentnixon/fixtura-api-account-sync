@@ -9,16 +9,34 @@ const EventEmitter = require("events");
 EventEmitter.defaultMaxListeners = 20; // Increase from default 10
 
 class PuppeteerManager {
+  // Singleton pattern to prevent multiple browser instances
+  static instance = null;
+  static getInstance() {
+    if (!PuppeteerManager.instance) {
+      PuppeteerManager.instance = new PuppeteerManager();
+      logger.info("PuppeteerManager singleton instance created");
+    }
+    return PuppeteerManager.instance;
+  }
+
   constructor() {
+    // If singleton already exists and this is a direct constructor call, warn but allow it
+    // This maintains backward compatibility while encouraging singleton usage
+    if (PuppeteerManager.instance && this.constructor === PuppeteerManager) {
+      logger.warn(
+        "PuppeteerManager: Direct instantiation detected. Consider using PuppeteerManager.getInstance() to share browser instance and save memory."
+      );
+    }
+
     this.browser = null;
     this.disposables = [];
     this.operationCount = 0;
     this.maxOperationsBeforeRestart = parseInt(
-      process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "20",
+      process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "10",
       10
-    ); // Restart every 20 operations by default (more aggressive)
+    ); // Restart every 10 operations by default (very aggressive)
     this.lastRestartTime = Date.now();
-    this.minRestartInterval = 30000; // Don't restart more than once per 30 seconds
+    this.minRestartInterval = 15000; // Don't restart more than once per 15 seconds
   }
 
   async launchBrowser() {
@@ -86,6 +104,19 @@ class PuppeteerManager {
 
     this.addDisposable(page);
     this.operationCount++;
+
+    // Log memory after page creation
+    if (this.operationCount % 5 === 0) {
+      const mem = process.memoryUsage();
+      logger.info(
+        `Page created (op ${this.operationCount}): RSS=${(
+          mem.rss /
+          1024 /
+          1024
+        ).toFixed(2)}MB, Heap=${(mem.heapUsed / 1024 / 1024).toFixed(2)}MB`
+      );
+    }
+
     return page;
   }
 
@@ -115,13 +146,24 @@ class PuppeteerManager {
     const memoryUsage = process.memoryUsage();
     const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024;
     const rssMB = memoryUsage.rss / 1024 / 1024;
+    const heapTotalMB = memoryUsage.heapTotal / 1024 / 1024;
+    const externalMB = memoryUsage.external / 1024 / 1024;
 
-    // Restart if heap exceeds 150MB or RSS exceeds 400MB (more aggressive thresholds)
-    if (heapUsedMB > 150 || rssMB > 400) {
+    // Log memory usage for monitoring
+    logger.info(
+      `Memory check: RSS=${rssMB.toFixed(2)}MB, Heap=${heapUsedMB.toFixed(
+        2
+      )}MB/${heapTotalMB.toFixed(2)}MB, External=${externalMB.toFixed(
+        2
+      )}MB, Ops=${this.operationCount}`
+    );
+
+    // Restart if heap exceeds 100MB or RSS exceeds 300MB (very aggressive thresholds)
+    if (heapUsedMB > 100 || rssMB > 300) {
       logger.warn(
         `Memory high (heap: ${heapUsedMB.toFixed(2)}MB, RSS: ${rssMB.toFixed(
           2
-        )}MB) - restarting browser`
+        )}MB) - restarting browser immediately`
       );
       await this.restartBrowser();
       return;
@@ -134,11 +176,18 @@ class PuppeteerManager {
    */
   async restartBrowser() {
     try {
-      logger.info("Restarting browser to free memory...");
+      const memoryBefore = process.memoryUsage();
+      const rssBeforeMB = memoryBefore.rss / 1024 / 1024;
+      logger.info(
+        `Restarting browser to free memory (RSS before: ${rssBeforeMB.toFixed(
+          2
+        )}MB)...`
+      );
 
       // Close all pages first
       if (this.browser) {
         const pages = await this.browser.pages();
+        logger.info(`Closing ${pages.length} pages before browser restart`);
         await Promise.all(
           pages.map(async (page) => {
             try {
@@ -160,13 +209,20 @@ class PuppeteerManager {
       this.lastRestartTime = Date.now();
       this.disposables = [];
 
-      // Small delay to let memory free up
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Longer delay to let memory free up
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Launch new browser
       await this.launchBrowser();
 
-      logger.info("Browser restarted successfully");
+      const memoryAfter = process.memoryUsage();
+      const rssAfterMB = memoryAfter.rss / 1024 / 1024;
+      const freedMB = rssBeforeMB - rssAfterMB;
+      logger.info(
+        `Browser restarted successfully (RSS after: ${rssAfterMB.toFixed(
+          2
+        )}MB, freed: ${freedMB.toFixed(2)}MB)`
+      );
     } catch (error) {
       logger.error("Error restarting browser", { error: error.message });
       // Try to launch a fresh browser anyway
@@ -225,19 +281,62 @@ class PuppeteerManager {
   async closeBrowser() {
     try {
       if (this.browser) {
+        // Close all pages first
+        try {
+          const pages = await this.browser.pages();
+          if (pages.length > 0) {
+            await Promise.all(
+              pages.map(async (page) => {
+                try {
+                  if (!page.isClosed()) {
+                    await page.close();
+                  }
+                } catch (error) {
+                  // Ignore
+                }
+              })
+            );
+          }
+        } catch (error) {
+          // Ignore errors getting pages
+        }
+
         await this.browser.close();
         this.browser = null; // Ensure the reference is cleared
         logger.info("Puppeteer browser closed");
       }
     } catch (error) {
       logger.error("Error closing Puppeteer browser", { error });
+      this.browser = null; // Force clear even on error
     }
   }
 
+  /**
+   * Get current memory usage statistics
+   */
+  getMemoryStats() {
+    const mem = process.memoryUsage();
+    return {
+      rss: (mem.rss / 1024 / 1024).toFixed(2) + " MB",
+      heapTotal: (mem.heapTotal / 1024 / 1024).toFixed(2) + " MB",
+      heapUsed: (mem.heapUsed / 1024 / 1024).toFixed(2) + " MB",
+      external: (mem.external / 1024 / 1024).toFixed(2) + " MB",
+      operationCount: this.operationCount,
+    };
+  }
+
   addDisposable(disposable) {
-    if (disposable && typeof disposable.dispose === "function") {
-      this.disposables.push(disposable);
+    if (
+      !disposable ||
+      !(
+        typeof disposable.dispose === "function" ||
+        typeof disposable.close === "function"
+      )
+    ) {
+      return;
     }
+
+    this.disposables.push(disposable);
   }
 
   async dispose() {

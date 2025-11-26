@@ -99,6 +99,28 @@ module.exports = {
         "--disable-setuid-sandbox",
         "--no-sandbox",
         "--disable-dev-shm-usage",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--disable-features=IsolateOrigins,site-per-process",
+        // Memory optimizations (safe for bot detection - don't trigger flags)
+        "--disable-gpu", // Reduces memory usage
+        "--disable-software-rasterizer", // Saves memory
+        "--disable-extensions", // Reduces memory footprint
+        "--disable-plugins", // Saves memory
+        "--disable-sync", // Reduces background processes
+        "--disable-background-timer-throttling", // Prevents memory leaks
+        "--disable-backgrounding-occluded-windows", // Memory optimization
+        "--disable-renderer-backgrounding", // Prevents memory accumulation
+        "--disable-blink-features=AutomationControlled", // Hide automation
+        "--disable-images", // Disable images to save memory
+        "--blink-settings=imagesEnabled=false", // Disable images in Blink engine
+        "--disable-component-extensions-with-background-pages", // Reduces extension overhead
+        "--disable-ipc-flooding-protection", // Better for automation
+        "--metrics-recording-only", // Reduce telemetry overhead
+        "--mute-audio", // Disable audio processing
+        "--disable-notifications", // Prevent notification pop-ups
+        "--disable-default-apps", // Don't load default apps
       ],
     });
   },

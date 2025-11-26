@@ -16,7 +16,8 @@ class GetTeams {
     this.GRADES = OBJ.Grades;
     this.URLs = OBJ.TEAMS;
 
-    this.puppeteerManager = new PuppeteerManager();
+    // Use singleton to share browser instance across services (memory optimization)
+    this.puppeteerManager = PuppeteerManager.getInstance();
     this.CRUDOperations = new CRUDOperations();
     this.processingTracker = ProcessingTracker.getInstance();
     this.domain = "https://www.playhq.com";
@@ -81,14 +82,14 @@ class GetTeams {
   }
 
   findCompIDForTeam(teamInfo) {
-    const gradeInfo = this.GRADES.find(grade => grade.id === teamInfo.grade);
+    const gradeInfo = this.GRADES.find((grade) => grade.id === teamInfo.grade);
     return gradeInfo ? gradeInfo.compID : null;
   }
 
   removeDuplicateTeams(teams) {
     const uniqueTeams = [];
 
-    teams.forEach(team => {
+    teams.forEach((team) => {
       if (!this.isDuplicateTeam(team, uniqueTeams)) {
         uniqueTeams.push(team);
       }
@@ -99,7 +100,7 @@ class GetTeams {
 
   isDuplicateTeam(team, teamList) {
     return teamList.some(
-      existingTeam =>
+      (existingTeam) =>
         existingTeam.teamID === team.teamID &&
         existingTeam.competition.toString() === team.competition.toString() &&
         existingTeam.grades.toString() === team.grades.toString()
