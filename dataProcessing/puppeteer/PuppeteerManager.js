@@ -32,9 +32,9 @@ class PuppeteerManager {
     this.disposables = [];
     this.operationCount = 0;
     this.maxOperationsBeforeRestart = parseInt(
-      process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "10",
+      process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "3",
       10
-    ); // Restart every 10 operations by default (very aggressive)
+    ); // Restart every 3 operations by default (very aggressive for single-job memory spikes)
     this.lastRestartTime = Date.now();
     this.minRestartInterval = 15000; // Don't restart more than once per 15 seconds
   }
@@ -158,8 +158,9 @@ class PuppeteerManager {
       )}MB, Ops=${this.operationCount}`
     );
 
-    // Restart if heap exceeds 100MB or RSS exceeds 300MB (very aggressive thresholds)
-    if (heapUsedMB > 100 || rssMB > 300) {
+    // Restart if heap exceeds 60MB or RSS exceeds 150MB (very aggressive thresholds for 1GB Heroku limit)
+    // Single jobs can create 50+ pages, need to restart more frequently
+    if (heapUsedMB > 60 || rssMB > 150) {
       logger.warn(
         `Memory high (heap: ${heapUsedMB.toFixed(2)}MB, RSS: ${rssMB.toFixed(
           2
@@ -168,6 +169,19 @@ class PuppeteerManager {
       await this.restartBrowser();
       return;
     }
+  }
+
+  /**
+   * Force browser restart (bypasses rate limiting and operation count checks)
+   * Use this between major processing stages to prevent memory accumulation
+   */
+  async forceRestartBrowser() {
+    logger.info("Force restarting browser between processing stages");
+    // Temporarily disable rate limiting
+    const originalMinInterval = this.minRestartInterval;
+    this.minRestartInterval = 0;
+    await this.restartBrowser();
+    this.minRestartInterval = originalMinInterval;
   }
 
   /**

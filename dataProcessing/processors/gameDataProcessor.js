@@ -57,6 +57,11 @@ class GameDataProcessor {
           this.dataObj
         );
         await assignGameDataObj.setup();
+
+        // MEMORY OPTIMIZATION: Clear scrapedGameData after assignment to free memory
+        // The data is already stored in allScrapedFixtures and assigned to CMS
+        scrapedGameData = null;
+
         BatchItem++;
       }
 

@@ -56,8 +56,9 @@ class GetTeams {
   }
 
   async setup() {
+    let page = null;
     try {
-      const page = await this.initPage();
+      page = await this.initPage();
       const teams = await this.processTeams(page);
 
       if (teams.length === 0) {
@@ -77,7 +78,10 @@ class GetTeams {
       console.error(error);
       throw error;
     } finally {
-      await this.puppeteerManager.dispose();
+      // Close page individually - DO NOT call dispose() on shared singleton
+      if (page) {
+        await this.puppeteerManager.closePage(page);
+      }
     }
   }
 

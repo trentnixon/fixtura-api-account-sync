@@ -666,9 +666,9 @@ class FixtureValidationService {
                   batchIndex + 1
                 }/${batches.length}`
               );
-              await this.puppeteerManager.dispose();
-              this.puppeteerManager = null;
-              this.browser = null;
+              // DO NOT dispose shared singleton - just close pages
+              // Browser will be restarted automatically by PuppeteerManager based on memory/operation count
+              await this.puppeteerManager.cleanupOrphanedPages();
             } catch (disposeError) {
               logger.warn(
                 `[VALIDATION] Dispose error: ${disposeError.message}`
@@ -695,8 +695,10 @@ class FixtureValidationService {
     // Final cleanup - dispose browser completely
     if (this.puppeteerManager) {
       try {
-        logger.info("[VALIDATION] Final cleanup - disposing browser");
-        await this.puppeteerManager.dispose();
+        logger.info("[VALIDATION] Final cleanup - closing orphaned pages");
+        // DO NOT dispose shared singleton - just cleanup orphaned pages
+        // Browser will be restarted automatically by PuppeteerManager based on memory/operation count
+        await this.puppeteerManager.cleanupOrphanedPages();
         this.puppeteerManager = null;
         this.browser = null;
       } catch (error) {

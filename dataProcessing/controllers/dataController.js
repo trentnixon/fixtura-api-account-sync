@@ -12,6 +12,7 @@ const GameCRUD = require("../assignCenter/games/GameCrud");
 
 const errorHandler = require("../utils/errorHandler");
 const logger = require("../../src/utils/logger");
+const PuppeteerManager = require("../puppeteer/PuppeteerManager");
 
 class DataController {
   constructor(fromRedis) {
@@ -26,6 +27,28 @@ class DataController {
       new ProcessingTracker();
     }
     this.processingTracker = ProcessingTracker.getInstance();
+  }
+
+  /**
+   * Force browser restart between processing stages to prevent memory accumulation
+   * This helps prevent memory spikes in single-job executions
+   */
+  async forceBrowserRestartIfNeeded() {
+    try {
+      const puppeteerManager = PuppeteerManager.getInstance();
+      if (puppeteerManager && puppeteerManager.browser) {
+        logger.info(
+          "[MEMORY] Forcing browser restart between processing stages"
+        );
+        await puppeteerManager.forceRestartBrowser();
+        logger.info("[MEMORY] Browser restart completed between stages");
+      }
+    } catch (error) {
+      logger.warn("[MEMORY] Error forcing browser restart between stages", {
+        error: error.message,
+      });
+      // Don't throw - browser restart is optional optimization
+    }
   }
 
   async reSyncData() {
@@ -102,6 +125,10 @@ class DataController {
       logger.info("[STAGE] completeStage('competitions') completed", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
+
+      // MEMORY OPTIMIZATION: Force browser restart between stages to free memory
+      await this.forceBrowserRestartIfNeeded();
+
       logger.info("[START] Refreshing data after competitions", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
@@ -126,6 +153,10 @@ class DataController {
       logger.info("[STAGE] completeStage('teams') completed", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
+
+      // MEMORY OPTIMIZATION: Force browser restart between stages to free memory
+      await this.forceBrowserRestartIfNeeded();
+
       logger.info("[START] Refreshing data after teams", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
@@ -157,6 +188,10 @@ class DataController {
       logger.info("[STAGE] completeStage('games') completed", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
+
+      // MEMORY OPTIMIZATION: Force browser restart between stages to free memory
+      await this.forceBrowserRestartIfNeeded();
+
       logger.info("[START] Refreshing data after games", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });

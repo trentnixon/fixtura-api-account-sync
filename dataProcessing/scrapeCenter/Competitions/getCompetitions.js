@@ -62,8 +62,9 @@ class GetCompetitions {
 
   // Main method to setup competition scraping
   async setup() {
+    let page = null;
     try {
-      const page = await this.initPage();
+      page = await this.initPage();
       let competitions = [];
 
       if (this.ACCOUNTTYPE === "ASSOCIATION") {
@@ -90,7 +91,10 @@ class GetCompetitions {
       });
       throw error;
     } finally {
-      await this.puppeteerManager.dispose();
+      // Close page individually - DO NOT call dispose() on shared singleton
+      if (page) {
+        await this.puppeteerManager.closePage(page);
+      }
     }
   }
 }

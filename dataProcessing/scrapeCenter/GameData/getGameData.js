@@ -52,8 +52,9 @@ class GetTeamsGameData {
   }
 
   async setup() {
+    let page = null;
     try {
-      const page = await this.initPage();
+      page = await this.initPage();
       let fetchedGames = await this.processGamesBatch(page, this.teams);
 
       fetchedGames = this.removeDuplicateGames(fetchedGames);
@@ -68,7 +69,10 @@ class GetTeamsGameData {
       logger.error("Error in setup method", { error });
       throw error;
     } finally {
-      await this.puppeteerManager.dispose();
+      // Close page individually - DO NOT call dispose() on shared singleton
+      if (page) {
+        await this.puppeteerManager.closePage(page);
+      }
     }
   }
 
