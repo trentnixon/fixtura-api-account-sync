@@ -3,6 +3,10 @@ const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 puppeteer.use(StealthPlugin());
 const fetcher = require("../api/Utils/fetcher");
 
+// Fix MaxListenersExceededWarning: Increase max listeners for Puppeteer's Commander
+const EventEmitter = require("events");
+EventEmitter.defaultMaxListeners = 20; // Increase from default 10
+
 const qs = require("qs");
 const changeisUpdating = async (ID, isUpdating) => {
   await fetcher(`accounts/${ID}`, `PUT`, {
@@ -86,7 +90,11 @@ const getClubRelationsForAssociation = () => {
 module.exports = {
   getPuppeteerInstance: async () => {
     return await puppeteer.launch({
-      headless: process.env.NODE_ENV === "development" ? false : "shell",
+      headless: process.env.NODE_ENV === "development" ? false : true,
+      // Handle browser process errors to prevent listener accumulation
+      handleSIGINT: false,
+      handleSIGTERM: false,
+      handleSIGHUP: false,
       args: [
         "--disable-setuid-sandbox",
         "--no-sandbox",

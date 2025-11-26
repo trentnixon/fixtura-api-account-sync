@@ -609,6 +609,11 @@ class FixtureValidationService {
               `[VALIDATION] Page close error (ignored): ${pageCloseError.message}`
             );
           }
+
+          // Cleanup orphaned pages and check for browser restart
+          if (this.puppeteerManager) {
+            await this.puppeteerManager.cleanupOrphanedPages();
+          }
         } catch (batchError) {
           const errorMsg = batchError.message || String(batchError);
           logger.error(

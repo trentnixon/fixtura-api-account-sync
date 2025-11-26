@@ -3,10 +3,22 @@ const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const logger = require("../../src/utils/logger");
 puppeteer.use(StealthPlugin());
 
+// Fix MaxListenersExceededWarning: Increase max listeners for Puppeteer's Commander
+// This prevents memory leak warnings when multiple browser instances exist
+const EventEmitter = require("events");
+EventEmitter.defaultMaxListeners = 20; // Increase from default 10
+
 class PuppeteerManager {
   constructor() {
     this.browser = null;
     this.disposables = [];
+    this.operationCount = 0;
+    this.maxOperationsBeforeRestart = parseInt(
+      process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "20",
+      10
+    ); // Restart every 20 operations by default (more aggressive)
+    this.lastRestartTime = Date.now();
+    this.minRestartInterval = 30000; // Don't restart more than once per 30 seconds
   }
 
   async launchBrowser() {
@@ -20,6 +32,10 @@ class PuppeteerManager {
           process.env.NODE_ENV && process.env.NODE_ENV.trim() === "development"
             ? false
             : true,
+        // Handle browser process errors to prevent listener accumulation
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false,
         args: [
           "--disable-setuid-sandbox",
           "--no-sandbox",
@@ -56,6 +72,9 @@ class PuppeteerManager {
   }
 
   async createPageInNewContext() {
+    // Check if we need to restart the browser
+    await this.checkAndRestartIfNeeded();
+
     await this.launchBrowser();
     const page = await this.browser.newPage();
 
@@ -66,7 +85,94 @@ class PuppeteerManager {
     // if needed, to avoid conflicts with multiple handlers
 
     this.addDisposable(page);
+    this.operationCount++;
     return page;
+  }
+
+  /**
+   * Checks if browser should be restarted based on operation count or memory
+   * Restarts automatically to prevent memory accumulation
+   */
+  async checkAndRestartIfNeeded() {
+    const now = Date.now();
+    const timeSinceLastRestart = now - this.lastRestartTime;
+
+    // Don't restart too frequently (rate limiting)
+    if (timeSinceLastRestart < this.minRestartInterval) {
+      return;
+    }
+
+    // Restart if we've exceeded operation count
+    if (this.operationCount >= this.maxOperationsBeforeRestart) {
+      logger.info(
+        `Restarting browser after ${this.operationCount} operations to free memory`
+      );
+      await this.restartBrowser();
+      return;
+    }
+
+    // Check memory usage and restart if too high
+    const memoryUsage = process.memoryUsage();
+    const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024;
+    const rssMB = memoryUsage.rss / 1024 / 1024;
+
+    // Restart if heap exceeds 150MB or RSS exceeds 400MB (more aggressive thresholds)
+    if (heapUsedMB > 150 || rssMB > 400) {
+      logger.warn(
+        `Memory high (heap: ${heapUsedMB.toFixed(2)}MB, RSS: ${rssMB.toFixed(
+          2
+        )}MB) - restarting browser`
+      );
+      await this.restartBrowser();
+      return;
+    }
+  }
+
+  /**
+   * Restarts the browser to free memory
+   * Closes all pages and the browser, then launches a new one
+   */
+  async restartBrowser() {
+    try {
+      logger.info("Restarting browser to free memory...");
+
+      // Close all pages first
+      if (this.browser) {
+        const pages = await this.browser.pages();
+        await Promise.all(
+          pages.map(async (page) => {
+            try {
+              if (!page.isClosed()) {
+                await page.close();
+              }
+            } catch (error) {
+              // Ignore errors
+            }
+          })
+        );
+      }
+
+      // Close browser
+      await this.closeBrowser();
+
+      // Reset counters
+      this.operationCount = 0;
+      this.lastRestartTime = Date.now();
+      this.disposables = [];
+
+      // Small delay to let memory free up
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Launch new browser
+      await this.launchBrowser();
+
+      logger.info("Browser restarted successfully");
+    } catch (error) {
+      logger.error("Error restarting browser", { error: error.message });
+      // Try to launch a fresh browser anyway
+      this.browser = null;
+      await this.launchBrowser();
+    }
   }
 
   /**
