@@ -54,6 +54,55 @@ class PuppeteerManager {
     // Create a new page in the default browser context
     const page = await this.browser.newPage();
 
+    // CRITICAL: Set user agent and viewport to avoid CAPTCHA detection
+    // Puppeteer v24 uses Chrome 131.x - use matching user agent
+    try {
+      await page.setUserAgent(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      );
+    } catch (uaError) {
+      logger.warn("Failed to set user agent", { error: uaError.message });
+    }
+
+    // Set viewport to avoid detection (common desktop resolution)
+    try {
+      await page.setViewport({
+        width: 1920,
+        height: 1080,
+        deviceScaleFactor: 1,
+      });
+    } catch (viewportError) {
+      logger.warn("Failed to set viewport", { error: viewportError.message });
+    }
+
+    // Add additional evasions to avoid detection
+    try {
+      // Override webdriver property
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, "webdriver", {
+          get: () => false,
+        });
+      });
+
+      // Override plugins to look like a real browser
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, "plugins", {
+          get: () => [1, 2, 3, 4, 5],
+        });
+      });
+
+      // Override languages
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, "languages", {
+          get: () => ["en-US", "en"],
+        });
+      });
+    } catch (evasionError) {
+      logger.warn("Failed to set page evasions", {
+        error: evasionError.message,
+      });
+    }
+
     // Add page to disposables for cleanup
     this.addDisposable(page);
 
