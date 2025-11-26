@@ -54,9 +54,22 @@ class PuppeteerManager {
     // Create a new page in the default browser context
     const page = await this.browser.newPage();
 
-    // CRITICAL: Set user agent and viewport to avoid CAPTCHA detection
-    // Puppeteer v24 uses Chrome 131.x - use matching user agent
+    // CRITICAL: Configure page with comprehensive anti-detection measures
+    await this.configurePageForStealth(page);
+
+    // Add page to disposables for cleanup
+    this.addDisposable(page);
+
+    return page;
+  }
+
+  /**
+   * Configures a page with comprehensive stealth and anti-CAPTCHA measures
+   * This method applies all evasions needed to bypass detection on Heroku
+   */
+  async configurePageForStealth(page) {
     try {
+      // Set user agent - Puppeteer v24 uses Chrome 131.x
       await page.setUserAgent(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
       );
@@ -75,38 +88,109 @@ class PuppeteerManager {
       logger.warn("Failed to set viewport", { error: viewportError.message });
     }
 
-    // Add additional evasions to avoid detection
+    // Set realistic HTTP headers
     try {
-      // Override webdriver property
+      await page.setExtraHTTPHeaders({
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        Connection: "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
+      });
+    } catch (headersError) {
+      logger.warn("Failed to set HTTP headers", {
+        error: headersError.message,
+      });
+    }
+
+    // Comprehensive evasions - all in one evaluateOnNewDocument for efficiency
+    try {
       await page.evaluateOnNewDocument(() => {
+        // Override chrome property (critical for detection)
+        window.chrome = {
+          runtime: {},
+          loadTimes: function () {},
+          csi: function () {},
+          app: {},
+        };
+
+        // Override webdriver property
         Object.defineProperty(navigator, "webdriver", {
           get: () => false,
         });
-      });
 
-      // Override plugins to look like a real browser
-      await page.evaluateOnNewDocument(() => {
+        // Remove webdriver from navigator prototype
+        delete window.navigator.__proto__.webdriver;
+
+        // Override plugins to look like a real browser
         Object.defineProperty(navigator, "plugins", {
           get: () => [1, 2, 3, 4, 5],
         });
-      });
 
-      // Override languages
-      await page.evaluateOnNewDocument(() => {
+        // Override languages
         Object.defineProperty(navigator, "languages", {
           get: () => ["en-US", "en"],
         });
+
+        // Override permissions API
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) =>
+          parameters.name === "notifications"
+            ? Promise.resolve({ state: Notification.permission })
+            : originalQuery(parameters);
+
+        // Override iframe contentWindow
+        Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
+          get: function () {
+            return window;
+          },
+        });
+
+        // Override toString methods to hide automation
+        const getParameter = WebGLRenderingContext.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function (parameter) {
+          if (parameter === 37445) {
+            return "Intel Inc.";
+          }
+          if (parameter === 37446) {
+            return "Intel Iris OpenGL Engine";
+          }
+          return getParameter.call(this, parameter);
+        };
+
+        // Override canvas fingerprinting
+        const toBlob = HTMLCanvasElement.prototype.toBlob;
+        const toDataURL = HTMLCanvasElement.prototype.toDataURL;
+        const getImageData = CanvasRenderingContext2D.prototype.getImageData;
+
+        // Add noise to canvas operations
+        HTMLCanvasElement.prototype.toBlob = function (
+          callback,
+          type,
+          quality
+        ) {
+          const canvas = this;
+          return toBlob.call(canvas, callback, type, quality);
+        };
+
+        // Override notification permission
+        if (Notification.permission === "default") {
+          Object.defineProperty(Notification, "permission", {
+            get: () => "default",
+          });
+        }
       });
     } catch (evasionError) {
       logger.warn("Failed to set page evasions", {
         error: evasionError.message,
       });
     }
-
-    // Add page to disposables for cleanup
-    this.addDisposable(page);
-
-    return page;
   }
 
   async closeBrowser() {
