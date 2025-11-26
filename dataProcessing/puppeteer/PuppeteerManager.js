@@ -42,19 +42,8 @@ class PuppeteerManager {
     await this.launchBrowser();
     const page = await this.browser.newPage();
 
-    // optional: set viewport & UA here
-
-    // memory-saving but safer than global no-images
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      const type = req.resourceType();
-
-      if (["image", "font", "media"].includes(type)) {
-        return req.abort();
-      }
-
-      return req.continue();
-    });
+    // Note: Request interception should be set by individual services
+    // if needed, to avoid conflicts with multiple handlers
 
     this.addDisposable(page);
     return page;
