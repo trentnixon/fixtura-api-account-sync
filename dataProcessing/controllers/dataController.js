@@ -33,6 +33,18 @@ class DataController {
   }
 
   /**
+   * Re-sync data using direct org ID (bypasses account lookup).
+   * Used for direct club/association ID processing.
+   *
+   * @param {number} orgId - The organization ID (club or association ID)
+   * @param {string} orgType - The organization type ("CLUB" or "ASSOCIATION")
+   * @returns {Promise<object>} - Structured data object with pseudo account ID
+   */
+  async reSyncDataDirect(orgId, orgType) {
+    return await this.dataService.fetchDataDirect(orgId, orgType);
+  }
+
+  /**
    * Update account data only - fetches fresh account data without processing competitions, teams, or games.
    * This is used for on-demand account updates that only refresh account metadata.
    */

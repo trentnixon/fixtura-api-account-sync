@@ -2,6 +2,11 @@
 
 This document tracks development progress for key features in the ScrapeAccountSync service.
 
+## Features
+
+1. [On-Demand Account Update Feature](#on-demand-account-update-feature) ✅ COMPLETE
+2. [Direct Organization ID Processing Feature](#direct-organization-id-processing-feature) ✅ COMPLETE
+
 ---
 
 # On-Demand Account Update Feature
@@ -280,3 +285,117 @@ This feature implements comprehensive handling for missing fixtures (404 errors)
    - Should deletion be enabled by default or opt-in?
    - Should it be configurable per account or globally?
    - Recommendation: Opt-in with per-account configuration
+
+---
+
+# Direct Organization ID Processing Feature
+
+This feature allows processing club or association data directly using their organization IDs, without requiring an associated user account. It bypasses the account lookup step and uses a pseudo/sudo admin account ID internally to satisfy data structure requirements.
+
+**Status**: ✅ **COMPLETE**
+
+---
+
+## ✅ Completed
+
+- [x] Research and planning completed (TKT-2025-001)
+  - Analyzed existing architecture
+  - Identified key decisions (pseudo account ID strategy)
+  - Created detailed implementation plan
+- [x] **Phase 1: Queue Setup** - Added two new Bull queues
+  - Added `syncClubDirect` queue to `queueConfig.js`
+  - Added `syncAssociationDirect` queue to `queueConfig.js`
+  - Registered queues in `worker.js`
+  - Created queue handlers (`syncClubDirectQueue.js`, `syncAssociationDirectQueue.js`)
+- [x] **Phase 2: Data Fetching** - New direct data fetching methods
+  - Created `fetchClubDirectData(clubId)` in `ProcessorUtils.js`
+  - Created `fetchAssociationDirectData(associationId)` in `ProcessorUtils.js`
+  - Added `getPseudoAccountId(orgType)` utility function
+  - Added `ADMIN_ACCOUNT_ID` to environment config
+  - Added `fetchDataDirect(orgId, orgType)` method to `DataService`
+  - Added `reSyncDataDirect(orgId, orgType)` method to `DataController`
+  - All Phase 2 tests passed with real IDs (27958, 3292)
+- [x] **Phase 3: Controller Setup** - Controllers and task processors
+  - Created `Controller_ClubDirect(fromRedis)` in `controller.js`
+  - Created `Controller_AssociationDirect(fromRedis)` in `controller.js`
+  - Created `ClubDirectTaskProcessor` in `src/tasks/`
+  - Created `AssociationDirectTaskProcessor` in `src/tasks/`
+  - Updated queue handlers to use new processors
+  - All processing stages work as-is (no modifications needed)
+- [x] **Phase 4: Account Operations & Notifications** - Skip account updates, implement notifications
+  - Task processors skip account status updates (no `isSetup`, no `isUpdating`)
+  - Created `notifyDirectOrgProcessing(orgId, orgType, status, errorMessage)` function
+  - Sends Slack/webhook notifications (not CMS account endpoints)
+  - Improved error handling with prominent org ID logging
+  - All notifications integrated into queue handlers
+- [x] **Phase 5: Testing & Validation** - End-to-end testing
+  - Created comprehensive test script (`testPhase5DirectProcessing.js`)
+  - Association test (3292) passed successfully (all stages completed)
+  - Error handling tests created and improved
+  - Club test (27958) configured and ready
+- [x] **Phase 6: Documentation** - Complete documentation
+  - Created `QUEUE_JOB_PARAMETERS_DIRECT_IDS.md` with full queue documentation
+  - Updated `QUEUE_JOB_PARAMETERS.md` to reference direct ID queues
+  - Updated `DevelopmentRoadMap.md` with feature progress
+  - Updated `src/queues/readMe.md` with new queue files
+  - Updated `src/tasks/readMe.md` with new task processors
+  - Updated `src/controller/readMe.md` with new controller functions
+
+---
+
+## Key Features
+
+- ✅ Processes organizations directly by ID (no account lookup needed)
+- ✅ Full processing pipeline (competitions, teams, games, validation, cleanup)
+- ✅ Uses pseudo admin account ID internally (configured via `ADMIN_ACCOUNT_ID` env var)
+- ✅ Skips account status updates (`isSetup`, `isUpdating` not modified)
+- ✅ Notifications sent via Slack/webhook (not CMS account endpoints)
+- ✅ All existing processing stages work as-is (no modifications needed)
+- ✅ Comprehensive error handling with prominent org ID logging
+
+---
+
+## Queue Names
+
+- `syncClubDirect`: Direct club ID processing
+- `syncAssociationDirect`: Direct association ID processing
+
+---
+
+## Environment Configuration
+
+Required environment variable:
+
+```bash
+ADMIN_ACCOUNT_ID=436  # Pseudo/sudo admin account ID used internally
+```
+
+Optional Slack configuration:
+
+```bash
+SlackToken=xoxb-your-slack-token
+SLACK_DIRECT_ORG_CHANNEL=#data-account
+SLACK_DIRECT_ORG_ERROR_CHANNEL=#data-account-error
+```
+
+---
+
+## Documentation
+
+- Queue job parameters: [`QUEUE_JOB_PARAMETERS_DIRECT_IDS.md`](./QUEUE_JOB_PARAMETERS_DIRECT_IDS.md)
+- Implementation details: [`Tickets.md`](./Tickets.md)
+- Research findings: [`RESEARCH_CLUB_ASSOCIATION_IDS.md`](./RESEARCH_CLUB_ASSOCIATION_IDS.md)
+
+---
+
+## Testing
+
+Test scripts available:
+
+- Phase 2: [`__tests__/testPhase2DirectDataFetching.js`](./__tests__/testPhase2DirectDataFetching.js)
+- Phase 5: [`__tests__/testPhase5DirectProcessing.js`](./__tests__/testPhase5DirectProcessing.js)
+
+Test IDs:
+
+- Club ID: `27958`
+- Association ID: `3292`

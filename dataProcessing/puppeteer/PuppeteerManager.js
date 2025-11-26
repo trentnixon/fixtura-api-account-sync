@@ -24,8 +24,6 @@ class PuppeteerManager {
         args: [
           "--disable-setuid-sandbox",
           "--no-sandbox",
-          "--single-process",
-          "--no-zygote",
           "--disable-dev-shm-usage",
           "--disable-gpu",
           "--no-first-run",

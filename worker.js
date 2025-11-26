@@ -4,6 +4,8 @@
 const checkAssetGeneratorAccountStatus = require("./src/queues/checkAssetGeneratorAccountStatus");
 const handleAccountSync = require("./src/queues/syncUserAccountQueue");
 const handleUpdateAccountOnly = require("./src/queues/updateAccountOnlyQueue");
+const handleClubDirectSync = require("./src/queues/syncClubDirectQueue");
+const handleAssociationDirectSync = require("./src/queues/syncAssociationDirectQueue");
 
 const logger = require("./src/utils/logger");
 const onboardNewAccountTask = require("./src/queues/onboardNewAccount");
@@ -64,6 +66,22 @@ function initializeQueueProcessing() {
     console.log("handleUpdateAccountOnly completed");
   } catch (error) {
     console.error("Error in handleUpdateAccountOnly:", error);
+  }
+
+  try {
+    console.log("Calling handleClubDirectSync...");
+    handleClubDirectSync();
+    console.log("handleClubDirectSync completed");
+  } catch (error) {
+    console.error("Error in handleClubDirectSync:", error);
+  }
+
+  try {
+    console.log("Calling handleAssociationDirectSync...");
+    handleAssociationDirectSync();
+    console.log("handleAssociationDirectSync completed");
+  } catch (error) {
+    console.error("Error in handleAssociationDirectSync:", error);
   }
 
   console.log("=== QUEUE PROCESSING INITIALIZATION COMPLETE ===");

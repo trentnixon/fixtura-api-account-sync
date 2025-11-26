@@ -18,6 +18,10 @@ const queueNames = {
   onboardNewAccount: "onboardNewAccount",
   // 5 On-demand account update only (no data processing)
   updateAccountOnly: "updateAccountOnly",
+  // 6 Direct club processing (bypasses account lookup)
+  syncClubDirect: "syncClubDirect",
+  // 7 Direct association processing (bypasses account lookup)
+  syncAssociationDirect: "syncAssociationDirect",
 };
 
 let initializedQueues;

@@ -7,7 +7,9 @@ This folder contains the main service controller that orchestrates the worker op
 - `controller.js`: Main service controller for orchestrating operations
   - `Controller_Club`: Full sync for club accounts
   - `Controller_Associations`: Full sync for association accounts
-  - `Controller_UpdateAccountOnly`: On-demand account update only (no data processing)
+  - `Controller_UpdateAccountOnly`: On-demand account update (full sync without worker handoff)
+  - `Controller_ClubDirect`: Direct club ID processing (bypasses account lookup) - **NEW**
+  - `Controller_AssociationDirect`: Direct association ID processing (bypasses account lookup) - **NEW**
 
 ## Relations
 

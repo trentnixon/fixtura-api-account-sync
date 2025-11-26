@@ -86,12 +86,11 @@ const getClubRelationsForAssociation = () => {
 module.exports = {
   getPuppeteerInstance: async () => {
     return await puppeteer.launch({
-      headless: process.env.NODE_ENV === "development" ? false : "new",
+      headless: process.env.NODE_ENV === "development" ? false : "shell",
       args: [
         "--disable-setuid-sandbox",
         "--no-sandbox",
-        "--single-process",
-        "--no-zygote",
+        "--disable-dev-shm-usage",
       ],
     });
   },

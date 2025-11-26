@@ -38,15 +38,34 @@ const API_CONFIG = {
   retryAttempts: parseInt(process.env.API_RETRY_ATTEMPTS) || 3,
 };
 
+// Admin Account Configuration for Direct Org Processing
+const ADMIN_CONFIG = {
+  accountId: process.env.ADMIN_ACCOUNT_ID
+    ? parseInt(process.env.ADMIN_ACCOUNT_ID, 10)
+    : null,
+};
+
 // Log configuration for debugging
 console.log(`[environment.js] Environment: ${ENVIRONMENT}`);
 console.log(`[environment.js] API Base URL: ${API_CONFIG.baseUrl}`);
 console.log(`[environment.js] API Timeout: ${API_CONFIG.timeout}ms`);
 console.log(`[environment.js] API Retry Attempts: ${API_CONFIG.retryAttempts}`);
 
+// Log admin config if set
+if (ADMIN_CONFIG.accountId) {
+  console.log(
+    `[environment.js] Admin Account ID: ${ADMIN_CONFIG.accountId} (for direct org processing)`
+  );
+} else {
+  console.log(
+    `[environment.js] Admin Account ID: Not set (direct org processing will use null account ID)`
+  );
+}
+
 module.exports = {
   ENVIRONMENT,
   API_CONFIG,
+  ADMIN_CONFIG,
   isDevelopment: ENVIRONMENT === "development",
   isProduction: ENVIRONMENT === "production",
 };

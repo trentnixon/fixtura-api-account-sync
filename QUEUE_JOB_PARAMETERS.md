@@ -1,4 +1,18 @@
-# Queue Job Parameters for `updateAccountOnly` Queue
+# Queue Job Parameters Documentation
+
+This document outlines all Redis Bull queues and how to add jobs to them from Strapi CMS.
+
+## Available Queues
+
+1. [`updateAccountOnly`](#updateaccountonly-queue) - On-demand account updates
+2. [`syncClubDirect`](QUEUE_JOB_PARAMETERS_DIRECT_IDS.md#synclubdirect-queue) - Direct club ID processing (NEW)
+3. [`syncAssociationDirect`](QUEUE_JOB_PARAMETERS_DIRECT_IDS.md#syncassociationdirect-queue) - Direct association ID processing (NEW)
+
+**Note**: Direct ID processing queues (`syncClubDirect` and `syncAssociationDirect`) are documented in a separate file: [`QUEUE_JOB_PARAMETERS_DIRECT_IDS.md`](QUEUE_JOB_PARAMETERS_DIRECT_IDS.md)
+
+---
+
+# `updateAccountOnly` Queue
 
 This document outlines the `updateAccountOnly` Redis Bull queue and how to add jobs to it from Strapi CMS.
 

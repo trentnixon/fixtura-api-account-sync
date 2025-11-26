@@ -4,12 +4,50 @@ const {
   getDetailedClubDetails,
   getAssociationObj,
   getDetailedAssociationDetails,
+  fetchClubDirectData,
+  fetchAssociationDirectData,
 } = require("../utils/ProcessorUtils");
 const CRUDOperations = require("./CRUDoperations");
 
 class DataService {
   constructor() {
     // Initialization code, if needed
+  }
+
+  /**
+   * Gets pseudo/sudo account ID for direct org processing.
+   * Returns admin account ID from environment or null if not configured.
+   *
+   * @param {string} orgType - The organization type ("CLUB" or "ASSOCIATION")
+   * @returns {number|null} - Admin account ID or null
+   */
+  getPseudoAccountId(orgType) {
+    // Option A: Return null (if skipping account operations)
+    // return null;
+
+    // Option B: Return admin account ID (RECOMMENDED)
+    // Get from environment variable, default to 1 if not set
+    const adminAccountId = process.env.ADMIN_ACCOUNT_ID
+      ? parseInt(process.env.ADMIN_ACCOUNT_ID, 10)
+      : null;
+
+    if (!adminAccountId) {
+      logger.warn(
+        "⚠️ ADMIN_ACCOUNT_ID not set in environment. Using null for pseudo account ID.",
+        {
+          orgType: orgType,
+          note: "Account operations may fail if account ID is required",
+        }
+      );
+      return null;
+    }
+
+    logger.debug("Using pseudo account ID for direct org processing", {
+      orgType: orgType,
+      pseudoAccountId: adminAccountId,
+    });
+
+    return adminAccountId;
   }
   async fetchData(fromStrapi) {
     if (fromStrapi.PATH === "CLUB") {
@@ -18,6 +56,107 @@ class DataService {
       return await this.fetchDataForAssociation(fromStrapi);
     } else {
       throw new Error("Invalid PATH value");
+    }
+  }
+
+  /**
+   * Fetches data directly using org ID (bypasses account lookup).
+   * Used for direct club/association ID processing.
+   *
+   * @param {number} orgId - The organization ID (club or association ID)
+   * @param {string} orgType - The organization type ("CLUB" or "ASSOCIATION")
+   * @returns {Promise<object>} - Structured data object with pseudo account ID
+   */
+  async fetchDataDirect(orgId, orgType) {
+    try {
+      if (orgType === "CLUB") {
+        return await this.fetchDataForClubDirect(orgId);
+      } else if (orgType === "ASSOCIATION") {
+        return await this.fetchDataForAssociationDirect(orgId);
+      } else {
+        throw new Error(
+          `Invalid org type: ${orgType}. Must be "CLUB" or "ASSOCIATION"`
+        );
+      }
+    } catch (error) {
+      logger.critical("An error occurred in DataService - fetchDataDirect", {
+        orgId: orgId,
+        orgType: orgType,
+        error: error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches club data directly using club ID (bypasses account lookup).
+   * Creates pseudo account ID to satisfy data structure requirements.
+   *
+   * @param {number} clubId - The club ID to fetch directly
+   * @returns {Promise<object>} - Structured data object
+   */
+  async fetchDataForClubDirect(clubId) {
+    try {
+      // Fetch club data directly (bypasses account lookup)
+      const { clubObj, details } = await fetchClubDirectData(clubId);
+
+      // Get pseudo account ID
+      const pseudoAccountId = this.getPseudoAccountId("CLUB");
+
+      // Create fromStrapi-like structure for compatibility
+      const fromStrapi = {
+        ID: pseudoAccountId, // Use pseudo account ID
+        PATH: "CLUB",
+      };
+
+      // Structure data with pseudo account ID
+      return this.structureClubData(fromStrapi, clubObj, details);
+    } catch (error) {
+      logger.critical(
+        "An error occurred in DataService - fetchDataForClubDirect",
+        {
+          clubId: clubId,
+          error: error,
+        }
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches association data directly using association ID (bypasses account lookup).
+   * Creates pseudo account ID to satisfy data structure requirements.
+   *
+   * @param {number} associationId - The association ID to fetch directly
+   * @returns {Promise<object>} - Structured data object
+   */
+  async fetchDataForAssociationDirect(associationId) {
+    try {
+      // Fetch association data directly (bypasses account lookup)
+      const { associationObj, details } = await fetchAssociationDirectData(
+        associationId
+      );
+
+      // Get pseudo account ID
+      const pseudoAccountId = this.getPseudoAccountId("ASSOCIATION");
+
+      // Create fromStrapi-like structure for compatibility
+      const fromStrapi = {
+        ID: pseudoAccountId, // Use pseudo account ID
+        PATH: "ASSOCIATION",
+      };
+
+      // Structure data with pseudo account ID
+      return this.structureAssociationData(fromStrapi, associationObj, details);
+    } catch (error) {
+      logger.critical(
+        "An error occurred in DataService - fetchDataForAssociationDirect",
+        {
+          associationId: associationId,
+          error: error,
+        }
+      );
+      throw error;
     }
   }
   async fetchDataForClub(fromStrapi) {
@@ -90,14 +229,14 @@ class DataService {
       return arr;
     }
 
-    teamsData.forEach(team => {
+    teamsData.forEach((team) => {
       try {
         if (!team?.attributes?.grades?.data) {
           logger.warn("Invalid team data structure", { team });
           return;
         }
 
-        team.attributes.grades.data.forEach(grade => {
+        team.attributes.grades.data.forEach((grade) => {
           if (!grade?.id) {
             logger.warn("Invalid grade data", { grade });
             return;
@@ -133,7 +272,7 @@ class DataService {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-    competitionsData.forEach(comp => {
+    competitionsData.forEach((comp) => {
       try {
         if (!comp?.attributes?.startDate || !comp?.attributes?.teams?.data) {
           logger.warn("Invalid competition data structure", { comp });
@@ -145,7 +284,7 @@ class DataService {
           return;
         }
 
-        comp.attributes.teams.data.forEach(team => {
+        comp.attributes.teams.data.forEach((team) => {
           if (!team?.attributes) {
             logger.warn("Invalid team data", { team });
             return;
@@ -188,7 +327,7 @@ class DataService {
       today.getDate() - 14
     );
 
-    competitionsData.forEach(comp => {
+    competitionsData.forEach((comp) => {
       try {
         if (!comp?.attributes?.competition?.data) {
           logger.warn("Invalid competition data structure", { comp });
@@ -206,7 +345,7 @@ class DataService {
           return;
         }
 
-        compData.attributes.grades.data.forEach(grades => {
+        compData.attributes.grades.data.forEach((grades) => {
           if (!grades?.attributes) {
             logger.warn("Invalid grades data", { grades });
             return;
@@ -245,7 +384,7 @@ class DataService {
 
       // Proceed only if the competition's end date is within the last 14 days
       if (endDate > fourteenDaysAgo) {
-        const gradeArr = comp.attributes.grades.data.map(grade => ({
+        const gradeArr = comp.attributes.grades.data.map((grade) => ({
           compID: comp.id,
           compName: comp.attributes.competitionName,
           id: grade.id,
