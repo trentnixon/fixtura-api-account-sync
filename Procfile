@@ -1,1 +1,1 @@
-worker: npm install && node worker.js
+worker: node worker.js

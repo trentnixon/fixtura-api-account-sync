@@ -8,7 +8,8 @@
     "worker": "nodemon worker.js",
     "start": "node index.js",
     "dev": "set NODE_ENV=development && set PORT=7000 && nodemon worker.js",
-    "LOGS": "heroku logs --tail"
+    "LOGS": "heroku logs --tail",
+    "postinstall": "node -e \"try { if (process.env.NODE_ENV === 'production' || process.env.RENDER) { const { execSync } = require('child_process'); execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' }); } } catch(e) { console.log('Chrome install skipped:', e.message); }\""
   },
   "author": "",
   "license": "ISC",
