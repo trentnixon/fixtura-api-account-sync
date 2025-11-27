@@ -32,11 +32,11 @@ class PuppeteerManager {
     this.disposables = [];
     this.operationCount = 0;
     this.maxOperationsBeforeRestart = parseInt(
-      process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "3",
+      process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "75",
       10
-    ); // Restart every 3 operations by default (very aggressive for single-job memory spikes)
+    ); // Restart every 15 operations (relaxed from 3 for 2GB memory - allows faster processing)
     this.lastRestartTime = Date.now();
-    this.minRestartInterval = 15000; // Don't restart more than once per 15 seconds
+    this.minRestartInterval = 60000; // Don't restart more than once per 60 seconds (relaxed from 15s to reduce CPU usage)
     this.activePages = new Set(); // Track pages currently in use to prevent restart during operations
   }
 
@@ -55,6 +55,8 @@ class PuppeteerManager {
         handleSIGINT: false,
         handleSIGTERM: false,
         handleSIGHUP: false,
+        // Performance: Set protocol timeout for faster error detection
+        protocolTimeout: 120000, // 2 minutes (faster failure detection)
         args: [
           "--disable-setuid-sandbox",
           "--no-sandbox",
@@ -63,9 +65,9 @@ class PuppeteerManager {
           "--no-default-browser-check",
           "--disable-background-networking",
           "--disable-features=IsolateOrigins,site-per-process",
-          // Memory optimizations (safe for bot detection - don't trigger flags)
-          "--disable-gpu", // Reduces memory usage
-          "--disable-software-rasterizer", // Saves memory
+          // Memory optimizations (relaxed for 2GB memory - removed performance-hindering flags)
+          // REMOVED: --disable-gpu (enabled for GPU acceleration, faster rendering)
+          // REMOVED: --disable-software-rasterizer (enabled for better performance)
           "--disable-extensions", // Reduces memory footprint
           "--disable-plugins", // Saves memory
           "--disable-sync", // Reduces background processes
@@ -73,11 +75,11 @@ class PuppeteerManager {
           "--disable-backgrounding-occluded-windows", // Memory optimization
           "--disable-renderer-backgrounding", // Prevents memory accumulation
           "--disable-blink-features=AutomationControlled", // Hide automation (testing if safe)
-          "--disable-images", // Disable images to save memory
-          "--blink-settings=imagesEnabled=false", // Disable images in Blink engine
+          // REMOVED: --disable-images (images enabled for proper page rendering)
+          // REMOVED: --blink-settings=imagesEnabled=false (images enabled)
           "--disable-component-extensions-with-background-pages", // Reduces extension overhead
           "--disable-ipc-flooding-protection", // Better for automation
-          "--metrics-recording-only", // Reduce telemetry overhead
+          // REMOVED: --metrics-recording-only (not needed, minimal impact)
           "--mute-audio", // Disable audio processing
           "--disable-notifications", // Prevent notification pop-ups
           "--disable-default-apps", // Don't load default apps
@@ -108,17 +110,57 @@ class PuppeteerManager {
       this.activePages.delete(page);
     });
 
-    // Memory optimization: Set JavaScript heap size limit for this page
+    // Performance optimizations: Set default timeouts for faster failures
+    page.setDefaultNavigationTimeout(30000); // 30 seconds (faster than default 30s, but reasonable)
+    page.setDefaultTimeout(15000); // 15 seconds for operations
+
+    // Set optimal viewport for faster rendering
+    await page.setViewport({
+      width: 1920,
+      height: 1080,
+      deviceScaleFactor: 1,
+    });
+
+    // Set modern user agent for better compatibility
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    );
+
+    // Enable JavaScript (required for most sites)
     await page.setJavaScriptEnabled(true);
 
-    // Note: Request interception should be set by individual services
-    // if needed, to avoid conflicts with multiple handlers
+    // Performance: Block non-essential resources by default (can be overridden by services)
+    // This speeds up page loading significantly
+    try {
+      await page.setRequestInterception(true);
+      page.on("request", (request) => {
+        const resourceType = request.resourceType();
+        // Block resources that slow down loading but aren't needed for scraping
+        // Services can override this if they need specific resources
+        if (
+          [
+            "font", // Fonts not needed for data extraction
+            "media", // Videos/audio not needed
+            "websocket", // WebSockets not needed
+            "manifest", // App manifests not needed
+            // Note: Images and stylesheets are allowed (some sites need them for proper rendering)
+          ].includes(resourceType)
+        ) {
+          request.abort();
+        } else {
+          request.continue();
+        }
+      });
+    } catch (interceptError) {
+      // If request interception fails, continue without it (some pages may already have it)
+      logger.debug("Request interception not available (may already be set)");
+    }
 
     this.addDisposable(page);
     this.operationCount++;
 
-    // Log memory after page creation
-    if (this.operationCount % 5 === 0) {
+    // Log memory less frequently to reduce CPU usage (every 10 operations instead of 5)
+    if (this.operationCount % 10 === 0) {
       const mem = process.memoryUsage();
       logger.info(
         `Page created (op ${this.operationCount}): RSS=${(
@@ -161,18 +203,22 @@ class PuppeteerManager {
     const heapTotalMB = memoryUsage.heapTotal / 1024 / 1024;
     const externalMB = memoryUsage.external / 1024 / 1024;
 
-    // Log memory usage for monitoring
-    logger.info(
-      `Memory check: RSS=${rssMB.toFixed(2)}MB, Heap=${heapUsedMB.toFixed(
-        2
-      )}MB/${heapTotalMB.toFixed(2)}MB, External=${externalMB.toFixed(
-        2
-      )}MB, Ops=${this.operationCount}`
-    );
+    // Log memory usage less frequently to reduce CPU (only log every 5th check or if memory is high)
+    const shouldLogMemory =
+      this.operationCount % 5 === 0 || heapUsedMB > 100 || rssMB > 300;
+    if (shouldLogMemory) {
+      logger.info(
+        `Memory check: RSS=${rssMB.toFixed(2)}MB, Heap=${heapUsedMB.toFixed(
+          2
+        )}MB/${heapTotalMB.toFixed(2)}MB, External=${externalMB.toFixed(
+          2
+        )}MB, Ops=${this.operationCount}`
+      );
+    }
 
-    // Restart if heap exceeds 60MB or RSS exceeds 150MB (very aggressive thresholds for 1GB Heroku limit)
-    // Single jobs can create 50+ pages, need to restart more frequently
-    if (heapUsedMB > 60 || rssMB > 150) {
+    // Restart if heap exceeds 150MB or RSS exceeds 400MB (relaxed thresholds for 2GB memory)
+    // With 2GB available, we can allow more memory before restarting for better performance
+    /* if (heapUsedMB > 150 || rssMB > 400) {
       logger.warn(
         `Memory high (heap: ${heapUsedMB.toFixed(2)}MB, RSS: ${rssMB.toFixed(
           2
@@ -180,7 +226,7 @@ class PuppeteerManager {
       );
       await this.restartBrowser();
       return;
-    }
+    } */
   }
 
   /**
@@ -246,8 +292,8 @@ class PuppeteerManager {
       this.lastRestartTime = Date.now();
       this.disposables = [];
 
-      // Longer delay to let memory free up
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Shorter delay to let memory free up (reduced from 2s to 1s for faster restarts)
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Launch new browser
       await this.launchBrowser();
