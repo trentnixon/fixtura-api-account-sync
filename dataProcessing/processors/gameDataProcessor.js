@@ -41,7 +41,7 @@ class GameDataProcessor {
           ...this.dataObj,
           TEAMS: teamsBatch,
         });
-        const scrapedGameData = await getGameDataObj.setup();
+        let scrapedGameData = await getGameDataObj.setup();
 
         if (!scrapedGameData || scrapedGameData.length === 0) {
           logger.warn("No game data scraped for current batch.");
@@ -58,9 +58,8 @@ class GameDataProcessor {
         );
         await assignGameDataObj.setup();
 
-        // MEMORY OPTIMIZATION: Clear scrapedGameData after assignment to free memory
+        // MEMORY OPTIMIZATION: scrapedGameData will be garbage collected after this iteration
         // The data is already stored in allScrapedFixtures and assigned to CMS
-        scrapedGameData = null;
 
         BatchItem++;
       }
