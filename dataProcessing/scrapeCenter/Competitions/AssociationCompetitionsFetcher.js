@@ -35,7 +35,7 @@ class AssociationCompetitionsFetcher {
 
   async extractCompetitionsData() {
     try {
-      return await this.page.evaluate(associationID => {
+      return await this.page.evaluate((associationID) => {
         const result = [];
 
         // Select the parent block (the entire container with all competitions)
@@ -75,7 +75,7 @@ class AssociationCompetitionsFetcher {
               : `Unknown Season ${compIndex}`;
             const dateSpan = comp.querySelector("span:nth-child(2)");
             const [startDate, endDate] = dateSpan
-              ? dateSpan.textContent.split(" — ").map(date => date.trim())
+              ? dateSpan.textContent.split(" — ").map((date) => date.trim())
               : ["Unknown Start Date", "Unknown End Date"];
             const status = comp.querySelector("div > span")
               ? comp.querySelector("div > span").textContent.trim()
@@ -128,7 +128,7 @@ class AssociationCompetitionsFetcher {
     const season = seasonSpan.textContent.trim();
     const [startDate, endDate] = dateSpan.textContent
       .split(" — ")
-      .map(date => date.trim());
+      .map((date) => date.trim());
     const status = statusSpan.textContent.trim();
     const url = link.href;
     const competitionId = url.split("/").slice(-1)[0];

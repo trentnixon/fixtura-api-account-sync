@@ -37,6 +37,7 @@ class PuppeteerManager {
     ); // Restart every 3 operations by default (very aggressive for single-job memory spikes)
     this.lastRestartTime = Date.now();
     this.minRestartInterval = 15000; // Don't restart more than once per 15 seconds
+    this.activePages = new Set(); // Track pages currently in use to prevent restart during operations
   }
 
   async launchBrowser() {
@@ -90,11 +91,22 @@ class PuppeteerManager {
   }
 
   async createPageInNewContext() {
-    // Check if we need to restart the browser
-    await this.checkAndRestartIfNeeded();
+    // Only check for restart if no pages are currently active
+    // This prevents closing pages while they're being used
+    if (this.activePages.size === 0) {
+      await this.checkAndRestartIfNeeded();
+    }
 
     await this.launchBrowser();
     const page = await this.browser.newPage();
+
+    // Track this page as active
+    this.activePages.add(page);
+
+    // Automatically remove from active set when page closes
+    page.once("close", () => {
+      this.activePages.delete(page);
+    });
 
     // Memory optimization: Set JavaScript heap size limit for this page
     await page.setJavaScriptEnabled(true);
@@ -187,8 +199,17 @@ class PuppeteerManager {
   /**
    * Restarts the browser to free memory
    * Closes all pages and the browser, then launches a new one
+   * Will NOT restart if there are active pages in use
    */
   async restartBrowser() {
+    // Don't restart if pages are actively being used
+    if (this.activePages.size > 0) {
+      logger.info(
+        `Deferring browser restart - ${this.activePages.size} active page(s) in use`
+      );
+      return;
+    }
+
     try {
       const memoryBefore = process.memoryUsage();
       const rssBeforeMB = memoryBefore.rss / 1024 / 1024;
@@ -208,6 +229,8 @@ class PuppeteerManager {
               if (!page.isClosed()) {
                 await page.close();
               }
+              // Remove from active set if it was tracked
+              this.activePages.delete(page);
             } catch (error) {
               // Ignore errors
             }
@@ -253,10 +276,14 @@ class PuppeteerManager {
     try {
       if (page && !page.isClosed()) {
         await page.close();
+        // Remove from active set
+        this.activePages.delete(page);
         logger.debug("Page closed and memory freed");
       }
     } catch (error) {
       logger.warn("Error closing page", { error: error.message });
+      // Still remove from active set even if close failed
+      this.activePages.delete(page);
     }
   }
 
