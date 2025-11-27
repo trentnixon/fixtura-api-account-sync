@@ -106,10 +106,35 @@ async function handleClubDirectSync(testData = null) {
       await notifyDirectOrgProcessing(clubId, "CLUB", "completed");
     });
 
+    // Handle stalled jobs gracefully - log as info instead of error
+    // Stalled jobs are normal for long-running processing (30-90 minutes)
+    syncClubDirect.on("stalled", (jobId) => {
+      logger.info(
+        "⏳ syncClubDirect job detected as stalled (still processing)",
+        {
+          jobId: jobId,
+          message:
+            "Job is taking longer than expected but still processing. This is normal for large clubs.",
+        }
+      );
+    });
+
     syncClubDirect.on("failed", async (job, error) => {
       const clubId = job.data.getSync?.ID;
 
-      // Handle queue error
+      // Only treat as error if it's not a stall-related error
+      // Stall errors are handled by the stalled event above
+      if (error.message && error.message.includes("stalled")) {
+        logger.info("ℹ️ syncClubDirect job exceeded stall limit", {
+          jobId: job.id,
+          clubId: clubId,
+          message:
+            "Job took longer than 2 hours. This may indicate a very large club or performance issue.",
+        });
+        return; // Don't treat as critical error, just log and return
+      }
+
+      // Handle queue error for actual failures
       queueErrorHandler("syncClubDirect")(job, error);
 
       // Log failure with prominent org ID
