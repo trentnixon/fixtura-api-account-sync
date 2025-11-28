@@ -64,11 +64,19 @@ const setupRequestInterception = async (page) => {
  * @returns {boolean} True if authentication was successful
  */
 const authenticateProxy = async (page, proxyConfig) => {
-  if (!proxyConfig || !proxyConfig.username || !proxyConfig.password) {
+  // Check exactly like dependencies.js - must have username AND password (not empty strings)
+  if (
+    !proxyConfig ||
+    !proxyConfig.username ||
+    !proxyConfig.password ||
+    proxyConfig.username.trim() === "" ||
+    proxyConfig.password.trim() === ""
+  ) {
     return false;
   }
 
   try {
+    // EXACTLY like dependencies.js (production) - NO trimming on values
     await page.authenticate({
       username: proxyConfig.username,
       password: proxyConfig.password,
@@ -81,6 +89,7 @@ const authenticateProxy = async (page, proxyConfig) => {
     logger.warn("Proxy authentication failed, continuing without auth", {
       error: error.message,
       proxy: `${proxyConfig.host}:${proxyConfig.port}`,
+      stack: error.stack,
     });
     return false;
   }
@@ -88,15 +97,18 @@ const authenticateProxy = async (page, proxyConfig) => {
 
 /**
  * Set up a new page with all default configurations
+ * IMPORTANT: Authentication should be done BEFORE calling this function
+ * to ensure it happens before any requests are made
  * @param {Page} page - Puppeteer page object
- * @param {Object} proxyConfig - Optional proxy configuration
+ * @param {Object} proxyConfig - Optional proxy configuration (deprecated - auth should be done before)
  */
 const setupPage = async (page, proxyConfig = null) => {
+  // Configure page settings
   await configurePage(page);
+  // Set up request interception (must be after authentication if auth is needed)
   await setupRequestInterception(page);
-  if (proxyConfig) {
-    await authenticateProxy(page, proxyConfig);
-  }
+  // Note: Authentication is now done in PuppeteerManager before calling setupPage
+  // This ensures auth happens before any requests
 };
 
 module.exports = {

@@ -4,9 +4,36 @@
  */
 
 /**
+ * Decodo Proxy Configuration
+ * Ports range from 10001 to 10100 (100 ports total)
+ */
+const DECODO_PROXY_CONFIG = {
+  host: "dc.decodo.com",
+  portRange: {
+    start: 10001,
+    end: 10100,
+  },
+};
+
+/**
+ * Generate port array from range
+ * @param {number} start - Starting port number
+ * @param {number} end - Ending port number (inclusive)
+ * @returns {string[]} Array of port numbers as strings
+ */
+const generatePortsFromRange = (start, end) => {
+  const ports = [];
+  for (let i = start; i <= end; i++) {
+    ports.push(i.toString());
+  }
+  return ports;
+};
+
+/**
  * Parse proxy server string into host and ports
  * @param {string} proxyServerString - Format: "host:port" or "host:port1,port2,port3"
  * @returns {{host: string, ports: string[]}} Parsed host and ports array
+ * @deprecated Use DECODO_PROXY_CONFIG and generatePortsFromRange instead
  */
 const parseProxyServer = (proxyServerString) => {
   if (!proxyServerString || typeof proxyServerString !== "string") {
@@ -30,18 +57,30 @@ const parseProxyServer = (proxyServerString) => {
 
 /**
  * Build proxy configuration object from environment variables
+ * Uses DECODO_PROXY_CONFIG for host and port range, but allows override via env vars
  * @param {Object} env - Environment variables object
  * @returns {Object} Proxy configuration object
  */
 const buildProxyConfig = (env) => {
-  const proxyServer = env.DECODO_PROXY_SERVER || "";
-  const { host, ports } = parseProxyServer(proxyServer);
+  // Allow host override via environment variable, otherwise use config
+  const host = env.DECODO_PROXY_HOST || DECODO_PROXY_CONFIG.host;
+
+  // Generate ports from configured range
+  const ports = generatePortsFromRange(
+    DECODO_PROXY_CONFIG.portRange.start,
+    DECODO_PROXY_CONFIG.portRange.end
+  );
+
+  // Build server string for display/logging (first 5 ports as example)
+  const serverDisplay = `${host}:${ports.slice(0, 5).join(",")}... (${
+    ports.length
+  } ports)`;
 
   return {
     enabled: env.DECODO_PROXY_ENABLED === "true",
     host,
     ports,
-    server: proxyServer,
+    server: serverDisplay, // Display string instead of full port list
     username: env.DECODO_PROXY_USERNAME || "",
     password: env.DECODO_PROXY_PASSWORD || "",
     rotateOnRestart: env.DECODO_ROTATE_ON_RESTART !== "false",
@@ -51,6 +90,8 @@ const buildProxyConfig = (env) => {
 
 /**
  * Build proxy server URL from host and port
+ * NOTE: Do NOT include credentials in URL - use page.authenticate() instead
+ * Chrome doesn't support credentials in proxy URL for HTTPS connections
  * @param {string} host - Proxy host
  * @param {string} port - Proxy port
  * @returns {string|null} Proxy server URL or null if invalid
@@ -88,6 +129,8 @@ const getProxyConfigDisplay = (config) => {
 };
 
 module.exports = {
+  DECODO_PROXY_CONFIG,
+  generatePortsFromRange,
   parseProxyServer,
   buildProxyConfig,
   getProxyServerUrl,

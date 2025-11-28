@@ -1,11 +1,83 @@
-# Development Roadmap – ScrapeAccountSync Features
+# Development Roadmap – ScrapeAccountSync Service
 
-This document tracks development progress for key features in the ScrapeAccountSync service.
+This file tracks **progress, priorities, and recommendations** for the ScrapeAccountSync service. It should remain **clean and high-level**, while detailed planning lives in `Tickets.md`.
 
-## Features
+---
 
-1. [On-Demand Account Update Feature](#on-demand-account-update-feature) ✅ COMPLETE
-2. [Direct Organization ID Processing Feature](#direct-organization-id-processing-feature) ✅ COMPLETE
+## ✅ Completed
+
+- [x] On-demand account update feature (full sync without worker handoff)
+- [x] Direct organization ID processing (club/association direct processing)
+- [x] Multi-stage data processing pipeline (competitions, teams, games, validation, cleanup)
+- [x] Fixture validation and cleanup system (404 detection, comparison, deletion)
+- [x] Processing tracking and monitoring system
+- [x] Memory optimization with browser restart between stages
+- [x] Integration testing framework
+- [x] Queue-based job processing system
+- [x] Error handling and recovery mechanisms
+
+---
+
+## ⏳ To Do (easy → hard)
+
+1. [ ] **Service Enhancements**
+
+   - Add service health monitoring and status endpoints
+   - Implement graceful shutdown handling
+   - Add service performance metrics and analytics
+   - (see TKT-2025-XXX for details)
+
+2. [ ] **Testing Improvements**
+
+   - Expand integration test coverage
+   - Add unit tests for all modules
+   - Implement end-to-end testing scenarios
+   - (see TKT-2025-XXX for details)
+
+3. [ ] **Performance Optimization**
+
+   - Optimize queue operations and job processing
+   - Implement parallel processing where possible
+   - Add request/response caching strategies
+   - (see TKT-2025-XXX for details)
+
+4. [ ] **Code Quality**
+
+   - Consolidate duplicate functionality across modules
+   - Remove deprecated code (e.g., DELETE_ScrapeUtils.js)
+   - Standardize error handling patterns
+   - (see TKT-2025-XXX for details)
+
+5. [ ] **Architecture Improvements**
+   - Refactor to use shared data processing modules consistently
+   - Implement dependency injection
+   - Add module health monitoring
+   - (see TKT-2025-XXX for details)
+
+---
+
+## 💡 Recommendations
+
+- Consider implementing a service registry for better organization
+- Add comprehensive monitoring and alerting for all service components
+- Implement service configuration management system
+- Add support for service scaling and load balancing
+- Consider implementing a service health dashboard
+- Add comprehensive API documentation for all service operations
+- Implement service audit logging and history
+- Consider adding support for distributed processing
+- Add service dependency management and health checks
+- Consider implementing a service plugin system for extensibility
+
+---
+
+## Feature Details
+
+### 1. [On-Demand Account Update Feature](#on-demand-account-update-feature) ✅ COMPLETE
+
+### 2. [Direct Organization ID Processing Feature](#direct-organization-id-processing-feature) ✅ COMPLETE
+
+### 3. [Fixture Deletion and 404 Error Handling](#fixture-deletion-and-404-error-handling) ⏳ IN PROGRESS
 
 ---
 

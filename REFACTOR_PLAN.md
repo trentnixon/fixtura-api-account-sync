@@ -30,11 +30,13 @@ This document outlines the refactoring plan for the Decodo proxy integration cod
 ## 📁 Files to Refactor
 
 ### Primary Files
+
 1. `src/config/environment.js` - Proxy configuration parsing
 2. `dataProcessing/puppeteer/PuppeteerManager.js` - Main browser manager
 3. `common/dependencies.js` - Legacy browser launcher
 
 ### New Files to Create
+
 1. `src/config/proxyConfig.js` - Proxy configuration utilities
 2. `dataProcessing/puppeteer/browserConfig.js` - Browser launch configuration
 3. `src/utils/configLogger.js` - Centralized configuration logging
@@ -46,6 +48,7 @@ This document outlines the refactoring plan for the Decodo proxy integration cod
 ### Task 1: Extract Proxy Configuration Logic
 
 **Current Issue:**
+
 - Proxy parsing logic is verbose and embedded in `environment.js`
 - Logic is duplicated in `PuppeteerManager` and `dependencies.js`
 
@@ -58,38 +61,52 @@ Create `src/config/proxyConfig.js` to centralize proxy configuration:
  * Handles parsing and validation of Decodo proxy settings
  */
 
-const parseProxyServer = (proxyServerString) => {
-  if (!proxyServerString || typeof proxyServerString !== 'string') {
-    return { host: '', ports: [] };
+/**
+ * Decodo Proxy Configuration
+ * Ports range from 10001 to 10100 (100 ports total)
+ */
+const DECODO_PROXY_CONFIG = {
+  host: "dc.decodo.com",
+  portRange: {
+    start: 10001,
+    end: 10100,
+  },
+};
+
+/**
+ * Generate port array from range
+ */
+const generatePortsFromRange = (start, end) => {
+  const ports = [];
+  for (let i = start; i <= end; i++) {
+    ports.push(i.toString());
   }
-
-  const parts = proxyServerString.split(':');
-  if (parts.length < 2) {
-    return { host: '', ports: [] };
-  }
-
-  const host = parts[0].trim();
-  const portsString = parts.slice(1).join(':');
-  const ports = portsString
-    .split(',')
-    .map((p) => p.trim())
-    .filter((p) => p && !isNaN(Number(p)));
-
-  return { host, ports };
+  return ports;
 };
 
 const buildProxyConfig = (env) => {
-  const proxyServer = env.DECODO_PROXY_SERVER || '';
-  const { host, ports } = parseProxyServer(proxyServer);
+  // Allow host override via environment variable, otherwise use config
+  const host = env.DECODO_PROXY_HOST || DECODO_PROXY_CONFIG.host;
+
+  // Generate ports from configured range
+  const ports = generatePortsFromRange(
+    DECODO_PROXY_CONFIG.portRange.start,
+    DECODO_PROXY_CONFIG.portRange.end
+  );
+
+  // Build server string for display/logging
+  const serverDisplay = `${host}:${ports.slice(0, 5).join(",")}... (${
+    ports.length
+  } ports)`;
 
   return {
-    enabled: env.DECODO_PROXY_ENABLED === 'true',
+    enabled: env.DECODO_PROXY_ENABLED === "true",
     host,
     ports,
-    server: proxyServer,
-    username: env.DECODO_PROXY_USERNAME || '',
-    password: env.DECODO_PROXY_PASSWORD || '',
-    rotateOnRestart: env.DECODO_ROTATE_ON_RESTART !== 'false',
+    server: serverDisplay,
+    username: env.DECODO_PROXY_USERNAME || "",
+    password: env.DECODO_PROXY_PASSWORD || "",
+    rotateOnRestart: env.DECODO_ROTATE_ON_RESTART !== "false",
     currentPortIndex: 0,
   };
 };
@@ -100,15 +117,12 @@ const getProxyServerUrl = (host, port) => {
 };
 
 const isProxyConfigValid = (config) => {
-  return (
-    config.enabled &&
-    config.host &&
-    config.ports.length > 0
-  );
+  return config.enabled && config.host && config.ports.length > 0;
 };
 
 module.exports = {
-  parseProxyServer,
+  DECODO_PROXY_CONFIG,
+  generatePortsFromRange,
   buildProxyConfig,
   getProxyServerUrl,
   isProxyConfigValid,
@@ -116,6 +130,7 @@ module.exports = {
 ```
 
 **Benefits:**
+
 - ✅ Centralized proxy parsing logic
 - ✅ Easier to test
 - ✅ Reusable across files
@@ -126,6 +141,7 @@ module.exports = {
 ### Task 2: Extract Browser Launch Configuration
 
 **Current Issue:**
+
 - Launch arguments duplicated in `PuppeteerManager.js` and `dependencies.js`
 - Different arguments between files (inconsistency)
 - Hard to maintain (need to update in multiple places)
@@ -141,25 +157,25 @@ Create `dataProcessing/puppeteer/browserConfig.js`:
 
 const getBaseLaunchArgs = () => {
   return [
-    '--disable-setuid-sandbox',
-    '--no-sandbox',
-    '--disable-dev-shm-usage',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--disable-background-networking',
-    '--disable-features=IsolateOrigins,site-per-process',
-    '--disable-extensions',
-    '--disable-plugins',
-    '--disable-sync',
-    '--disable-background-timer-throttling',
-    '--disable-backgrounding-occluded-windows',
-    '--disable-renderer-backgrounding',
-    '--disable-blink-features=AutomationControlled',
-    '--disable-component-extensions-with-background-pages',
-    '--disable-ipc-flooding-protection',
-    '--mute-audio',
-    '--disable-notifications',
-    '--disable-default-apps',
+    "--disable-setuid-sandbox",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-background-networking",
+    "--disable-features=IsolateOrigins,site-per-process",
+    "--disable-extensions",
+    "--disable-plugins",
+    "--disable-sync",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-ipc-flooding-protection",
+    "--mute-audio",
+    "--disable-notifications",
+    "--disable-default-apps",
   ];
 };
 
@@ -167,11 +183,11 @@ const getLegacyLaunchArgs = () => {
   // Legacy launcher uses more aggressive memory optimizations
   return [
     ...getBaseLaunchArgs(),
-    '--disable-gpu',
-    '--disable-software-rasterizer',
-    '--disable-images',
-    '--blink-settings=imagesEnabled=false',
-    '--metrics-recording-only',
+    "--disable-gpu",
+    "--disable-software-rasterizer",
+    "--disable-images",
+    "--blink-settings=imagesEnabled=false",
+    "--metrics-recording-only",
   ];
 };
 
@@ -199,10 +215,7 @@ const getLaunchOptions = (options = {}) => {
 };
 
 const getLegacyLaunchOptions = (options = {}) => {
-  const {
-    headless = true,
-    proxyServer = null,
-  } = options;
+  const { headless = true, proxyServer = null } = options;
 
   const args = getLegacyLaunchArgs();
 
@@ -228,6 +241,7 @@ module.exports = {
 ```
 
 **Benefits:**
+
 - ✅ Single source of truth for launch args
 - ✅ Consistent configuration
 - ✅ Easy to update arguments
@@ -238,6 +252,7 @@ module.exports = {
 ### Task 3: Centralize Configuration Logging
 
 **Current Issue:**
+
 - Multiple `console.log` statements scattered in `environment.js`
 - Inconsistent logging format
 - Hard to disable/enable logging
@@ -255,7 +270,9 @@ const logEnvironment = (config) => {
   console.log(`[environment.js] Environment: ${config.environment}`);
   console.log(`[environment.js] API Base URL: ${config.api.baseUrl}`);
   console.log(`[environment.js] API Timeout: ${config.api.timeout}ms`);
-  console.log(`[environment.js] API Retry Attempts: ${config.api.retryAttempts}`);
+  console.log(
+    `[environment.js] API Retry Attempts: ${config.api.retryAttempts}`
+  );
 };
 
 const logAdminConfig = (config) => {
@@ -271,7 +288,10 @@ const logAdminConfig = (config) => {
 };
 
 const logProxyConfig = (config) => {
-  const { isProxyConfigValid, getProxyConfigDisplay } = require('../config/proxyConfig');
+  const {
+    isProxyConfigValid,
+    getProxyConfigDisplay,
+  } = require("../config/proxyConfig");
 
   if (isProxyConfigValid(config)) {
     const display = getProxyConfigDisplay(config);
@@ -296,6 +316,7 @@ module.exports = {
 ```
 
 **Benefits:**
+
 - ✅ Consistent logging format
 - ✅ Easy to disable/enable
 - ✅ Centralized logging logic
@@ -306,6 +327,7 @@ module.exports = {
 ### Task 4: Refactor environment.js
 
 **Current Issues:**
+
 - Verbose proxy parsing inline
 - Scattered logging
 - Mixed concerns (parsing + logging)
@@ -313,15 +335,15 @@ module.exports = {
 **Refactored Structure:**
 
 ```javascript
-const dotenv = require('dotenv');
-const { buildProxyConfig } = require('./config/proxyConfig');
-const { logAllConfig } = require('../utils/configLogger');
+const dotenv = require("dotenv");
+const { buildProxyConfig } = require("./config/proxyConfig");
+const { logAllConfig } = require("../utils/configLogger");
 
 // ... existing validation code ...
 
 // API Configuration
 const API_CONFIG = {
-  baseUrl: process.env.FIXTURA_API || 'http://127.0.0.1:1337',
+  baseUrl: process.env.FIXTURA_API || "http://127.0.0.1:1337",
   token: process.env.FIXTURA_TOKEN,
   timeout: parseInt(process.env.API_TIMEOUT) || 30000,
   retryAttempts: parseInt(process.env.API_RETRY_ATTEMPTS) || 3,
@@ -350,12 +372,13 @@ module.exports = {
   API_CONFIG,
   ADMIN_CONFIG,
   PROXY_CONFIG,
-  isDevelopment: ENVIRONMENT === 'development',
-  isProduction: ENVIRONMENT === 'production',
+  isDevelopment: ENVIRONMENT === "development",
+  isProduction: ENVIRONMENT === "production",
 };
 ```
 
 **Benefits:**
+
 - ✅ Cleaner, more readable code
 - ✅ Separation of concerns
 - ✅ Easier to test
@@ -366,6 +389,7 @@ module.exports = {
 ### Task 5: Refactor PuppeteerManager.js
 
 **Current Issues:**
+
 - Duplicated launch args
 - Inline proxy config logic
 - Verbose launch options
@@ -373,14 +397,17 @@ module.exports = {
 **Refactored Structure:**
 
 ```javascript
-const { getLaunchOptions } = require('./browserConfig');
-const { isProxyConfigValid, getProxyServerUrl } = require('../../src/config/proxyConfig');
+const { getLaunchOptions } = require("./browserConfig");
+const {
+  isProxyConfigValid,
+  getProxyServerUrl,
+} = require("../../src/config/proxyConfig");
 
 class PuppeteerManager {
   // ... existing code ...
 
   _getProxyConfig() {
-    const { PROXY_CONFIG } = require('../../src/config/environment');
+    const { PROXY_CONFIG } = require("../../src/config/environment");
 
     if (!isProxyConfigValid(PROXY_CONFIG)) {
       return null;
@@ -411,45 +438,45 @@ class PuppeteerManager {
 
     try {
       const launchOptions = getLaunchOptions({
-        headless: process.env.NODE_ENV?.trim() !== 'development',
+        headless: process.env.NODE_ENV?.trim() !== "development",
         proxyServer: proxyConfig?.server || null,
         protocolTimeout: 120000,
       });
 
       if (proxyConfig) {
-        logger.info('Puppeteer browser launching with Decodo proxy', {
+        logger.info("Puppeteer browser launching with Decodo proxy", {
           proxy: `${proxyConfig.host}:${proxyConfig.port}`,
           portRotation: proxyConfig.hasMultiplePorts
             ? `${proxyConfig.totalPorts} ports available`
-            : 'single port',
+            : "single port",
         });
       }
 
       this.browser = await puppeteer.launch(launchOptions);
 
-      logger.info('Puppeteer browser launched', {
+      logger.info("Puppeteer browser launched", {
         proxyEnabled: proxyConfig !== null,
       });
     } catch (error) {
-      logger.error('Error launching Puppeteer browser', { error });
+      logger.error("Error launching Puppeteer browser", { error });
 
       if (proxyConfig) {
         logger.warn(
-          'Browser launch with proxy failed, retrying without proxy',
+          "Browser launch with proxy failed, retrying without proxy",
           { error: error.message }
         );
 
         try {
           const fallbackOptions = getLaunchOptions({
-            headless: process.env.NODE_ENV?.trim() !== 'development',
+            headless: process.env.NODE_ENV?.trim() !== "development",
             proxyServer: null,
             protocolTimeout: 120000,
           });
 
           this.browser = await puppeteer.launch(fallbackOptions);
-          logger.warn('Browser launched without proxy (fallback mode)');
+          logger.warn("Browser launched without proxy (fallback mode)");
         } catch (fallbackError) {
-          logger.error('Browser launch failed even without proxy', {
+          logger.error("Browser launch failed even without proxy", {
             error: fallbackError,
           });
           throw fallbackError;
@@ -465,6 +492,7 @@ class PuppeteerManager {
 ```
 
 **Benefits:**
+
 - ✅ Uses centralized launch config
 - ✅ Cleaner proxy logic
 - ✅ Less duplication
@@ -475,6 +503,7 @@ class PuppeteerManager {
 ### Task 6: Refactor dependencies.js
 
 **Current Issues:**
+
 - Duplicated launch args
 - Duplicated proxy logic
 - Inconsistent with PuppeteerManager
@@ -482,12 +511,17 @@ class PuppeteerManager {
 **Refactored Structure:**
 
 ```javascript
-const { getLegacyLaunchOptions } = require('../dataProcessing/puppeteer/browserConfig');
-const { isProxyConfigValid, getProxyServerUrl } = require('../src/config/proxyConfig');
+const {
+  getLegacyLaunchOptions,
+} = require("../dataProcessing/puppeteer/browserConfig");
+const {
+  isProxyConfigValid,
+  getProxyServerUrl,
+} = require("../src/config/proxyConfig");
 
 module.exports = {
   getPuppeteerInstance: async () => {
-    const { PROXY_CONFIG } = require('../src/config/environment');
+    const { PROXY_CONFIG } = require("../src/config/environment");
 
     let proxyServer = null;
     if (isProxyConfigValid(PROXY_CONFIG)) {
@@ -497,7 +531,7 @@ module.exports = {
     }
 
     const launchOptions = getLegacyLaunchOptions({
-      headless: process.env.NODE_ENV !== 'development',
+      headless: process.env.NODE_ENV !== "development",
       proxyServer,
     });
 
@@ -521,6 +555,7 @@ module.exports = {
 ```
 
 **Benefits:**
+
 - ✅ Consistent with PuppeteerManager
 - ✅ Uses centralized config
 - ✅ Less duplication
@@ -531,17 +566,20 @@ module.exports = {
 ## 📊 Impact Analysis
 
 ### Code Reduction
+
 - **Before**: ~450 lines across 3 files
 - **After**: ~350 lines (with utilities)
 - **Savings**: ~100 lines of duplicated code
 
 ### Maintainability
+
 - ✅ Single source of truth for launch args
 - ✅ Centralized proxy logic
 - ✅ Easier to add new launch arguments
 - ✅ Easier to test individual components
 
 ### Consistency
+
 - ✅ Same launch args (with appropriate differences for legacy)
 - ✅ Same proxy logic
 - ✅ Same error handling patterns
@@ -551,18 +589,21 @@ module.exports = {
 ## 🧪 Testing Strategy
 
 ### Unit Tests
-1. Test `parseProxyServer()` with various inputs
-2. Test `buildProxyConfig()` with different env vars
+
+1. Test `generatePortsFromRange()` with different ranges
+2. Test `buildProxyConfig()` with different env vars (host override, credentials)
 3. Test `getLaunchOptions()` with different configurations
 4. Test `isProxyConfigValid()` validation
 
 ### Integration Tests
+
 1. Test browser launch with proxy
 2. Test browser launch without proxy
 3. Test proxy rotation
 4. Test fallback behavior
 
 ### Manual Testing
+
 1. Verify proxy works in PuppeteerManager
 2. Verify proxy works in legacy launcher
 3. Verify logging output
@@ -573,21 +614,25 @@ module.exports = {
 ## 📋 Implementation Order
 
 1. **Phase 1: Extract Utilities** (Low Risk)
+
    - Create `src/config/proxyConfig.js`
    - Create `dataProcessing/puppeteer/browserConfig.js`
    - Create `src/utils/configLogger.js`
    - Add unit tests
 
 2. **Phase 2: Refactor environment.js** (Low Risk)
+
    - Use extracted utilities
    - Test configuration loading
 
 3. **Phase 3: Refactor PuppeteerManager.js** (Medium Risk)
+
    - Use extracted utilities
    - Test browser launch
    - Test proxy rotation
 
 4. **Phase 4: Refactor dependencies.js** (Medium Risk)
+
    - Use extracted utilities
    - Test legacy launcher
    - Verify consistency
@@ -614,15 +659,18 @@ module.exports = {
 ## 🚨 Risk Assessment
 
 ### Low Risk
+
 - Extracting utilities (pure functions)
 - Centralizing logging
 - Refactoring environment.js
 
 ### Medium Risk
+
 - Refactoring PuppeteerManager (core functionality)
 - Refactoring dependencies.js (legacy code)
 
 ### Mitigation
+
 - Comprehensive testing after each phase
 - Keep old code until new code is verified
 - Gradual rollout
@@ -640,6 +688,7 @@ module.exports = {
 ## 🔄 Rollback Plan
 
 If issues arise:
+
 1. Revert to previous commit
 2. All changes are in separate files (utilities)
 3. Can disable new utilities and use old code if needed
@@ -655,4 +704,3 @@ If issues arise:
 ---
 
 **Status**: Ready for review and implementation
-

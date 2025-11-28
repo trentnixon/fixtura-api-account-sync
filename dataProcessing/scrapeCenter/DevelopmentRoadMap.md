@@ -6,11 +6,12 @@ This file tracks **progress, priorities, and recommendations** for the core scra
 
 ## ✅ Completed
 
-- [x] Competition scraping from web sources
+- [x] Competition scraping from association/club sources
 - [x] Game data scraping and extraction
-- [x] Team extraction from ladder/standings pages
-- [x] Scraping utility functions and constants
-- [x] Game data processing utilities
+- [x] Team extraction from ladder pages
+- [x] Ladder detection and page structure monitoring
+- [x] Team extraction with retry and backoff mechanisms
+- [x] Page analysis and structure detection
 
 ---
 
@@ -22,16 +23,28 @@ This file tracks **progress, priorities, and recommendations** for the core scra
    - Add scraping retry strategies
    - (see TKT-2025-XXX for details)
 
-2. [ ] **Utility Improvements**
-   - Enhance utility function documentation
-   - Add utility function testing
-   - Implement utility performance optimization
+2. [ ] **Page Structure Handling**
+   - Enhance page structure detection
+   - Add support for dynamic page structures
+   - Implement structure change monitoring
    - (see TKT-2025-XXX for details)
 
 3. [ ] **Performance Optimization**
    - Optimize scraping operations
    - Implement parallel scraping where possible
    - Add scraping batch operations
+   - (see TKT-2025-XXX for details)
+
+4. [ ] **Error Recovery**
+   - Add scraping error recovery mechanisms
+   - Implement scraping retry with exponential backoff
+   - Add scraping failure notification
+   - (see TKT-2025-XXX for details)
+
+5. [ ] **Advanced Features**
+   - Add support for custom scraping strategies
+   - Implement scraping result validation
+   - Add scraping history and audit logging
    - (see TKT-2025-XXX for details)
 
 ---
@@ -43,6 +56,10 @@ This file tracks **progress, priorities, and recommendations** for the core scra
 - Implement scraping result validation and verification
 - Add support for scraping templates and presets
 - Consider adding scraping performance profiling
+- Implement scraping dependency management
+- Add comprehensive documentation for scraping APIs
+- Consider implementing scraping result streaming for large datasets
+- Add support for different scraping sources and formats
 
 ---
 
@@ -52,3 +69,4 @@ This file tracks **progress, priorities, and recommendations** for the core scra
 * Reorder tasks so easier jobs always appear first.
 * Update when scope changes or new requirements arise.
 * Cross-reference each task with its ticket for detailed breakdowns and discussions.
+

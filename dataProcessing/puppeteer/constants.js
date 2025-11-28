@@ -11,19 +11,20 @@ const BROWSER_CONFIG = {
 };
 
 // Memory Management Configuration
+// Updated for 2GB server - relaxed thresholds for better performance
 const MEMORY_CONFIG = {
   MAX_OPERATIONS_BEFORE_RESTART: parseInt(
-    process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "75",
+    process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "150", // Increased from 75 for 2GB server
     10
   ),
-  MIN_RESTART_INTERVAL: 60000, // 60 seconds - don't restart more frequently
-  MEMORY_LOG_INTERVAL: 10, // Log memory every 10 operations
-  MEMORY_CHECK_INTERVAL: 5, // Check memory every 5 operations
-  // Memory thresholds (currently commented out but kept for reference)
-  HEAP_THRESHOLD_MB: 150,
-  RSS_THRESHOLD_MB: 400,
-  MEMORY_WARNING_HEAP_MB: 100,
-  MEMORY_WARNING_RSS_MB: 300,
+  MIN_RESTART_INTERVAL: 120000, // 120 seconds (2 minutes) - increased from 60s for 2GB server
+  MEMORY_LOG_INTERVAL: 20, // Log memory every 20 operations (reduced frequency from 10)
+  MEMORY_CHECK_INTERVAL: 10, // Check memory every 10 operations (reduced frequency from 5)
+  // Memory thresholds - increased for 2GB server
+  HEAP_THRESHOLD_MB: 300, // Increased from 150
+  RSS_THRESHOLD_MB: 800, // Increased from 400
+  MEMORY_WARNING_HEAP_MB: 200, // Increased from 100
+  MEMORY_WARNING_RSS_MB: 600, // Increased from 300
 };
 
 // Page Configuration
@@ -50,9 +51,7 @@ const BLOCKED_RESOURCE_TYPES = [
 
 // Environment Detection
 const isDevelopment = () => {
-  return (
-    process.env.NODE_ENV && process.env.NODE_ENV.trim() === "development"
-  );
+  return process.env.NODE_ENV && process.env.NODE_ENV.trim() === "development";
 };
 
 module.exports = {
@@ -62,4 +61,3 @@ module.exports = {
   BLOCKED_RESOURCE_TYPES,
   isDevelopment,
 };
-

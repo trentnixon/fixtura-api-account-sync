@@ -127,7 +127,8 @@ class DataController {
       });
 
       // MEMORY OPTIMIZATION: Force browser restart between stages to free memory
-      await this.forceBrowserRestartIfNeeded();
+      // REMOVED for 2GB server - not needed after competitions stage
+      // await this.forceBrowserRestartIfNeeded();
 
       logger.info("[START] Refreshing data after competitions", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -155,7 +156,8 @@ class DataController {
       });
 
       // MEMORY OPTIMIZATION: Force browser restart between stages to free memory
-      await this.forceBrowserRestartIfNeeded();
+      // REMOVED for 2GB server - not needed after teams stage
+      // await this.forceBrowserRestartIfNeeded();
 
       logger.info("[START] Refreshing data after teams", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,

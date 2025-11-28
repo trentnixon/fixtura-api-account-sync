@@ -61,6 +61,8 @@ class PuppeteerManager {
     // Select port (rotate if multiple ports available)
     const portIndex = this.currentProxyPortIndex % PROXY_CONFIG.ports.length;
     const selectedPort = PROXY_CONFIG.ports[portIndex];
+    // Do NOT include credentials in URL - use page.authenticate() instead
+    // Chrome doesn't support credentials in proxy URL for HTTPS
     const proxyServer = getProxyServerUrl(PROXY_CONFIG.host, selectedPort);
 
     return {
@@ -126,6 +128,47 @@ class PuppeteerManager {
 
       this.browser = await puppeteer.launch(launchOptions);
 
+      // Authenticate browser with proxy credentials if needed
+      // EXACTLY like dependencies.js (production code)
+      if (
+        proxyConfig &&
+        proxyConfig.username &&
+        proxyConfig.password &&
+        proxyConfig.username.trim() !== "" &&
+        proxyConfig.password.trim() !== ""
+      ) {
+        try {
+          // Authenticate the default page immediately after launch
+          // EXACTLY like dependencies.js - no trimming on values
+          const pages = await this.browser.pages();
+          if (pages.length > 0) {
+            await pages[0].authenticate({
+              username: proxyConfig.username,
+              password: proxyConfig.password,
+            });
+            logger.info("Proxy authentication configured on default page", {
+              proxy: `${proxyConfig.host}:${proxyConfig.port}`,
+            });
+          }
+        } catch (authError) {
+          logger.error(
+            "Failed to authenticate browser with proxy - this will cause HTTP 407 errors",
+            {
+              error: authError.message,
+              proxy: `${proxyConfig.host}:${proxyConfig.port}`,
+              stack: authError.stack,
+            }
+          );
+          // Don't throw - allow browser to continue, but this will likely cause 407 errors
+        }
+      } else if (proxyConfig) {
+        logger.warn("Proxy configured but credentials missing or empty", {
+          hasUsername: !!proxyConfig.username,
+          hasPassword: !!proxyConfig.password,
+          proxy: `${proxyConfig.host}:${proxyConfig.port}`,
+        });
+      }
+
       logger.info("Puppeteer browser launched", {
         proxyEnabled: proxyConfig !== null,
       });
@@ -174,9 +217,29 @@ class PuppeteerManager {
       this.activePages.delete(page);
     });
 
-    // Set up page with default configurations
+    // CRITICAL: Authenticate page BEFORE any other setup to prevent 407 errors
+    // Authentication must happen before any navigation or requests
     const proxyConfig = this._getProxyConfig();
-    await setupPage(page, proxyConfig);
+    if (proxyConfig && proxyConfig.username && proxyConfig.password) {
+      try {
+        await page.authenticate({
+          username: proxyConfig.username,
+          password: proxyConfig.password,
+        });
+        logger.debug("Proxy authentication configured for new page", {
+          proxy: `${proxyConfig.host}:${proxyConfig.port}`,
+        });
+      } catch (authError) {
+        logger.error("Failed to authenticate new page with proxy", {
+          error: authError.message,
+          proxy: `${proxyConfig.host}:${proxyConfig.port}`,
+        });
+        // Continue - but this will likely cause 407 errors
+      }
+    }
+
+    // Set up page with default configurations (authentication already done above)
+    await setupPage(page, null); // Pass null to skip authentication in setupPage
 
     this.addDisposable(page);
     this.operationCount++;

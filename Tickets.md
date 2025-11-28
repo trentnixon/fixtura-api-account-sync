@@ -1,19 +1,30 @@
-# Tickets
+# 📁 Tickets.md – ScrapeAccountSync Service
+
+This file is used for **feature-level planning and tracking** for the ScrapeAccountSync service.
+Each ticket must follow a consistent structure so it can be easily read by both humans and LLMs.
+
+---
 
 ## Completed Tickets
 
-- (None yet)
+- TKT-2025-001: Club and Association Direct ID Processing ✅ COMPLETE
+- (Additional completed tickets will be listed here as they are completed)
 
 ---
 
 ## Active Tickets
 
-### TKT-2025-001: Club and Association Direct ID Processing
+### TKT-2025-001
 
-**Status**: Research
-**Priority**: Medium
-**Created**: 2025-01-XX
-**Updated**: 2025-01-XX
+---
+ID: TKT-2025-001
+Status: Completed
+Priority: Medium
+Owner: (TBD)
+Created: 2025-01-XX
+Updated: 2025-01-27
+Related: Roadmap-Direct-Org-Processing
+---
 
 #### Overview
 
@@ -255,4 +266,5 @@ See `RESEARCH_CLUB_ASSOCIATION_IDS.md` for detailed analysis.
 
 ## Summaries of Completed Tickets
 
-(No completed tickets yet)
+### TKT-2025-001
+Club and Association Direct ID Processing feature implemented. Allows processing organizations directly by ID without requiring user accounts. Includes two new Bull queues (syncClubDirect, syncAssociationDirect), direct data fetching methods, pseudo account ID support, and full processing pipeline integration. All phases completed including queue setup, data fetching, controller setup, account operations, testing, and documentation.
