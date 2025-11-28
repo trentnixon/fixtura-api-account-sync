@@ -32,6 +32,20 @@ LOG_LEVEL=info
 - `API_RETRY_ATTEMPTS`: Number of retry attempts for failed requests (default: 3)
 - `LOG_LEVEL`: Logging level (default: info)
 
+## Decodo Proxy Configuration (Optional)
+
+Proxy configuration for bypassing IP-based CAPTCHA detection:
+
+- `DECODO_PROXY_ENABLED`: Set to `true` to enable proxy (default: disabled)
+- `DECODO_PROXY_SERVER`: Proxy server and ports in format `host:port1,port2,port3`
+  - Example: `dc.decodo.com:10001,10002,10003,10004,10005,10006,10007,10008,10009,10010`
+  - Supports multiple ports for automatic rotation
+- `DECODO_PROXY_USERNAME`: Your Decodo username
+- `DECODO_PROXY_PASSWORD`: Your Decodo password
+- `DECODO_ROTATE_ON_RESTART`: Rotate through ports on browser restart (default: `true`)
+
+**Note:** The system will automatically rotate through all configured ports on each browser restart to distribute load and reduce IP blocking.
+
 ## Troubleshooting Connection Issues
 
 If you're getting "ECONNREFUSED" errors:

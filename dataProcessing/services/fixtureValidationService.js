@@ -446,28 +446,43 @@ class FixtureValidationService {
           }
 
           // MEMORY OPTIMIZATION: Block non-essential resources aggressively
+          // Note: Request interception may already be set up by PuppeteerManager
+          // Check if it's already enabled to avoid "Request is already handled!" error
           try {
-            await page.setRequestInterception(true);
-            page.on("request", (request) => {
-              const resourceType = request.resourceType();
-              // Block everything except document and script (needed for SPA)
-              if (
-                [
-                  "image",
-                  "font",
-                  "media",
-                  "websocket",
-                  "manifest",
-                  "stylesheet",
-                ].includes(resourceType)
-              ) {
-                request.abort();
-              } else {
-                request.continue();
-              }
-            });
+            const isInterceptionEnabled = page.listenerCount("request") > 0;
+
+            if (!isInterceptionEnabled) {
+              await page.setRequestInterception(true);
+              page.on("request", (request) => {
+                const resourceType = request.resourceType();
+                // Block everything except document and script (needed for SPA)
+                if (
+                  [
+                    "image",
+                    "font",
+                    "media",
+                    "websocket",
+                    "manifest",
+                    "stylesheet",
+                  ].includes(resourceType)
+                ) {
+                  request.abort();
+                } else {
+                  request.continue();
+                }
+              });
+            } else {
+              // Request interception already enabled by PuppeteerManager
+              // The existing handler will work, but we won't get the more aggressive blocking
+              logger.debug(
+                "Request interception already enabled by PuppeteerManager, skipping additional setup"
+              );
+            }
           } catch (interceptError) {
             // Ignore - request interception not critical
+            logger.debug("Request interception setup failed", {
+              error: interceptError.message,
+            });
           }
 
           logger.info(

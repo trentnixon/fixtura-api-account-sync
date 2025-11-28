@@ -1,9 +1,13 @@
 # Decodo/Proxy Integration Plan
 
+> **Status:** ✅ **COMPLETED** - Integration successfully implemented and tested. Proxy is working with port rotation (10001-10010).
+
 ## 📋 Current State Analysis
 
 ### Architecture Overview
+
 - **PuppeteerManager (Singleton)** - Main browser manager
+
   - Location: `dataProcessing/puppeteer/PuppeteerManager.js`
   - Used by: Most services (GameDataFetcher, GetCompetitions, FixtureValidationService, etc.)
   - Pattern: Singleton pattern, shared browser instance
@@ -14,13 +18,16 @@
   - Pattern: Creates new browser per call
 
 ### Configuration System
+
 - Centralized in `src/config/environment.js`
 - Environment variables loaded via dotenv
-- Currently: **No proxy configuration exists**
+- ✅ **Proxy configuration implemented** - Supports multiple ports with rotation
 
 ### Documentation Status
-- `DECODO_SETUP_GUIDE.md` exists but references implementation that doesn't exist
-- Guide mentions proxy support that isn't actually in code
+
+- ✅ `DECODO_SETUP_GUIDE.md` - Updated with actual implementation details
+- ✅ `CONFIGURATION.md` - Includes proxy environment variables
+- ✅ Implementation matches documentation
 
 ---
 
@@ -29,9 +36,11 @@
 ### Phase 1: Configuration Setup
 
 #### 1.1 Add Proxy Config to environment.js
+
 **Location:** `src/config/environment.js`
 
 **Add:**
+
 ```javascript
 // Proxy Configuration (Decodo)
 const PROXY_CONFIG = {
@@ -47,6 +56,7 @@ const PROXY_CONFIG = {
 **Export:** Add `PROXY_CONFIG` to module.exports
 
 **Rationale:**
+
 - Centralized configuration
 - Easy to enable/disable
 - Supports future rotation features
@@ -56,9 +66,11 @@ const PROXY_CONFIG = {
 ### Phase 2: PuppeteerManager Integration
 
 #### 2.1 Add Proxy Helper Method
+
 **Location:** `dataProcessing/puppeteer/PuppeteerManager.js`
 
 **Create method:**
+
 ```javascript
 _getProxyConfig() {
   const { PROXY_CONFIG } = require("../../src/config/environment");
@@ -79,11 +91,14 @@ _getProxyConfig() {
 ```
 
 #### 2.2 Update launchBrowser() Method
+
 **Location:** `dataProcessing/puppeteer/PuppeteerManager.js` (line 43)
 
 **Modify:**
+
 - Call `_getProxyConfig()` before `puppeteer.launch()`
 - If proxy config exists, add to launch options:
+
   ```javascript
   const proxyConfig = this._getProxyConfig();
   const launchOptions = {
@@ -95,12 +110,15 @@ _getProxyConfig() {
     // Note: Puppeteer doesn't support auth in args, need to use page.authenticate()
   }
   ```
+
 - Log proxy status (enabled/disabled)
 
 #### 2.3 Add Proxy Authentication to Pages
+
 **Location:** `dataProcessing/puppeteer/PuppeteerManager.js` (in `createPageInNewContext()`)
 
 **After page creation:**
+
 ```javascript
 // Authenticate with proxy if needed
 const proxyConfig = this._getProxyConfig();
@@ -117,6 +135,7 @@ if (proxyConfig && proxyConfig.username && proxyConfig.password) {
 ### Phase 3: Legacy Browser Launcher Integration
 
 #### 3.1 Update dependencies.js
+
 **Location:** `common/dependencies.js` (line 91)
 
 - Import proxy config from environment
@@ -128,24 +147,28 @@ if (proxyConfig && proxyConfig.username && proxyConfig.password) {
 ### Phase 4: Error Handling & Fallback
 
 #### 4.1 Proxy Connection Errors
+
 **Strategy:**
+
 - If proxy fails, log error and continue without proxy (graceful degradation)
 - Don't crash the app
 - Log proxy failures for monitoring
 
 **Implementation:**
+
 ```javascript
 try {
   // Launch with proxy
 } catch (proxyError) {
   logger.warn("Proxy connection failed, retrying without proxy", {
-    error: proxyError.message
+    error: proxyError.message,
   });
   // Retry without proxy
 }
 ```
 
 #### 4.2 Proxy Validation
+
 - Validate proxy config format on startup
 - Warn if config is incomplete
 - Allow running without proxy if config is missing
@@ -155,12 +178,14 @@ try {
 ### Phase 5: Logging & Monitoring
 
 #### 5.1 Add Proxy Status Logging
+
 - Log when proxy is enabled/disabled
 - Log proxy server being used (without credentials)
 - Log proxy connection failures
 - Track proxy usage metrics
 
 #### 5.2 Health Checks
+
 - Optional: Test proxy connection on startup
 - Monitor proxy success/failure rates
 
@@ -169,6 +194,7 @@ try {
 ## 🚀 Implementation Phases
 
 ### Phase 1: Core Integration (Priority: HIGH)
+
 1. Add PROXY_CONFIG to environment.js
 2. Add `_getProxyConfig()` to PuppeteerManager
 3. Update `launchBrowser()` to use proxy
@@ -181,6 +207,7 @@ try {
 ---
 
 ### Phase 2: Error Handling (Priority: HIGH)
+
 1. Add try-catch around proxy setup
 2. Implement fallback to no-proxy on failure
 3. Add validation for proxy config
@@ -192,6 +219,7 @@ try {
 ---
 
 ### Phase 3: Testing & Validation (Priority: MEDIUM)
+
 1. Test with proxy enabled
 2. Test with proxy disabled
 3. Test with invalid proxy config
@@ -204,6 +232,7 @@ try {
 ---
 
 ### Phase 4: Documentation & Deployment (Priority: MEDIUM)
+
 1. Update DECODO_SETUP_GUIDE.md with actual implementation
 2. Update CONFIGURATION.md with proxy env vars
 3. Add proxy config to Render/Heroku
@@ -217,38 +246,58 @@ try {
 ## 🔧 Environment Variables
 
 ### Required (when enabled)
+
 ```bash
 DECODO_PROXY_ENABLED=true
-DECODO_PROXY_SERVER=proxy.decodo.com:8080
+DECODO_PROXY_SERVER=dc.decodo.com:10001
 DECODO_PROXY_USERNAME=your-username
 DECODO_PROXY_PASSWORD=your-password
 ```
 
-### Optional
+### Multiple Ports Support
+
+If you have multiple ports available, you can specify them as a comma-separated list:
+
+**Example with ports 10001-10010:**
+
 ```bash
-DECODO_ROTATE_ON_RESTART=false  # Future: rotate proxy on browser restart
+DECODO_PROXY_SERVER=dc.decodo.com:10001,10002,10003,10004,10005,10006,10007,10008,10009,10010
 ```
+
+The system will automatically rotate through ports on each browser restart. With 10 ports, the system will cycle through all of them before repeating.
+
+### Optional
+
+```bash
+DECODO_ROTATE_ON_RESTART=true  # Default: true - rotate ports on browser restart
+```
+
+Set to `false` to always use the first port (no rotation).
 
 ---
 
 ## 🎨 Design Decisions
 
 ### 1. Centralized Configuration
+
 - Single source of truth in `environment.js`
 - Easy to enable/disable
 - Consistent across codebase
 
 ### 2. Graceful Degradation
+
 - App works without proxy
 - Falls back if proxy fails
 - No crashes from proxy issues
 
 ### 3. Dual Support
+
 - Update both PuppeteerManager and legacy launcher
 - Maintain backward compatibility
 - Gradual migration path
 
 ### 4. Security
+
 - Never log credentials
 - Store in environment variables only
 - Validate config format
@@ -258,17 +307,20 @@ DECODO_ROTATE_ON_RESTART=false  # Future: rotate proxy on browser restart
 ## 🧪 Testing Strategy
 
 ### Unit Tests
+
 - Test `_getProxyConfig()` with various configs
 - Test proxy parsing (host:port)
 - Test validation logic
 
 ### Integration Tests
+
 - Test browser launch with proxy
 - Test browser launch without proxy
 - Test proxy authentication
 - Test fallback on proxy failure
 
 ### Manual Testing
+
 1. Set proxy env vars
 2. Run a test scrape
 3. Verify proxy is used (check logs)
@@ -281,11 +333,13 @@ DECODO_ROTATE_ON_RESTART=false  # Future: rotate proxy on browser restart
 ## 🔄 Rollback Plan
 
 ### If Proxy Causes Issues
+
 1. Set `DECODO_PROXY_ENABLED=false` (or unset it)
 2. App runs without proxy immediately
 3. No code changes needed
 
 ### If Proxy Breaks Browser Launch
+
 - Fallback logic should catch errors
 - App continues without proxy
 - Logs will show the issue
@@ -295,16 +349,19 @@ DECODO_ROTATE_ON_RESTART=false  # Future: rotate proxy on browser restart
 ## 🔮 Future Enhancements (NOT in Initial Implementation)
 
 ### Proxy Rotation
+
 - Rotate proxy IPs on browser restart
 - Support multiple proxy servers
 - Load balancing across proxies
 
 ### Proxy Health Monitoring
+
 - Track proxy success rates
 - Auto-disable failing proxies
 - Alert on proxy issues
 
 ### Per-Request Proxy Selection
+
 - Different proxies for different sites
 - Geographic proxy selection
 - Cost optimization
@@ -343,16 +400,34 @@ DECODO_ROTATE_ON_RESTART=false  # Future: rotate proxy on browser restart
 
 ---
 
-## 📝 Next Steps
+## 📝 Implementation Status
 
 1. ✅ Review and approve this plan
-2. ⏳ Get Decodo credentials for testing
-3. ⏳ Implement Phase 1 (Core Integration)
-4. ⏳ Test with credentials
-5. ⏳ Implement Phase 2 (Error Handling)
-6. ⏳ Deploy to staging/test environment
-7. ⏳ Monitor and adjust
-8. ⏳ Deploy to production
+2. ✅ Get Decodo credentials for testing
+3. ✅ Implement Phase 1 (Core Integration)
+4. ✅ Test with credentials - **Proxy working successfully**
+5. ✅ Implement Phase 2 (Error Handling)
+6. ✅ Deploy to staging/test environment
+7. ✅ Monitor and adjust
+8. ✅ Production ready
+
+## ✅ Completion Summary
+
+**What was implemented:**
+
+- Proxy configuration in `src/config/environment.js` with support for multiple ports (10001-10010)
+- Port rotation on browser restart in `PuppeteerManager.js`
+- Proxy authentication for all pages
+- Graceful fallback if proxy fails
+- Legacy browser launcher support in `common/dependencies.js`
+- Comprehensive error handling and logging
+
+**Impact:**
+
+- Successfully bypassing IP-based CAPTCHA detection
+- Automatic port rotation distributes load across 10 proxy ports
+- System continues operating if proxy fails (graceful degradation)
+- Both modern (PuppeteerManager) and legacy code paths support proxy
 
 ---
 
@@ -362,4 +437,3 @@ DECODO_ROTATE_ON_RESTART=false  # Future: rotate proxy on browser restart
 - [Puppeteer Proxy Documentation](https://pptr.dev/#?product=Puppeteer&version=v24.31.0&show=api-pageauthenticatecredentials)
 - Existing: `DECODO_SETUP_GUIDE.md`
 - Configuration: `src/config/environment.js`
-

@@ -1,12 +1,16 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const logger = require("../../src/utils/logger");
+const { setupPage } = require("./pageSetup");
+const { getMemoryStats, formatMemoryStats } = require("./memoryUtils");
+const { closePagesSafely, getPagesSafely } = require("./pageUtils");
+const { BROWSER_CONFIG, MEMORY_CONFIG, isDevelopment } = require("./constants");
+
 puppeteer.use(StealthPlugin());
 
 // Fix MaxListenersExceededWarning: Increase max listeners for Puppeteer's Commander
-// This prevents memory leak warnings when multiple browser instances exist
 const EventEmitter = require("events");
-EventEmitter.defaultMaxListeners = 20; // Increase from default 10
+EventEmitter.defaultMaxListeners = BROWSER_CONFIG.MAX_LISTENERS;
 
 class PuppeteerManager {
   // Singleton pattern to prevent multiple browser instances
@@ -31,13 +35,64 @@ class PuppeteerManager {
     this.browser = null;
     this.disposables = [];
     this.operationCount = 0;
-    this.maxOperationsBeforeRestart = parseInt(
-      process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "75",
-      10
-    ); // Restart every 15 operations (relaxed from 3 for 2GB memory - allows faster processing)
+    this.maxOperationsBeforeRestart =
+      MEMORY_CONFIG.MAX_OPERATIONS_BEFORE_RESTART;
     this.lastRestartTime = Date.now();
-    this.minRestartInterval = 60000; // Don't restart more than once per 60 seconds (relaxed from 15s to reduce CPU usage)
-    this.activePages = new Set(); // Track pages currently in use to prevent restart during operations
+    this.minRestartInterval = MEMORY_CONFIG.MIN_RESTART_INTERVAL;
+    this.activePages = new Set();
+    this.currentProxyPortIndex = 0;
+  }
+
+  /**
+   * Get proxy configuration with port rotation support
+   * @returns {Object|null} Proxy config with server, username, password or null if disabled
+   */
+  _getProxyConfig() {
+    const { PROXY_CONFIG } = require("../../src/config/environment");
+    const {
+      isProxyConfigValid,
+      getProxyServerUrl,
+    } = require("../../src/config/proxyConfig");
+
+    if (!isProxyConfigValid(PROXY_CONFIG)) {
+      return null; // No proxy configured
+    }
+
+    // Select port (rotate if multiple ports available)
+    const portIndex = this.currentProxyPortIndex % PROXY_CONFIG.ports.length;
+    const selectedPort = PROXY_CONFIG.ports[portIndex];
+    const proxyServer = getProxyServerUrl(PROXY_CONFIG.host, selectedPort);
+
+    return {
+      server: proxyServer,
+      host: PROXY_CONFIG.host,
+      port: selectedPort,
+      username: PROXY_CONFIG.username,
+      password: PROXY_CONFIG.password,
+      hasMultiplePorts: PROXY_CONFIG.ports.length > 1,
+      totalPorts: PROXY_CONFIG.ports.length,
+    };
+  }
+
+  /**
+   * Rotate to next proxy port (called on browser restart if rotation enabled)
+   */
+  _rotateProxyPort() {
+    const { PROXY_CONFIG } = require("../../src/config/environment");
+
+    if (
+      PROXY_CONFIG.enabled &&
+      PROXY_CONFIG.rotateOnRestart &&
+      PROXY_CONFIG.ports.length > 1
+    ) {
+      this.currentProxyPortIndex =
+        (this.currentProxyPortIndex + 1) % PROXY_CONFIG.ports.length;
+      logger.info(
+        `Proxy port rotated to: ${PROXY_CONFIG.host}:${
+          PROXY_CONFIG.ports[this.currentProxyPortIndex]
+        } (${this.currentProxyPortIndex + 1}/${PROXY_CONFIG.ports.length})`
+      );
+    }
   }
 
   async launchBrowser() {
@@ -45,56 +100,67 @@ class PuppeteerManager {
       // Browser is already launched, so just return.
       return;
     }
+
+    // Rotate proxy port if enabled (before launching new browser)
+    this._rotateProxyPort();
+
+    // Get proxy configuration
+    const proxyConfig = this._getProxyConfig();
+    const { getLaunchOptions } = require("./browserConfig");
+
     try {
-      this.browser = await puppeteer.launch({
-        headless:
-          process.env.NODE_ENV && process.env.NODE_ENV.trim() === "development"
-            ? false
-            : true,
-        // Handle browser process errors to prevent listener accumulation
-        handleSIGINT: false,
-        handleSIGTERM: false,
-        handleSIGHUP: false,
-        // Performance: Set protocol timeout for faster error detection
-        protocolTimeout: 120000, // 2 minutes (faster failure detection)
-        args: [
-          "--disable-setuid-sandbox",
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--no-first-run",
-          "--no-default-browser-check",
-          "--disable-background-networking",
-          "--disable-features=IsolateOrigins,site-per-process",
-          // Memory optimizations (relaxed for 2GB memory - removed performance-hindering flags)
-          // REMOVED: --disable-gpu (enabled for GPU acceleration, faster rendering)
-          // REMOVED: --disable-software-rasterizer (enabled for better performance)
-          "--disable-extensions", // Reduces memory footprint
-          "--disable-plugins", // Saves memory
-          "--disable-sync", // Reduces background processes
-          "--disable-background-timer-throttling", // Prevents memory leaks
-          "--disable-backgrounding-occluded-windows", // Memory optimization
-          "--disable-renderer-backgrounding", // Prevents memory accumulation
-          "--disable-blink-features=AutomationControlled", // Hide automation (testing if safe)
-          // REMOVED: --disable-images (images enabled for proper page rendering)
-          // REMOVED: --blink-settings=imagesEnabled=false (images enabled)
-          "--disable-component-extensions-with-background-pages", // Reduces extension overhead
-          "--disable-ipc-flooding-protection", // Better for automation
-          // REMOVED: --metrics-recording-only (not needed, minimal impact)
-          "--mute-audio", // Disable audio processing
-          "--disable-notifications", // Prevent notification pop-ups
-          "--disable-default-apps", // Don't load default apps
-        ],
+      const launchOptions = getLaunchOptions({
+        headless: !isDevelopment(),
+        proxyServer: proxyConfig ? proxyConfig.server : null,
+        protocolTimeout: BROWSER_CONFIG.PROTOCOL_TIMEOUT,
       });
-      logger.info("Puppeteer browser launched");
+
+      if (proxyConfig) {
+        logger.info("Puppeteer browser launching with Decodo proxy", {
+          proxy: `${proxyConfig.host}:${proxyConfig.port}`,
+          portRotation: proxyConfig.hasMultiplePorts
+            ? `${proxyConfig.totalPorts} ports available`
+            : "single port",
+        });
+      }
+
+      this.browser = await puppeteer.launch(launchOptions);
+
+      logger.info("Puppeteer browser launched", {
+        proxyEnabled: proxyConfig !== null,
+      });
     } catch (error) {
       logger.error("Error launching Puppeteer browser", { error });
-      throw error;
+
+      // If proxy was enabled and launch failed, try without proxy as fallback
+      if (proxyConfig) {
+        logger.warn(
+          "Browser launch with proxy failed, retrying without proxy",
+          { error: error.message }
+        );
+        try {
+          const fallbackOptions = getLaunchOptions({
+            headless: !isDevelopment(),
+            proxyServer: null,
+            protocolTimeout: BROWSER_CONFIG.PROTOCOL_TIMEOUT,
+          });
+
+          this.browser = await puppeteer.launch(fallbackOptions);
+          logger.warn("Browser launched without proxy (fallback mode)");
+        } catch (fallbackError) {
+          logger.error("Browser launch failed even without proxy", {
+            error: fallbackError,
+          });
+          throw fallbackError;
+        }
+      } else {
+        throw error;
+      }
     }
   }
 
   async createPageInNewContext() {
     // Only check for restart if no pages are currently active
-    // This prevents closing pages while they're being used
     if (this.activePages.size === 0) {
       await this.checkAndRestartIfNeeded();
     }
@@ -104,70 +170,24 @@ class PuppeteerManager {
 
     // Track this page as active
     this.activePages.add(page);
-
-    // Automatically remove from active set when page closes
     page.once("close", () => {
       this.activePages.delete(page);
     });
 
-    // Performance optimizations: Set default timeouts for faster failures
-    page.setDefaultNavigationTimeout(30000); // 30 seconds (faster than default 30s, but reasonable)
-    page.setDefaultTimeout(15000); // 15 seconds for operations
-
-    // Set optimal viewport for faster rendering
-    await page.setViewport({
-      width: 1920,
-      height: 1080,
-      deviceScaleFactor: 1,
-    });
-
-    // Set modern user agent for better compatibility
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-    );
-
-    // Enable JavaScript (required for most sites)
-    await page.setJavaScriptEnabled(true);
-
-    // Performance: Block non-essential resources by default (can be overridden by services)
-    // This speeds up page loading significantly
-    try {
-      await page.setRequestInterception(true);
-      page.on("request", (request) => {
-        const resourceType = request.resourceType();
-        // Block resources that slow down loading but aren't needed for scraping
-        // Services can override this if they need specific resources
-        if (
-          [
-            "font", // Fonts not needed for data extraction
-            "media", // Videos/audio not needed
-            "websocket", // WebSockets not needed
-            "manifest", // App manifests not needed
-            // Note: Images and stylesheets are allowed (some sites need them for proper rendering)
-          ].includes(resourceType)
-        ) {
-          request.abort();
-        } else {
-          request.continue();
-        }
-      });
-    } catch (interceptError) {
-      // If request interception fails, continue without it (some pages may already have it)
-      logger.debug("Request interception not available (may already be set)");
-    }
+    // Set up page with default configurations
+    const proxyConfig = this._getProxyConfig();
+    await setupPage(page, proxyConfig);
 
     this.addDisposable(page);
     this.operationCount++;
 
-    // Log memory less frequently to reduce CPU usage (every 10 operations instead of 5)
-    if (this.operationCount % 10 === 0) {
-      const mem = process.memoryUsage();
+    // Log memory periodically
+    if (this.operationCount % MEMORY_CONFIG.MEMORY_LOG_INTERVAL === 0) {
+      const stats = getMemoryStats();
       logger.info(
-        `Page created (op ${this.operationCount}): RSS=${(
-          mem.rss /
-          1024 /
-          1024
-        ).toFixed(2)}MB, Heap=${(mem.heapUsed / 1024 / 1024).toFixed(2)}MB`
+        `Page created (op ${this.operationCount}): RSS=${stats.rss.toFixed(
+          2
+        )}MB, Heap=${stats.heapUsed.toFixed(2)}MB`
       );
     }
 
@@ -196,37 +216,18 @@ class PuppeteerManager {
       return;
     }
 
-    // Check memory usage and restart if too high
-    const memoryUsage = process.memoryUsage();
-    const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024;
-    const rssMB = memoryUsage.rss / 1024 / 1024;
-    const heapTotalMB = memoryUsage.heapTotal / 1024 / 1024;
-    const externalMB = memoryUsage.external / 1024 / 1024;
-
-    // Log memory usage less frequently to reduce CPU (only log every 5th check or if memory is high)
+    // Check memory usage
+    const stats = getMemoryStats();
     const shouldLogMemory =
-      this.operationCount % 5 === 0 || heapUsedMB > 100 || rssMB > 300;
+      this.operationCount % MEMORY_CONFIG.MEMORY_CHECK_INTERVAL === 0 ||
+      stats.heapUsed > MEMORY_CONFIG.MEMORY_WARNING_HEAP_MB ||
+      stats.rss > MEMORY_CONFIG.MEMORY_WARNING_RSS_MB;
+
     if (shouldLogMemory) {
       logger.info(
-        `Memory check: RSS=${rssMB.toFixed(2)}MB, Heap=${heapUsedMB.toFixed(
-          2
-        )}MB/${heapTotalMB.toFixed(2)}MB, External=${externalMB.toFixed(
-          2
-        )}MB, Ops=${this.operationCount}`
+        `Memory check: ${formatMemoryStats(stats)}, Ops=${this.operationCount}`
       );
     }
-
-    // Restart if heap exceeds 150MB or RSS exceeds 400MB (relaxed thresholds for 2GB memory)
-    // With 2GB available, we can allow more memory before restarting for better performance
-    /* if (heapUsedMB > 150 || rssMB > 400) {
-      logger.warn(
-        `Memory high (heap: ${heapUsedMB.toFixed(2)}MB, RSS: ${rssMB.toFixed(
-          2
-        )}MB) - restarting browser immediately`
-      );
-      await this.restartBrowser();
-      return;
-    } */
   }
 
   /**
@@ -257,31 +258,22 @@ class PuppeteerManager {
     }
 
     try {
-      const memoryBefore = process.memoryUsage();
-      const rssBeforeMB = memoryBefore.rss / 1024 / 1024;
+      const statsBefore = getMemoryStats();
       logger.info(
-        `Restarting browser to free memory (RSS before: ${rssBeforeMB.toFixed(
+        `Restarting browser to free memory (RSS before: ${statsBefore.rss.toFixed(
           2
         )}MB)...`
       );
 
       // Close all pages first
       if (this.browser) {
-        const pages = await this.browser.pages();
-        logger.info(`Closing ${pages.length} pages before browser restart`);
-        await Promise.all(
-          pages.map(async (page) => {
-            try {
-              if (!page.isClosed()) {
-                await page.close();
-              }
-              // Remove from active set if it was tracked
-              this.activePages.delete(page);
-            } catch (error) {
-              // Ignore errors
-            }
-          })
-        );
+        const pages = await getPagesSafely(this.browser);
+        if (pages.length > 0) {
+          logger.info(`Closing ${pages.length} pages before browser restart`);
+          await closePagesSafely(pages);
+          // Remove from active set
+          pages.forEach((page) => this.activePages.delete(page));
+        }
       }
 
       // Close browser
@@ -292,17 +284,18 @@ class PuppeteerManager {
       this.lastRestartTime = Date.now();
       this.disposables = [];
 
-      // Shorter delay to let memory free up (reduced from 2s to 1s for faster restarts)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Delay to let memory free up
+      await new Promise((resolve) =>
+        setTimeout(resolve, BROWSER_CONFIG.RESTART_DELAY)
+      );
 
       // Launch new browser
       await this.launchBrowser();
 
-      const memoryAfter = process.memoryUsage();
-      const rssAfterMB = memoryAfter.rss / 1024 / 1024;
-      const freedMB = rssBeforeMB - rssAfterMB;
+      const statsAfter = getMemoryStats();
+      const freedMB = statsBefore.rss - statsAfter.rss;
       logger.info(
-        `Browser restarted successfully (RSS after: ${rssAfterMB.toFixed(
+        `Browser restarted successfully (RSS after: ${statsAfter.rss.toFixed(
           2
         )}MB, freed: ${freedMB.toFixed(2)}MB)`
       );
@@ -319,17 +312,10 @@ class PuppeteerManager {
    * Call this after you're done with a page to prevent memory leaks
    */
   async closePage(page) {
-    try {
-      if (page && !page.isClosed()) {
-        await page.close();
-        // Remove from active set
-        this.activePages.delete(page);
-        logger.debug("Page closed and memory freed");
-      }
-    } catch (error) {
-      logger.warn("Error closing page", { error: error.message });
-      // Still remove from active set even if close failed
-      this.activePages.delete(page);
+    const closed = await require("./pageUtils").closePageSafely(page);
+    this.activePages.delete(page);
+    if (closed) {
+      logger.debug("Page closed and memory freed");
     }
   }
 
@@ -338,63 +324,35 @@ class PuppeteerManager {
    * Call this periodically during long-running operations
    */
   async cleanupOrphanedPages() {
-    try {
-      if (!this.browser) return;
+    if (!this.browser) return;
 
-      const pages = await this.browser.pages();
-      // Keep only the first page (default), close others
-      if (pages.length > 1) {
-        const pagesToClose = pages.slice(1);
-        await Promise.all(
-          pagesToClose.map(async (page) => {
-            try {
-              if (!page.isClosed()) {
-                await page.close();
-              }
-            } catch (error) {
-              // Ignore errors for already closed pages
-            }
-          })
-        );
-        logger.info(`Cleaned up ${pagesToClose.length} orphaned pages`);
+    const pages = await getPagesSafely(this.browser);
+    // Keep only the first page (default), close others
+    if (pages.length > 1) {
+      const pagesToClose = pages.slice(1);
+      const closedCount = await closePagesSafely(pagesToClose);
+      if (closedCount > 0) {
+        logger.info(`Cleaned up ${closedCount} orphaned pages`);
       }
-    } catch (error) {
-      logger.warn("Error cleaning up orphaned pages", {
-        error: error.message,
-      });
     }
   }
 
   async closeBrowser() {
-    try {
-      if (this.browser) {
-        // Close all pages first
-        try {
-          const pages = await this.browser.pages();
-          if (pages.length > 0) {
-            await Promise.all(
-              pages.map(async (page) => {
-                try {
-                  if (!page.isClosed()) {
-                    await page.close();
-                  }
-                } catch (error) {
-                  // Ignore
-                }
-              })
-            );
-          }
-        } catch (error) {
-          // Ignore errors getting pages
-        }
+    if (!this.browser) return;
 
-        await this.browser.close();
-        this.browser = null; // Ensure the reference is cleared
-        logger.info("Puppeteer browser closed");
+    try {
+      // Close all pages first
+      const pages = await getPagesSafely(this.browser);
+      if (pages.length > 0) {
+        await closePagesSafely(pages);
       }
+
+      await this.browser.close();
+      this.browser = null;
+      logger.info("Puppeteer browser closed");
     } catch (error) {
       logger.error("Error closing Puppeteer browser", { error });
-      this.browser = null; // Force clear even on error
+      this.browser = null;
     }
   }
 
@@ -402,12 +360,12 @@ class PuppeteerManager {
    * Get current memory usage statistics
    */
   getMemoryStats() {
-    const mem = process.memoryUsage();
+    const stats = getMemoryStats();
     return {
-      rss: (mem.rss / 1024 / 1024).toFixed(2) + " MB",
-      heapTotal: (mem.heapTotal / 1024 / 1024).toFixed(2) + " MB",
-      heapUsed: (mem.heapUsed / 1024 / 1024).toFixed(2) + " MB",
-      external: (mem.external / 1024 / 1024).toFixed(2) + " MB",
+      rss: stats.rss.toFixed(2) + " MB",
+      heapTotal: stats.heapTotal.toFixed(2) + " MB",
+      heapUsed: stats.heapUsed.toFixed(2) + " MB",
+      external: stats.external.toFixed(2) + " MB",
       operationCount: this.operationCount,
     };
   }
@@ -427,33 +385,21 @@ class PuppeteerManager {
   }
 
   async dispose() {
-    // Close all pages first to free memory
-    try {
-      const pages = await this.browser?.pages();
-      if (pages && pages.length > 0) {
-        await Promise.all(
-          pages.map(async (page) => {
-            try {
-              if (!page.isClosed()) {
-                await page.close();
-              }
-            } catch (pageError) {
-              logger.warn(`Error closing page: ${pageError.message}`);
-            }
-          })
-        );
-      }
-    } catch (pagesError) {
-      logger.warn(`Error getting pages: ${pagesError.message}`);
+    // Close all pages first
+    if (this.browser) {
+      const pages = await getPagesSafely(this.browser);
+      await closePagesSafely(pages);
     }
 
     // Dispose of registered disposables
     for (const disposable of this.disposables) {
       try {
-        if (disposable && typeof disposable.dispose === "function") {
+        if (disposable?.dispose && typeof disposable.dispose === "function") {
           await disposable.dispose();
-        } else if (disposable && typeof disposable.close === "function") {
-          // If it's a page, close it
+        } else if (
+          disposable?.close &&
+          typeof disposable.close === "function"
+        ) {
           await disposable.close();
         }
       } catch (error) {

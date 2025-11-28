@@ -38,18 +38,40 @@ After signing up, you'll receive:
 
 ## ⚙️ Step 3: Configure on Heroku
 
-Set the following environment variables on Heroku:
+Set the following environment variables on Render/Heroku:
+
+**For Render:**
+
+```bash
+# Enable proxy
+DECODO_PROXY_ENABLED=true
+
+# Set Decodo proxy server with all ports (10001-10010)
+DECODO_PROXY_SERVER=dc.decodo.com:10001,10002,10003,10004,10005,10006,10007,10008,10009,10010
+
+# Set Decodo credentials
+DECODO_PROXY_USERNAME=your-decodo-username
+DECODO_PROXY_PASSWORD=your-decodo-password
+
+# Optional: Enable port rotation (default: true)
+DECODO_ROTATE_ON_RESTART=true
+```
+
+**For Heroku (PowerShell):**
 
 ```powershell
-# Set Decodo proxy server (format: host:port)
-heroku config:set DECODO_PROXY_SERVER=proxy.decodo.com:8080 -a fixtura-api-account-sync
+# Enable proxy
+heroku config:set DECODO_PROXY_ENABLED=true -a fixtura-api-account-sync
+
+# Set Decodo proxy server with all ports
+heroku config:set DECODO_PROXY_SERVER=dc.decodo.com:10001,10002,10003,10004,10005,10006,10007,10008,10009,10010 -a fixtura-api-account-sync
 
 # Set Decodo credentials
 heroku config:set DECODO_PROXY_USERNAME=your-decodo-username -a fixtura-api-account-sync
 heroku config:set DECODO_PROXY_PASSWORD=your-decodo-password -a fixtura-api-account-sync
 ```
 
-**Replace with your actual Decodo credentials!**
+**Note:** The system will automatically rotate through all 10 ports (10001-10010) on each browser restart to distribute load and reduce IP blocking.
 
 ---
 
@@ -64,8 +86,9 @@ heroku config -a fixtura-api-account-sync | grep DECODO
 You should see:
 
 ```
+DECODO_PROXY_ENABLED: true
 DECODO_PROXY_PASSWORD: your-password
-DECODO_PROXY_SERVER: proxy.decodo.com:8080
+DECODO_PROXY_SERVER: dc.decodo.com:10001,10002,10003,10004,10005,10006,10007,10008,10009,10010
 DECODO_PROXY_USERNAME: your-username
 ```
 
@@ -85,9 +108,10 @@ heroku logs --tail -a fixtura-api-account-sync
 
 Look for these log messages:
 
-- `"Decodo proxy configured"` - Proxy server is set
-- `"Decodo proxy authentication configured"` - Credentials are working
-- `"Puppeteer browser launched { proxyEnabled: true }"` - Proxy is active
+- `"[environment.js] Decodo Proxy: Enabled (dc.decodo.com:10 ports (...))"` - Proxy configuration loaded
+- `"Puppeteer browser launching with Decodo proxy"` - Browser starting with proxy
+- `"Proxy authentication configured for page"` - Credentials are working
+- `"Puppeteer browser launched"` - Browser successfully started
 
 ---
 
