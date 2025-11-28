@@ -85,11 +85,16 @@ class GetCompetitions {
       this.processingTracker.itemFound("competitions", competitions.length);
       return competitions;
     } catch (error) {
-      logger.error("Error in GetCompetitions setup method", {
-        error,
-        method: "setup",
-      });
-      throw error;
+      logger.error(
+        "Error in GetCompetitions setup method, returning empty array",
+        {
+          error,
+          method: "setup",
+          accountId: this.AccountID,
+        }
+      );
+      // Return empty array instead of throwing - allows processing to continue
+      return [];
     } finally {
       // Close page individually - DO NOT call dispose() on shared singleton
       if (page) {

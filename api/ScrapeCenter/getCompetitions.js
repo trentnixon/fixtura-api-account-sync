@@ -57,7 +57,8 @@ class GetCompetitions extends BaseController {
         function: "ProcessComps",
         error: error, // changed from err to error as err is not defined in this scope
       });
-      throw error;
+      // Return false instead of throwing - allows processing to continue
+      return false;
     } finally {
       logger.info(`CLASS GetCompetitions: Page Closed!!`);
       await page.close();
@@ -76,9 +77,9 @@ class GetCompetitions extends BaseController {
       const seasonOrgs = Array.from(
         document.querySelectorAll('[data-testid^="season-org-"]')
       );
-      return seasonOrgs.flatMap(seasonOrg => {
+      return seasonOrgs.flatMap((seasonOrg) => {
         const competitionsList = Array.from(seasonOrg.querySelectorAll("h2"));
-        return competitionsList.map(competition => {
+        return competitionsList.map((competition) => {
           const competitionName = competition.textContent;
           const competitionUrl =
             competition.parentElement.querySelector("a")?.href;
@@ -110,9 +111,9 @@ class GetCompetitions extends BaseController {
       ];
 
       // Define a handler function
-      const handler = request => {
+      const handler = (request) => {
         if (
-          blockedResources.some(resource => request.url().includes(resource))
+          blockedResources.some((resource) => request.url().includes(resource))
         ) {
           request.abort();
         } else {
@@ -121,11 +122,35 @@ class GetCompetitions extends BaseController {
       };
 
       // Enable request interception and set up the handler
-      await page.setRequestInterception(true);
-      page.on("request", handler);
+      // Check if request interception is already enabled to avoid "Request is already handled!" error
+      try {
+        // Check if request interception is already set up (by PuppeteerManager)
+        const isInterceptionEnabled = page.listenerCount("request") > 0;
+
+        if (!isInterceptionEnabled) {
+          await page.setRequestInterception(true);
+          page.on("request", handler);
+        } else {
+          // Request interception already enabled by PuppeteerManager
+          // We can't add another handler without causing "Request is already handled!" error
+          // The existing handler will work, but we won't block the specific resources
+          logger.debug(
+            "Request interception already enabled by PuppeteerManager, skipping additional handler"
+          );
+        }
+      } catch (interceptError) {
+        // If interception fails, log but continue - page will still work
+        logger.warn(
+          "Could not set up request interception, continuing without it",
+          {
+            error: interceptError.message,
+            url: url,
+          }
+        );
+      }
 
       // Optionally handle or ignore page errors
-      page.on("pageerror", err => {
+      page.on("pageerror", (err) => {
         console.log("getCompetitions ::: Page error: " + err.toString());
         if (err instanceof EvalError) {
           console.log("Caught EvalError: " + err.toString());
@@ -133,7 +158,7 @@ class GetCompetitions extends BaseController {
       });
 
       // Optionally handle or ignore other errors
-      page.on("error", err => {
+      page.on("error", (err) => {
         console.log("Error: " + err.toString());
       });
 
@@ -175,7 +200,8 @@ class GetCompetitions extends BaseController {
         function: "fetchCompetitionsInClubs",
         error: error, // corrected from err to error
       });
-      throw error;
+      // Return empty array instead of throwing - allows processing to continue
+      return [];
     }
   }
 
@@ -185,7 +211,7 @@ class GetCompetitions extends BaseController {
 
       const h2Elements = document.querySelectorAll("h2"); // Selecting all h2 elements which contain competition names.
 
-      h2Elements.forEach(h2 => {
+      h2Elements.forEach((h2) => {
         const competitionName = h2.textContent || "Not Found";
         const ul = h2.nextElementSibling; // Assuming that ul is the next element after h2.
 
@@ -193,7 +219,7 @@ class GetCompetitions extends BaseController {
           // Check if ul exists and is actually a ul tag.
           const liElements = ul.querySelectorAll("li"); // Selecting all li elements under the ul tag.
 
-          liElements.forEach(li => {
+          liElements.forEach((li) => {
             const aTag = li.querySelector("a");
             if (aTag) {
               const competitionUrl = aTag.href || "Not Found";
@@ -242,6 +268,8 @@ class GetCompetitions extends BaseController {
         error: true,
       }); */
       logger.info("Create a Data Entry | ERROR");
+      // Return false instead of letting error propagate - prevents app crash
+      return false;
     } finally {
       await this.dependencies.changeisUpdating(this.ACCOUNTID, false);
       logger.info("Set Account to False| Finally ");

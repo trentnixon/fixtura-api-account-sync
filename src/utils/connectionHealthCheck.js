@@ -14,10 +14,28 @@ class ConnectionHealthCheck {
    */
   async checkHealth() {
     try {
-      logger.info("Checking API connection health...");
+      // Get health check endpoint from environment variable
+      // If not set, skip the check to avoid 404 errors
+      const healthCheckPath = process.env.HEALTH_CHECK_PATH;
 
-      // Try to fetch a simple endpoint to test connectivity
-      const response = await fetcher("", "GET", {}, 1); // Reduced retries for health check
+      if (!healthCheckPath || healthCheckPath.trim() === "") {
+        // No endpoint configured - skip check to avoid 404 errors
+        logger.debug(
+          "Health check path not configured (HEALTH_CHECK_PATH), skipping health check"
+        );
+        // Mark as healthy by default if no endpoint configured (assume API is up)
+        this.isHealthy = true;
+        this.lastError = null;
+        this.lastCheck = new Date();
+        return true;
+      }
+
+      logger.info("Checking API connection health...", {
+        endpoint: healthCheckPath,
+      });
+
+      // Try to fetch the configured health check endpoint
+      const response = await fetcher(healthCheckPath, "GET", {}, 1); // Reduced retries for health check
 
       if (response !== null) {
         this.isHealthy = true;
@@ -33,10 +51,15 @@ class ConnectionHealthCheck {
         return false;
       }
     } catch (error) {
+      // Log error but don't crash - health check failure shouldn't stop the app
       this.isHealthy = false;
       this.lastError = error.message;
       this.lastCheck = new Date();
-      logger.error("API connection health check failed:", error);
+      logger.error("API connection health check failed (non-critical):", {
+        error: error.message,
+        endpoint: process.env.HEALTH_CHECK_PATH || "not configured",
+      });
+      // Return false but don't throw - health check is informational only
       return false;
     }
   }

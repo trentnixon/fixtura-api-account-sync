@@ -46,8 +46,12 @@ class GetTeamsGameData {
       const gameDataFetcher = new GameDataFetcher(page, url);
       return await gameDataFetcher.fetchGameData();
     } catch (error) {
-      logger.error("Error fetching game data", { error, url });
-      throw error;
+      logger.error("Error fetching game data, returning empty array", {
+        error: error.message,
+        url,
+      });
+      // Return empty array instead of throwing - allows processing to continue
+      return [];
     }
   }
 
@@ -66,8 +70,12 @@ class GetTeamsGameData {
       this.processingTracker.itemFound("games", fetchedGames.length);
       return fetchedGames;
     } catch (error) {
-      logger.error("Error in setup method", { error });
-      throw error;
+      logger.error("Error in setup method, returning empty array", {
+        error: error.message,
+        accountId: this.accountId,
+      });
+      // Return empty array instead of throwing - allows processing to continue
+      return [];
     } finally {
       // Close page individually - DO NOT call dispose() on shared singleton
       if (page) {

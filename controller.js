@@ -127,22 +127,55 @@ class DataController extends BaseController {
   /** HELPER FUNCS  */
   /****************************** */
   async processAndAssignCompetitions(dataObj) {
-    const getCompetitionsObj = new GetCompetitions(
-      dataObj.TYPEOBJ.TYPEURL,
-      dataObj.ACCOUNT
-    );
+    try {
+      const getCompetitionsObj = new GetCompetitions(
+        dataObj.TYPEOBJ.TYPEURL,
+        dataObj.ACCOUNT
+      );
 
-    const scrapedCompetitions = await getCompetitionsObj.setup();
+      const scrapedCompetitions = await getCompetitionsObj.setup();
 
-    //console.log("scrapedCompetitionsscrapedCompetitionsscrapedCompetitionsscrapedCompetitions")
-    //console.log(scrapedCompetitions)
-    //throw new Error('STOP HERE'); 
+      // If no competitions scraped, log and continue to next step
+      if (
+        !scrapedCompetitions ||
+        (Array.isArray(scrapedCompetitions) && scrapedCompetitions.length === 0)
+      ) {
+        logger.warn("No competitions scraped, continuing to next step", {
+          accountId: dataObj.ACCOUNT.ACCOUNTID,
+          url: dataObj.TYPEOBJ.TYPEURL,
+        });
+        return; // Continue processing other steps
+      }
 
-    const assignScrapedCompetitions = new AssignCompetitions(
-      scrapedCompetitions,
-      dataObj
-    );
-    await assignScrapedCompetitions.setup();
+      //console.log("scrapedCompetitionsscrapedCompetitionsscrapedCompetitionsscrapedCompetitions")
+      //console.log(scrapedCompetitions)
+      //throw new Error('STOP HERE');
+
+      try {
+        const assignScrapedCompetitions = new AssignCompetitions(
+          scrapedCompetitions,
+          dataObj
+        );
+        await assignScrapedCompetitions.setup();
+      } catch (assignError) {
+        // Log assignment error but continue to next step
+        logger.error("Error assigning competitions, continuing to next step", {
+          error: assignError,
+          accountId: dataObj.ACCOUNT.ACCOUNTID,
+        });
+      }
+    } catch (error) {
+      // Log error but never throw - always continue to next step
+      logger.error(
+        "Error in processAndAssignCompetitions, continuing to next step",
+        {
+          error,
+          accountId: dataObj.ACCOUNT.ACCOUNTID,
+          url: dataObj.TYPEOBJ.TYPEURL,
+        }
+      );
+      // Don't throw - allow processing to continue with other steps
+    }
   }
 
   async processTeams(dataObj) {
