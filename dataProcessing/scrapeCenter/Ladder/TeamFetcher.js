@@ -31,7 +31,10 @@ class TeamFetcher {
   async fetchTeams() {
     try {
       logger.info(`Navigating to ${this.teamInfo.href}/ladder`);
-      await this.page.goto(`${this.teamInfo.href}/ladder`);
+      await this.page.goto(`${this.teamInfo.href}/ladder`, {
+        timeout: 15000, // 15 seconds - faster failure detection
+        waitUntil: "domcontentloaded", // Fast - same as other scrapers
+      });
       return await this.getTeamNamesAndUrls();
     } catch (error) {
       logger.error(

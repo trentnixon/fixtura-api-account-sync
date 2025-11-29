@@ -203,12 +203,14 @@ class PuppeteerManager {
   }
 
   async createPageInNewContext() {
+    await this.launchBrowser();
+
     // Only check for restart if no pages are currently active
+    // Do this AFTER launchBrowser to avoid unnecessary checks
     if (this.activePages.size === 0) {
       await this.checkAndRestartIfNeeded();
     }
 
-    await this.launchBrowser();
     const page = await this.browser.newPage();
 
     // Track this page as active
@@ -248,9 +250,9 @@ class PuppeteerManager {
     if (this.operationCount % MEMORY_CONFIG.MEMORY_LOG_INTERVAL === 0) {
       const stats = getMemoryStats();
       logger.info(
-        `Page created (op ${this.operationCount}): RSS=${stats.rss.toFixed(
-          2
-        )}MB, Heap=${stats.heapUsed.toFixed(2)}MB`
+        `[PERF] Page created (op ${
+          this.operationCount
+        }): RSS=${stats.rss.toFixed(2)}MB, Heap=${stats.heapUsed.toFixed(2)}MB`
       );
     }
 
@@ -260,36 +262,48 @@ class PuppeteerManager {
   /**
    * Checks if browser should be restarted based on operation count or memory
    * Restarts automatically to prevent memory accumulation
+   * OPTIMIZED: Only does expensive memory checks when necessary
    */
   async checkAndRestartIfNeeded() {
     const now = Date.now();
     const timeSinceLastRestart = now - this.lastRestartTime;
 
-    // Don't restart too frequently (rate limiting)
+    // Don't restart too frequently (rate limiting) - fast check first
     if (timeSinceLastRestart < this.minRestartInterval) {
       return;
     }
 
-    // Restart if we've exceeded operation count
+    // Fast check: Restart if we've exceeded operation count (no memory check needed)
     if (this.operationCount >= this.maxOperationsBeforeRestart) {
       logger.info(
-        `Restarting browser after ${this.operationCount} operations to free memory`
+        `[PERF] Restarting browser after ${this.operationCount} operations to free memory`
       );
       await this.restartBrowser();
       return;
     }
 
-    // Check memory usage
-    const stats = getMemoryStats();
-    const shouldLogMemory =
-      this.operationCount % MEMORY_CONFIG.MEMORY_CHECK_INTERVAL === 0 ||
-      stats.heapUsed > MEMORY_CONFIG.MEMORY_WARNING_HEAP_MB ||
-      stats.rss > MEMORY_CONFIG.MEMORY_WARNING_RSS_MB;
+    // Only do expensive memory check if we're close to operation limit or it's time to log
+    // This avoids expensive getMemoryStats() calls on every page creation
+    const opsUntilRestart =
+      this.maxOperationsBeforeRestart - this.operationCount;
+    const shouldCheckMemory =
+      opsUntilRestart <= 10 || // Close to restart limit
+      this.operationCount % MEMORY_CONFIG.MEMORY_CHECK_INTERVAL === 0; // Time to log
 
-    if (shouldLogMemory) {
-      logger.info(
-        `Memory check: ${formatMemoryStats(stats)}, Ops=${this.operationCount}`
-      );
+    if (shouldCheckMemory) {
+      const stats = getMemoryStats();
+      const shouldLogMemory =
+        this.operationCount % MEMORY_CONFIG.MEMORY_CHECK_INTERVAL === 0 ||
+        stats.heapUsed > MEMORY_CONFIG.MEMORY_WARNING_HEAP_MB ||
+        stats.rss > MEMORY_CONFIG.MEMORY_WARNING_RSS_MB;
+
+      if (shouldLogMemory) {
+        logger.info(
+          `[PERF] Memory check: ${formatMemoryStats(stats)}, Ops=${
+            this.operationCount
+          }`
+        );
+      }
     }
   }
 
@@ -298,7 +312,7 @@ class PuppeteerManager {
    * Use this between major processing stages to prevent memory accumulation
    */
   async forceRestartBrowser() {
-    logger.info("Force restarting browser between processing stages");
+    logger.info("[PERF] Force restarting browser between processing stages");
     // Temporarily disable rate limiting
     const originalMinInterval = this.minRestartInterval;
     this.minRestartInterval = 0;
@@ -315,7 +329,7 @@ class PuppeteerManager {
     // Don't restart if pages are actively being used
     if (this.activePages.size > 0) {
       logger.info(
-        `Deferring browser restart - ${this.activePages.size} active page(s) in use`
+        `[PERF] Deferring browser restart - ${this.activePages.size} active page(s) in use`
       );
       return;
     }
@@ -323,7 +337,7 @@ class PuppeteerManager {
     try {
       const statsBefore = getMemoryStats();
       logger.info(
-        `Restarting browser to free memory (RSS before: ${statsBefore.rss.toFixed(
+        `[PERF] Restarting browser to free memory (RSS before: ${statsBefore.rss.toFixed(
           2
         )}MB)...`
       );
@@ -332,7 +346,9 @@ class PuppeteerManager {
       if (this.browser) {
         const pages = await getPagesSafely(this.browser);
         if (pages.length > 0) {
-          logger.info(`Closing ${pages.length} pages before browser restart`);
+          logger.info(
+            `[PERF] Closing ${pages.length} pages before browser restart`
+          );
           await closePagesSafely(pages);
           // Remove from active set
           pages.forEach((page) => this.activePages.delete(page));
@@ -358,7 +374,7 @@ class PuppeteerManager {
       const statsAfter = getMemoryStats();
       const freedMB = statsBefore.rss - statsAfter.rss;
       logger.info(
-        `Browser restarted successfully (RSS after: ${statsAfter.rss.toFixed(
+        `[PERF] Browser restarted successfully (RSS after: ${statsAfter.rss.toFixed(
           2
         )}MB, freed: ${freedMB.toFixed(2)}MB)`
       );

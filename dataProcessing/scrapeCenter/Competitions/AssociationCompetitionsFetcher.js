@@ -26,7 +26,10 @@ class AssociationCompetitionsFetcher {
   }
 
   async navigateToUrl() {
-    await this.page.goto(this.url);
+    await this.page.goto(this.url, {
+      timeout: 15000, // 15 seconds - faster failure detection
+      waitUntil: "domcontentloaded", // Fast - same as other scrapers
+    });
   }
 
   async waitForPageLoad() {

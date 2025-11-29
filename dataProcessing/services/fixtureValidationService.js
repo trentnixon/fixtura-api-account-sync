@@ -100,7 +100,7 @@ class FixtureValidationService {
       }
 
       // Wait for page to render (PlayHQ is a SPA - needs time for content to load)
-      // Wait longer to ensure 404 page content is fully rendered
+      // OPTIMIZED: Use waitForFunction instead of fixed delay for faster detection
       try {
         // Check if page is still connected
         if (page.isClosed()) {
@@ -108,8 +108,18 @@ class FixtureValidationService {
         }
         // Wait for body to exist first
         await page.waitForSelector("body", { timeout: 3000 });
-        // Then wait for content to render (SPA needs time)
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        // Wait for content to render using waitForFunction (faster than fixed delay)
+        // This will return as soon as content is available, or timeout after 2 seconds
+        try {
+          await page.waitForFunction(
+            () => document.body && document.body.innerText.length > 50,
+            { timeout: 2000 }
+          );
+        } catch (waitFuncError) {
+          // If waitForFunction times out, use minimal fallback delay (500ms)
+          // This handles edge cases where content is slow to render
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       } catch (waitError) {
         // If body doesn't load or page is closed, return error result
         if (

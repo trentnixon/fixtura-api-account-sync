@@ -146,20 +146,47 @@ class GameDataFetcher {
 
   async navigateToUrl() {
     const maxRetries = 3;
+    const initialDelay = 500; // Start with 500ms
+    const backoffMultiplier = 1.5; // Exponential backoff multiplier
+
+    // Non-retryable errors - exit immediately
+    const nonRetryableErrors = [
+      "net::ERR_ABORTED", // 404, cancelled
+      "net::ERR_NAME_NOT_RESOLVED", // DNS failure
+      "net::ERR_INVALID_URL", // Invalid URL
+      "Navigation failed because browser has disconnected", // Browser closed
+    ];
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Set timeout to 10 seconds (10000 milliseconds)
+        // Set timeout to 15 seconds for faster failure detection
         await this.page.goto(this.href, {
-          timeout: 30000,
+          timeout: 15000,
           waitUntil: "domcontentloaded",
         });
         return;
       } catch (error) {
+        const errorMessage = error.message || "";
+
+        // Check if error is non-retryable - exit immediately
+        const isNonRetryable = nonRetryableErrors.some((err) =>
+          errorMessage.includes(err)
+        );
+
+        if (isNonRetryable) {
+          logger.warn(
+            `Non-retryable error for ${this.href}, skipping retries: ${errorMessage}`,
+            { url: this.href, error: errorMessage }
+          );
+          return; // Don't retry non-retryable errors
+        }
+
         // Log error using logger for consistency
         logger.error(
           `Attempt ${attempt}/${maxRetries} - Navigating to URL (${this.href}) failed in navigateToUrl:`,
           { error: error.message, url: this.href }
         );
+
         if (attempt === maxRetries) {
           // After all retries failed, log but don't throw - allow processing to continue
           logger.warn(
@@ -168,8 +195,18 @@ class GameDataFetcher {
           );
           return; // Don't throw - allow processing to continue
         }
-        // Wait 2 seconds before retrying
-        await new Promise((res) => setTimeout(res, 2000));
+
+        // Calculate exponential backoff delay
+        const delay = Math.floor(
+          initialDelay * Math.pow(backoffMultiplier, attempt - 1)
+        );
+        logger.debug(
+          `Retrying navigation in ${delay}ms (attempt ${
+            attempt + 1
+          }/${maxRetries})`,
+          { url: this.href, delay }
+        );
+        await new Promise((res) => setTimeout(res, delay));
       }
     }
   }

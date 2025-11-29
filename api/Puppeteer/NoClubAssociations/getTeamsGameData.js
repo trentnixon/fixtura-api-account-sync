@@ -203,9 +203,17 @@ class getTeamsGameData {
       await this.page.waitForSelector(
         ".fnpp5x-0.fnpp5x-4.gJrsYc.jWGbFY,.sc-bqGHjH.sc-dlMBXb.blmUXq.jAJvWi"
       );
-      await this.page.waitForTimeout(1000);
 
+      // OPTIMIZED: Wait for gradeId button selector instead of fixed delay
       const gradeIdSelector = "a.sc-crzoUp.lebimc.button";
+      try {
+        await this.page.waitForSelector(gradeIdSelector, { timeout: 1000 });
+      } catch (selectorError) {
+        // If selector not found within 1s, continue anyway (may not exist on all pages)
+        logger.debug(
+          `GradeId selector not found, continuing anyway: ${selectorError.message}`
+        );
+      }
       const gradeId = await this.page.$eval(gradeIdSelector, (element) => {
         const href = element.getAttribute("href");
         return href.split("/").pop();
