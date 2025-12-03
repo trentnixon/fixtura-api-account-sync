@@ -99,8 +99,14 @@ class GetTeamsGameData {
       });
     }
 
-    // Flatten all results into a single array
-    return results.flat();
+    // MEMORY FIX: Flatten results and extract immediately
+    const flattenedResults = results.flat();
+
+    // MEMORY FIX: Clear intermediate arrays immediately after use
+    results.length = 0; // Clear results array
+    errors.length = 0; // Clear errors array (already logged)
+
+    return flattenedResults;
   }
 
   async fetchAndProcessTeamGameData(page, url) {

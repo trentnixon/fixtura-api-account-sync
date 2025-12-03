@@ -26,6 +26,8 @@ const logger = require("../../src/utils/logger");
  * @param {boolean} options.continueOnError - Continue processing if individual items fail (default: true)
  * @param {boolean} options.logProgress - Log progress for each item (default: false)
  * @param {string} options.context - Context name for logging (default: "parallel")
+ * @param {boolean} options.streamResults - Stream results instead of accumulating (default: false)
+ * @param {Function} options.onResult - Callback for each result when streaming: (result, index, item) => Promise<void>
  * @returns {Promise<{results: Array, errors: Array, summary: Object}>} Object containing results, errors, and summary
  *
  * @example
@@ -50,6 +52,8 @@ async function processInParallel(
     continueOnError = true,
     logProgress = false,
     context = "parallel",
+    streamResults = false, // MEMORY FIX: Stream results instead of accumulating
+    onResult = null, // MEMORY FIX: Callback for each result when streaming
   } = options;
 
   if (!Array.isArray(items)) {
@@ -109,7 +113,28 @@ async function processInParallel(
           } in ${itemDuration}ms (remaining active: ${activeCount})`
         );
 
-        results.push({ item, index, result, success: true });
+        // MEMORY FIX: Stream result immediately if streaming enabled
+        if (streamResults && onResult && typeof onResult === "function") {
+          try {
+            // Process result immediately, don't accumulate
+            await onResult(result, index, item);
+            // Still track for summary, but don't store full result
+            results.push({ item, index, result: null, success: true }); // Store null to save memory
+          } catch (streamError) {
+            logger.error(
+              `[${context}] Error in onResult callback for item ${index + 1}`,
+              {
+                error: streamError.message,
+                index,
+              }
+            );
+            // Still mark as successful for summary, but log the stream error
+            results.push({ item, index, result: null, success: true });
+          }
+        } else {
+          // Otherwise accumulate (backward compatibility)
+          results.push({ item, index, result, success: true });
+        }
         return { item, index, result, success: true };
       } catch (error) {
         const errorInfo = {
@@ -182,13 +207,29 @@ async function processInParallel(
     );
   }
 
+  // MEMORY FIX: If streaming, results array contains nulls (results were processed via callback)
+  // Return empty array or minimal data
+  const finalResults = streamResults
+    ? [] // Results were processed via onResult callback, don't return them
+    : results
+        .map((r) => (r.success ? r.result : null))
+        .filter((r) => r !== null);
+
+  // MEMORY FIX: Clear intermediate arrays if streaming to help GC
+  if (streamResults) {
+    // Clear result objects from array (keep structure for summary calculation)
+    results.forEach((r) => {
+      if (r.success) {
+        r.result = null; // Clear result to help GC
+      }
+    });
+  }
+
   return {
-    results: results
-      .map((r) => (r.success ? r.result : null))
-      .filter((r) => r !== null),
+    results: finalResults,
     errors,
     summary,
-    rawResults: results, // Include all results with metadata
+    rawResults: streamResults ? [] : results, // Don't include rawResults when streaming
   };
 }
 
@@ -267,10 +308,21 @@ async function processInBatches(
       }
     );
 
+    // MEMORY FIX: Extract results immediately and add to accumulator
     allResults.push(...results);
     allErrors.push(...errors);
     totalSuccessful += summary.successful;
     totalFailed += summary.failed;
+
+    // MEMORY FIX: Clear batch results immediately after extracting
+    // Note: results and errors are already copied to allResults/allErrors above
+    // Setting to null helps GC, but arrays are already cleared in processInParallel if streaming
+    // For non-streaming mode, we can't clear here as they're returned, but we've already copied them
+
+    // MEMORY FIX: Force GC hint after every 5 batches
+    if (i > 0 && i % 5 === 0 && global.gc) {
+      global.gc();
+    }
   }
 
   const duration = Date.now() - startTime;

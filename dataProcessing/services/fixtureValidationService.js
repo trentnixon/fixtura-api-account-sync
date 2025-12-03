@@ -132,8 +132,7 @@ class FixtureValidationService {
               const h1Elements = Array.from(document.querySelectorAll("h1"));
               const has404 = h1Elements.some(
                 (h1) =>
-                  h1.innerText &&
-                  h1.innerText.toLowerCase().includes("404")
+                  h1.innerText && h1.innerText.toLowerCase().includes("404")
               );
 
               // Check for valid game content indicators
@@ -578,7 +577,16 @@ class FixtureValidationService {
                   } | Status: ${result.status}`
                 );
 
-                return result;
+                // MEMORY FIX: Return only minimal result data, don't store full URLs or error messages
+                // Extract only essential fields needed for comparison/cleanup
+                return {
+                  fixtureId: result.fixtureId,
+                  gameID: result.gameID,
+                  valid: result.valid,
+                  status: result.status, // String status: "404", "valid", "error", "no_url", etc.
+                  httpStatus: result.httpStatus, // HTTP status code number (200, 404, 403, etc.) - used for logging
+                  // Don't include: url (can be reconstructed), error (only needed for logging), method
+                };
               } catch (error) {
                 // Log error with full details
                 const errorMsg = error.message || String(error);
@@ -605,13 +613,14 @@ class FixtureValidationService {
                   }
                 );
 
+                // MEMORY FIX: Return minimal error result, don't store full URL or error message
                 const errorResult = {
                   valid: false,
                   status: "error",
                   fixtureId,
                   gameID: fixtureGameID,
-                  url: fixtureUrl,
-                  error: errorMsg,
+                  httpStatus: null, // No HTTP status for errors
+                  // Don't include: url, error (only needed for logging)
                 };
 
                 // Log error result
@@ -621,7 +630,9 @@ class FixtureValidationService {
                   } - ✗ ERROR | URL: ${fullUrl} | Error: ${errorMsg}`
                 );
 
-                throw error; // Re-throw to be caught by processInParallel
+                // MEMORY FIX: Return minimal error result instead of throwing
+                // This prevents full error objects from being stored in results array
+                return errorResult;
               } finally {
                 // Release page back to pool after processing
                 await this.puppeteerManager
@@ -639,16 +650,35 @@ class FixtureValidationService {
             }
           );
 
-          // Add all results from this batch
-          results.push(...batchResults.results);
+          // MEMORY FIX: Extract minimal data immediately, don't accumulate full result objects
+          // Results already contain minimal data (from our fix above), but ensure we're not storing extra fields
+          const minimalResults = batchResults.results.map((r) => ({
+            fixtureId: r.fixtureId,
+            gameID: r.gameID,
+            valid: r.valid,
+            status: r.status, // String status: "404", "valid", "error", "no_url", etc.
+            httpStatus: r.httpStatus, // HTTP status code number (200, 404, 403, etc.)
+            // Don't include: url, error, method, or any other fields
+          }));
 
-          // Log batch summary
-          if (batchResults.errors.length > 0) {
+          results.push(...minimalResults);
+
+          // Log batch summary before clearing
+          if (batchResults.errors && batchResults.errors.length > 0) {
             logger.warn(
               `[VALIDATION] Batch ${batchIndex + 1} completed with ${
                 batchResults.errors.length
               } errors`
             );
+          }
+
+          // MEMORY FIX: Clear batch results immediately after extracting minimal data
+          batchResults.results = null;
+          batchResults.errors = null;
+
+          // MEMORY FIX: Force GC hint after every 5 batches
+          if (batchIndex > 0 && batchIndex % 5 === 0 && global.gc) {
+            global.gc();
           }
 
           // Cleanup orphaned pages

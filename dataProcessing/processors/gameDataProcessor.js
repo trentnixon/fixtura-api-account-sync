@@ -21,7 +21,9 @@ class GameDataProcessor {
   async process() {
     const batchSize = 10;
     let BatchItem = 1;
-    const allScrapedFixtures = []; // Store all scraped fixtures for comparison
+    // MEMORY FIX: Only store minimal fixture data (gameID), not full objects
+    const scrapedFixtureIds = new Set(); // Use Set to avoid duplicates
+    const scrapedFixturesMinimal = []; // Store minimal objects { gameID } for comparison
     try {
       // Split teams array into smaller batches for processing
       const teamBatches = this.createBatches(this.dataObj.TEAMS, batchSize);
@@ -37,19 +39,32 @@ class GameDataProcessor {
           }
         );
         // Scrape game data for the current batch
-        const getGameDataObj = new getTeamsGameData({
+        let getGameDataObj = new getTeamsGameData({
           ...this.dataObj,
           TEAMS: teamsBatch,
         });
         let scrapedGameData = await getGameDataObj.setup();
+
+        // MEMORY FIX: Clear processor reference immediately after getting data
+        getGameDataObj = null;
 
         if (!scrapedGameData || scrapedGameData.length === 0) {
           logger.warn("No game data scraped for current batch.");
           continue;
         }
 
-        // Store scraped fixtures for later comparison
-        allScrapedFixtures.push(...scrapedGameData);
+        // MEMORY FIX: Extract minimal data immediately, don't accumulate full objects
+        scrapedGameData.forEach((fixture) => {
+          if (fixture && fixture.gameID) {
+            const gameID = fixture.gameID;
+            // Only add if not already in set (avoid duplicates)
+            if (!scrapedFixtureIds.has(gameID)) {
+              scrapedFixtureIds.add(gameID);
+              // Store minimal object for comparison service (expects objects with gameID property)
+              scrapedFixturesMinimal.push({ gameID });
+            }
+          }
+        });
 
         // ========================================
         // [DEBUG] LOG SCRAPED DATA BEFORE SENDING TO CMS
@@ -87,7 +102,9 @@ class GameDataProcessor {
             };
 
             logger.info(
-              `[GAMES] Fixture ${index + 1}/${fixturesToLog.length}: ${fixtureData.teamHome} vs ${fixtureData.teamAway} (GameID: ${fixtureData.gameID})`
+              `[GAMES] Fixture ${index + 1}/${fixturesToLog.length}: ${
+                fixtureData.teamHome
+              } vs ${fixtureData.teamAway} (GameID: ${fixtureData.gameID})`
             );
             logger.info(
               `[GAMES]   Round: ${fixtureData.round}, Date: ${fixtureData.date}, Status: ${fixtureData.status}`
@@ -96,13 +113,17 @@ class GameDataProcessor {
               `[GAMES]   Type: ${fixtureData.type}, Time: ${fixtureData.time}, Ground: ${fixtureData.ground}`
             );
             logger.info(
-              `[GAMES]   Grade: ${fixtureData.grade.join(", ") || "N/A"}, ScoreCard: ${fixtureData.urlToScoreCard}`
+              `[GAMES]   Grade: ${
+                fixtureData.grade.join(", ") || "N/A"
+              }, ScoreCard: ${fixtureData.urlToScoreCard}`
             );
           });
 
           if (scrapedGameData.length > 10) {
             logger.info(
-              `[GAMES] ... and ${scrapedGameData.length - 10} more fixtures in this batch`
+              `[GAMES] ... and ${
+                scrapedGameData.length - 10
+              } more fixtures in this batch`
             );
           }
 
@@ -142,21 +163,32 @@ class GameDataProcessor {
         );
         await assignGameDataObj.setup();
 
-        // MEMORY OPTIMIZATION: scrapedGameData will be garbage collected after this iteration
-        // The data is already stored in allScrapedFixtures and assigned to CMS
+        // MEMORY FIX: Clear references immediately after processing
+        // IDs are already extracted and stored in scrapedFixtureIds Set
+        scrapedGameData = null;
+        // Clear processor reference to help GC
+        const tempAssignObj = assignGameDataObj;
+        // assignGameDataObj will be GC'd after this scope
+
+        // MEMORY FIX: Force GC hint after every 3 batches
+        if (BatchItem % 3 === 0 && global.gc) {
+          global.gc();
+        }
 
         BatchItem++;
       }
 
       logger.info(
-        `Scraped ${allScrapedFixtures.length} fixtures total across ${
+        `Scraped ${scrapedFixtureIds.size} unique fixtures total across ${
           BatchItem - 1
         } batches`
       );
 
+      // MEMORY FIX: Return minimal objects { gameID } instead of full fixture objects
+      // This is compatible with FixtureComparisonService which extracts gameID from objects
       return {
         process: true,
-        scrapedFixtures: allScrapedFixtures, // Return scraped fixtures for comparison
+        scrapedFixtures: scrapedFixturesMinimal, // Return minimal objects for comparison
       };
     } catch (error) {
       this.processingTracker.errorDetected("games");
