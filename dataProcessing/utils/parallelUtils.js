@@ -6,6 +6,7 @@
  * Uses p-limit to manage concurrent operations and prevent resource exhaustion.
  */
 
+// p-limit v3 supports CommonJS require (v4+ is ESM-only)
 const pLimit = require("p-limit");
 const logger = require("../../src/utils/logger");
 
@@ -93,7 +94,9 @@ async function processInParallel(
 
       try {
         logger.info(
-          `[${context}] START processing item ${index + 1}/${items.length} (concurrency: ${concurrency}, currently active: ${currentActive})`
+          `[${context}] START processing item ${index + 1}/${
+            items.length
+          } (concurrency: ${concurrency}, currently active: ${currentActive})`
         );
 
         const result = await processor(item, index);
@@ -101,7 +104,9 @@ async function processInParallel(
         const itemDuration = Date.now() - itemStartTime;
         activeCount--;
         logger.info(
-          `[${context}] COMPLETE item ${index + 1}/${items.length} in ${itemDuration}ms (remaining active: ${activeCount})`
+          `[${context}] COMPLETE item ${index + 1}/${
+            items.length
+          } in ${itemDuration}ms (remaining active: ${activeCount})`
         );
 
         results.push({ item, index, result, success: true });
@@ -120,7 +125,9 @@ async function processInParallel(
         activeCount--;
 
         logger.error(
-          `[${context}] Error processing item ${index + 1}/${items.length} (remaining active: ${activeCount})`,
+          `[${context}] Error processing item ${index + 1}/${
+            items.length
+          } (remaining active: ${activeCount})`,
           {
             item: typeof item === "object" ? JSON.stringify(item) : item,
             error: error.message,
@@ -176,7 +183,9 @@ async function processInParallel(
   }
 
   return {
-    results: results.map((r) => (r.success ? r.result : null)).filter((r) => r !== null),
+    results: results
+      .map((r) => (r.success ? r.result : null))
+      .filter((r) => r !== null),
     errors,
     summary,
     rawResults: results, // Include all results with metadata
@@ -286,4 +295,3 @@ module.exports = {
   processInParallelSuccessOnly,
   processInBatches,
 };
-

@@ -9,6 +9,7 @@
     "start": "node index.js",
     "dev": "set NODE_ENV=development && set PORT=7000 && nodemon worker.js",
     "LOGS": "heroku logs --tail",
+    "preinstall": "npm cache clean --force || true",
     "postinstall": "node -e \"try { if (process.env.NODE_ENV === 'production' || process.env.RENDER) { const { execSync } = require('child_process'); execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' }); } } catch(e) { console.log('Chrome install skipped:', e.message); }\""
   },
   "author": "",
@@ -22,7 +23,7 @@
     "moment-timezone": "^0.5.46",
     "node-cron": "^3.0.2",
     "node-fetch": "^2.7.0",
-    "p-limit": "^5.0.0",
+    "p-limit": "^3.1.0",
     "puppeteer": "^24.31.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
