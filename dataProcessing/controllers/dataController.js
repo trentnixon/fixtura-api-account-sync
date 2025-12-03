@@ -517,8 +517,22 @@ class DataController {
 
   ProcessFixtureValidation = async (dataObj) => {
     try {
+      // MEMORY TRACKING: Log initial state
+      const { getMemoryStats } = require("../puppeteer/memoryUtils");
+      const validationInitialMemory = getMemoryStats();
       logger.info("[VALIDATION] Starting fixture validation process", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
+        initialMemory: {
+          rss: `${validationInitialMemory.rss}MB`,
+          heapUsed: `${validationInitialMemory.heapUsed}MB`,
+          heapTotal: `${validationInitialMemory.heapTotal}MB`,
+        },
+        existingData: {
+          fixtureValidationResults: (this.fixtureValidationResults || [])
+            .length,
+          fetchedFixtures: (this.fetchedFixtures || []).length,
+          scrapedFixtures: (this.scrapedFixtures || []).length,
+        },
       });
 
       // Fetch and validate fixtures

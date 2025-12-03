@@ -2,6 +2,7 @@ const logger = require("../../src/utils/logger");
 const GameCRUD = require("../assignCenter/games/GameCrud");
 const FixtureValidationService = require("../services/fixtureValidationService");
 const ProcessingTracker = require("../services/processingTracker");
+const { getMemoryStats } = require("../puppeteer/memoryUtils");
 
 /**
  * FixtureValidationProcessor handles validation of existing database fixtures.
@@ -37,9 +38,17 @@ class FixtureValidationProcessor {
    */
   async process() {
     try {
+      // MEMORY TRACKING: Log initial memory state
+      const initialMemory = getMemoryStats();
       logger.info("[VALIDATION] Starting fixture validation process", {
         accountId: this.dataObj.ACCOUNT.ACCOUNTID,
         accountType: this.dataObj.ACCOUNT.ACCOUNTTYPE,
+        initialMemory: {
+          rss: `${initialMemory.rss}MB`,
+          heapUsed: `${initialMemory.heapUsed}MB`,
+          heapTotal: `${initialMemory.heapTotal}MB`,
+          external: `${initialMemory.external}MB`,
+        },
       });
 
       // Get team IDs
@@ -190,12 +199,29 @@ class FixtureValidationProcessor {
         hasMore = page < (pagination.pageCount || 1);
         page++;
 
+        // MEMORY TRACKING: Log memory and object sizes after each page
+        const pageMemory = getMemoryStats();
         logger.info(
           `[VALIDATION] Page ${page - 1} complete: Validated ${
             totalValidCount + totalInvalidCount
           }/${totalFixtures} fixtures (${totalValidCount} valid, ${totalInvalidCount} invalid, ${
             invalidResults.length
-          } invalid stored)`
+          } invalid stored)`,
+          {
+            memory: {
+              rss: `${pageMemory.rss}MB (+${
+                pageMemory.rss - initialMemory.rss
+              }MB)`,
+              heapUsed: `${pageMemory.heapUsed}MB (+${
+                pageMemory.heapUsed - initialMemory.heapUsed
+              }MB)`,
+            },
+            objectSizes: {
+              invalidResults: invalidResults.length,
+              invalidFixtureIds: invalidFixtureIds.size,
+              allFixtureIds: allFixtureIds.size,
+            },
+          }
         );
       }
 
@@ -237,7 +263,8 @@ class FixtureValidationProcessor {
         }
       }
 
-      // Summary log
+      // MEMORY TRACKING: Log final memory state and object sizes
+      const finalMemory = getMemoryStats();
       logger.info("[VALIDATION] Fixture validation complete", {
         total: totalFixtures,
         validated: totalValidCount + totalInvalidCount,
@@ -248,6 +275,26 @@ class FixtureValidationProcessor {
         teamIdsCount: teamIds.length,
         pagesProcessed: page - 1,
         memoryNote: "Only invalid results stored (not all results)",
+        memory: {
+          initial: {
+            rss: `${initialMemory.rss}MB`,
+            heapUsed: `${initialMemory.heapUsed}MB`,
+          },
+          final: {
+            rss: `${finalMemory.rss}MB`,
+            heapUsed: `${finalMemory.heapUsed}MB`,
+          },
+          delta: {
+            rss: `+${finalMemory.rss - initialMemory.rss}MB`,
+            heapUsed: `+${finalMemory.heapUsed - initialMemory.heapUsed}MB`,
+          },
+        },
+        objectSizes: {
+          invalidResults: invalidResults.length,
+          invalidFixtureIds: invalidFixtureIds.size,
+          allFixtureIds: allFixtureIds.size,
+          fixturesArray: fixturesArray.length,
+        },
       });
 
       // MEMORY FIX: Convert Map to Array for fixtures (minimal data only)
