@@ -75,8 +75,17 @@ class FixtureValidationProcessor {
       let page = 1;
       let hasMore = true;
       let totalFixtures = 0;
-      const allValidationResults = [];
-      const allFixtures = [];
+
+      // MEMORY FIX: For large associations with HUNDREDS of teams and THOUSANDS of fixtures,
+      // we cannot accumulate all results. Only store invalid fixtures for cleanup.
+      const invalidResults = []; // Only invalid fixture results
+      const invalidFixtureIds = new Set(); // Track invalid IDs for quick lookup
+      let totalValidCount = 0;
+      let totalInvalidCount = 0;
+
+      // For comparison, we only need minimal fixture data ({ id, gameID })
+      // Use Map to avoid duplicates and use minimal memory
+      const allFixtureIds = new Map(); // Map<id, { id, gameID }>
 
       while (hasMore) {
         logger.info(
@@ -131,23 +140,50 @@ class FixtureValidationProcessor {
             this.concurrencyLimit
           );
 
-        // Accumulate results (these are minimal objects, not full fixtures)
-        allValidationResults.push(...pageValidationResults);
-        allFixtures.push(
-          ...pageFixtures.map((f) => ({
-            id: f.id,
-            gameID: f.gameID,
-          }))
-        );
+        // MEMORY FIX: Only accumulate invalid results, count valid ones
+        // For large associations, this prevents storing thousands of valid result objects
+        for (const result of pageValidationResults) {
+          if (result.valid) {
+            totalValidCount++;
+          } else {
+            totalInvalidCount++;
+            // Only store invalid results (needed for cleanup)
+            if (!invalidFixtureIds.has(result.fixtureId)) {
+              invalidFixtureIds.add(result.fixtureId);
+              invalidResults.push({
+                fixtureId: result.fixtureId,
+                gameID: result.gameID,
+                valid: false,
+                status: result.status,
+                httpStatus: result.httpStatus,
+              });
+            }
+          }
+        }
+
+        // Store minimal fixture data for comparison ({ id, gameID } only)
+        // Use Map to avoid duplicates by fixture ID
+        for (const fixture of pageFixtures) {
+          if (fixture.id && !allFixtureIds.has(fixture.id)) {
+            allFixtureIds.set(fixture.id, {
+              id: fixture.id,
+              gameID: fixture.gameID || null,
+            });
+          }
+        }
 
         // MEMORY FIX: Clear page data immediately after processing
         pageFixtures.length = 0; // Clear array
-        pageValidationResults.length = 0; // Results already copied to allValidationResults
+        pageValidationResults.length = 0; // Results already processed
 
-        // Force GC hint every 5 pages
-        if (page > 0 && page % 5 === 0 && global.gc) {
+        // Force GC hint every 3 pages (more frequent for large associations)
+        if (page > 0 && page % 3 === 0 && global.gc) {
           global.gc();
-          logger.info(`[VALIDATION] GC hint after page ${page}`);
+          logger.info(`[VALIDATION] GC hint after page ${page}`, {
+            invalidCount: invalidResults.length,
+            validCount: totalValidCount,
+            totalProcessed: totalValidCount + totalInvalidCount,
+          });
         }
 
         // Check if more pages
@@ -155,29 +191,32 @@ class FixtureValidationProcessor {
         page++;
 
         logger.info(
-          `[VALIDATION] Page ${page - 1} complete: ${
-            allValidationResults.length
-          }/${totalFixtures} fixtures validated`
+          `[VALIDATION] Page ${page - 1} complete: Validated ${
+            totalValidCount + totalInvalidCount
+          }/${totalFixtures} fixtures (${totalValidCount} valid, ${totalInvalidCount} invalid, ${
+            invalidResults.length
+          } invalid stored)`
         );
       }
 
-      // Store all validation results
-      this.validationResults = allValidationResults;
+      // MEMORY FIX: Only store invalid results (not all results)
+      // For large associations: 10,000 fixtures with 90% valid = only 1,000 invalid results stored
+      // vs storing all 10,000 results = 80% memory savings
+      this.validationResults = invalidResults;
 
-      // Count valid/invalid
-      const validCount = allValidationResults.filter((r) => r.valid).length;
-      const invalidCount = allValidationResults.filter((r) => !r.valid).length;
+      // Count valid/invalid (already counted during processing)
+      const validCount = totalValidCount;
+      const invalidCount = totalInvalidCount;
 
       // Track validation results
       this.processingTracker.itemUpdated("fixture-validation", validCount);
       this.processingTracker.itemDeleted("fixture-validation", invalidCount);
 
       // MEMORY OPTIMIZATION: Only log summary, not individual results (reduces memory usage)
-      // Log validation results (only invalid ones to reduce memory)
-      const invalidResults = allValidationResults.filter((r) => !r.valid);
+      // Log validation results (only invalid ones stored)
       if (invalidResults.length > 0) {
         logger.info(
-          `[VALIDATION] Found ${invalidResults.length} invalid fixtures (out of ${allValidationResults.length} total)`
+          `[VALIDATION] Found ${invalidResults.length} invalid fixtures (out of ${totalFixtures} total validated)`
         );
         // Only log first 10 invalid fixtures to reduce memory
         invalidResults.slice(0, 10).forEach((result, index) => {
@@ -186,7 +225,7 @@ class FixtureValidationProcessor {
               invalidResults.length
             } - GameID: ${result.gameID || "N/A"}, Status: ${
               result.status
-            }, URL: ${result.url ? result.url.substring(0, 60) + "..." : "N/A"}`
+            }, HTTP: ${result.httpStatus || "N/A"}`
           );
         });
         if (invalidResults.length > 10) {
@@ -201,32 +240,39 @@ class FixtureValidationProcessor {
       // Summary log
       logger.info("[VALIDATION] Fixture validation complete", {
         total: totalFixtures,
-        validated: allValidationResults.length,
+        validated: totalValidCount + totalInvalidCount,
         valid: validCount,
         invalid: invalidCount,
+        invalidStored: invalidResults.length,
         accountId: this.dataObj.ACCOUNT.ACCOUNTID,
         teamIdsCount: teamIds.length,
         pagesProcessed: page - 1,
+        memoryNote: "Only invalid results stored (not all results)",
       });
 
-      // MEMORY OPTIMIZATION: Return only minimal data
-      // Don't return full fixture objects - only validation results with IDs
-      // The comparison service only needs ID and gameID, not full fixture objects
-      // allFixtures already contains minimal data { id, gameID } from incremental processing
+      // MEMORY FIX: Convert Map to Array for fixtures (minimal data only)
+      // Map uses less memory than array, but comparison service expects array
+      const fixturesArray = Array.from(allFixtureIds.values());
 
-      logger.info("[VALIDATION] Returning validation results (minimal data)", {
-        accountId: this.dataObj.ACCOUNT.ACCOUNTID,
-        resultsCount: allValidationResults.length,
-        fixturesCount: allFixtures.length,
-      });
+      logger.info(
+        "[VALIDATION] Returning validation results (invalid-only storage)",
+        {
+          accountId: this.dataObj.ACCOUNT.ACCOUNTID,
+          resultsCount: invalidResults.length,
+          fixturesCount: fixturesArray.length,
+          note: "Only invalid results stored - major memory savings for large associations",
+        }
+      );
 
-      // Return validation results with minimal fixture data
+      // Return validation results - only invalid ones stored
+      // For large associations: 10,000 fixtures with 90% valid = only 1,000 results stored
+      // vs storing all 10,000 = 80-90% memory savings
       return {
-        validated: allValidationResults.length,
+        validated: totalValidCount + totalInvalidCount,
         valid: validCount,
         invalid: invalidCount,
-        results: allValidationResults, // Keep validation results (needed for comparison)
-        fixtures: allFixtures, // Only minimal data (id, gameID) - saves memory
+        results: invalidResults, // Only invalid results (needed for cleanup)
+        fixtures: fixturesArray, // Only fixture IDs (minimal data for comparison)
       };
     } catch (error) {
       this.processingTracker.errorDetected("fixture-validation");
