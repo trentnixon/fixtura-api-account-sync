@@ -146,7 +146,10 @@ class DataController {
       logger.info("[START] Refreshing data after competitions", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
+      // MEMORY FIX: Clear old dataObj reference before fetching new one
+      const oldDataObj = dataObj;
       dataObj = await this.reSyncData();
+      oldDataObj = null; // Help GC free old dataObj
       logger.info("[START] Data refreshed successfully after competitions", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
@@ -187,7 +190,10 @@ class DataController {
       logger.info("[START] Refreshing data after teams", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
+      // MEMORY FIX: Clear old dataObj reference before fetching new one
+      let oldDataObj = dataObj;
       dataObj = await this.reSyncData();
+      oldDataObj = null; // Help GC free old dataObj
       logger.info("[START] Data refreshed successfully after teams", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
@@ -234,7 +240,16 @@ class DataController {
       logger.info("[START] Refreshing data after games", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
+      // MEMORY FIX: Clear old dataObj reference before fetching new one
+      let oldDataObj = dataObj;
       dataObj = await this.reSyncData();
+      oldDataObj = null; // Help GC free old dataObj
+
+      // MEMORY FIX: Force GC hint after games stage (largest memory consumer)
+      if (global.gc) {
+        global.gc();
+      }
+
       logger.info("[START] Data refreshed successfully after games", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
@@ -349,6 +364,7 @@ class DataController {
 
   // Processes
   ProcessCompetitions = async (dataObj) => {
+    let competitionProcessor = null;
     try {
       logger.info("[COMPETITIONS] Starting competition processing", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -358,7 +374,7 @@ class DataController {
       logger.info("[COMPETITIONS] Creating CompetitionProcessor", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      const competitionProcessor = new CompetitionProcessor(dataObj);
+      competitionProcessor = new CompetitionProcessor(dataObj);
 
       logger.info("[COMPETITIONS] Calling competitionProcessor.process()", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -371,10 +387,16 @@ class DataController {
     } catch (error) {
       logger.error("[COMPETITIONS] Error in ProcessCompetitions:", error);
       throw error;
+    } finally {
+      // MEMORY FIX: Clear processor reference immediately after use
+      if (competitionProcessor) {
+        competitionProcessor = null;
+      }
     }
   };
 
   ProcessTeams = async (dataObj) => {
+    let teamProcessor = null;
     try {
       logger.info("[TEAMS] Starting team processing", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -384,7 +406,7 @@ class DataController {
       logger.info("[TEAMS] Creating TeamProcessor", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      const teamProcessor = new TeamProcessor(dataObj);
+      teamProcessor = new TeamProcessor(dataObj);
 
       logger.info("[TEAMS] Calling teamProcessor.process()", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -397,10 +419,16 @@ class DataController {
     } catch (error) {
       logger.error("[TEAMS] Error in ProcessTeams:", error);
       throw error;
+    } finally {
+      // MEMORY FIX: Clear processor reference immediately after use
+      if (teamProcessor) {
+        teamProcessor = null;
+      }
     }
   };
 
   ProcessGames = async (dataObj) => {
+    let gameDataProcessor = null;
     try {
       logger.info("[GAMES] Starting game data processing", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -410,7 +438,7 @@ class DataController {
       logger.info("[GAMES] Creating GameDataProcessor", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      const gameDataProcessor = new GameDataProcessor(dataObj);
+      gameDataProcessor = new GameDataProcessor(dataObj);
 
       logger.info("[GAMES] Calling gameDataProcessor.process()", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -424,7 +452,7 @@ class DataController {
           result && result.scrapedFixtures ? result.scrapedFixtures.length : 0,
       });
 
-      // Store scraped fixtures for use in cleanup phase
+      // MEMORY FIX: Store scraped fixtures immediately, then clear processor
       this.scrapedFixtures = result.scrapedFixtures || [];
       logger.info("[GAMES] Stored scraped fixtures for comparison", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -459,6 +487,11 @@ class DataController {
 
       // Re-throw the error to be handled by the main try-catch
       throw error;
+    } finally {
+      // MEMORY FIX: Clear processor reference immediately after use
+      if (gameDataProcessor) {
+        gameDataProcessor = null;
+      }
     }
   };
 

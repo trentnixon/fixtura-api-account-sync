@@ -149,6 +149,10 @@ class CompetitionProcessor {
 
       // Return failure result instead of throwing
       return { process: false, reason: error.message || "Unknown error" };
+    } finally {
+      // MEMORY FIX: Clear dataObj reference after processing to free large arrays
+      // This allows GC to free TEAMS, Grades, COMPETITIONS arrays
+      this.dataObj = null;
     }
   }
 }

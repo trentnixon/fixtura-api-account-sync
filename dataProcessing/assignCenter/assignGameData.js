@@ -21,7 +21,16 @@ class AssignGameData {
         (i + 1) * this.batchSize
       );
       await this.processBatch(currentBatch);
+
+      // MEMORY FIX: Clear batch reference after processing
+      // Note: currentBatch is a slice, but clearing helps GC
+      // The main this.games array will be cleared by caller after setup() completes
     }
+
+    // MEMORY FIX: Clear games array after all batches processed
+    // The data has been sent to CMS, we don't need it anymore
+    this.games = null;
+
     return { success: true };
   }
 

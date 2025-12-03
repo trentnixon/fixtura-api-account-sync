@@ -129,6 +129,10 @@ class TeamProcessor {
         class: "TeamProcessor",
       });
       throw error;
+    } finally {
+      // MEMORY FIX: Clear dataObj reference after processing to free large arrays
+      // This allows GC to free TEAMS, Grades, COMPETITIONS arrays
+      this.dataObj = null;
     }
   }
 

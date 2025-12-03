@@ -19,14 +19,17 @@ class GameDataProcessor {
    * Throws an error if any step in the process fails.
    */
   async process() {
-    const batchSize = 10;
+    // MEMORY FIX: Smaller batches for memory-constrained environments
+    const batchSize = parseInt(process.env.GAME_DATA_BATCH_SIZE || "5", 10); // Reduced from 10 to 5
     let BatchItem = 1;
     // MEMORY FIX: Only store minimal fixture data (gameID), not full objects
     const scrapedFixtureIds = new Set(); // Use Set to avoid duplicates
     const scrapedFixturesMinimal = []; // Store minimal objects { gameID } for comparison
     try {
+      // MEMORY FIX: Extract TEAMS reference before processing to allow GC of dataObj if needed
+      const teams = this.dataObj.TEAMS;
       // Split teams array into smaller batches for processing
-      const teamBatches = this.createBatches(this.dataObj.TEAMS, batchSize);
+      const teamBatches = this.createBatches(teams, batchSize);
 
       // Loop through each batch
       for (const teamsBatch of teamBatches) {
@@ -39,9 +42,11 @@ class GameDataProcessor {
           }
         );
         // Scrape game data for the current batch
+        // MEMORY FIX: Only pass minimal dataObj fields needed, not full object
         let getGameDataObj = new getTeamsGameData({
-          ...this.dataObj,
-          TEAMS: teamsBatch,
+          ACCOUNT: this.dataObj.ACCOUNT, // Only account info needed
+          TEAMS: teamsBatch, // Only current batch of teams
+          // Don't pass: Grades, COMPETITIONS, DETAILS, TYPEOBJ (not needed for game data scraping)
         });
         let scrapedGameData = await getGameDataObj.setup();
 
@@ -157,7 +162,7 @@ class GameDataProcessor {
         logger.info("[GAMES] ===== END SCRAPED DATA LOG =====");
 
         // Assign the scraped data for the current batch
-        const assignGameDataObj = new assignGameData(
+        let assignGameDataObj = new assignGameData(
           scrapedGameData,
           this.dataObj
         );
@@ -166,12 +171,10 @@ class GameDataProcessor {
         // MEMORY FIX: Clear references immediately after processing
         // IDs are already extracted and stored in scrapedFixtureIds Set
         scrapedGameData = null;
-        // Clear processor reference to help GC
-        const tempAssignObj = assignGameDataObj;
-        // assignGameDataObj will be GC'd after this scope
+        assignGameDataObj = null; // Clear processor reference to help GC
 
-        // MEMORY FIX: Force GC hint after every 3 batches
-        if (BatchItem % 3 === 0 && global.gc) {
+        // MEMORY FIX: Force GC hint after every 2 batches (more frequent)
+        if (BatchItem % 2 === 0 && global.gc) {
           global.gc();
         }
 
@@ -198,6 +201,10 @@ class GameDataProcessor {
         class: "GameDataProcessor",
       });
       throw error;
+    } finally {
+      // MEMORY FIX: Clear dataObj reference after processing to free large arrays
+      // This allows GC to free TEAMS, Grades, COMPETITIONS arrays
+      this.dataObj = null;
     }
   }
 

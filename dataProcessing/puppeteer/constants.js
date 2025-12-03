@@ -11,16 +11,16 @@ const BROWSER_CONFIG = {
 };
 
 // Memory Management Configuration
-// Updated for 2GB server - relaxed thresholds for better performance
+// MEMORY FIX: More aggressive restart thresholds for 2GB instances
 const MEMORY_CONFIG = {
   MAX_OPERATIONS_BEFORE_RESTART: parseInt(
-    process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "150", // Increased from 75 for 2GB server
+    process.env.PUPPETEER_MAX_OPS_BEFORE_RESTART || "75", // Reduced from 150 to 75 for more frequent restarts
     10
   ),
-  MIN_RESTART_INTERVAL: 120000, // 120 seconds (2 minutes) - increased from 60s for 2GB server
+  MIN_RESTART_INTERVAL: 60000, // 60 seconds (1 minute) - reduced from 120s for more frequent restarts
   MEMORY_LOG_INTERVAL: 20, // Log memory every 20 operations (reduced frequency from 10)
   MEMORY_CHECK_INTERVAL: 10, // Check memory every 10 operations (reduced frequency from 5)
-  // Memory thresholds - increased for 2GB server
+  // Memory thresholds - kept conservative for 2GB server
   HEAP_THRESHOLD_MB: 300, // Increased from 150
   RSS_THRESHOLD_MB: 800, // Increased from 400
   MEMORY_WARNING_HEAP_MB: 200, // Increased from 100
@@ -51,23 +51,24 @@ const BLOCKED_RESOURCE_TYPES = [
 
 // Parallel Processing Configuration
 // Strategy 1: Parallel Page Processing
+// MEMORY FIX: Reduced concurrency for 2GB instances to prevent memory exhaustion
 const PARALLEL_CONFIG = {
   PAGE_POOL_SIZE: parseInt(
-    process.env.PARALLEL_PAGE_POOL_SIZE || "3",
+    process.env.PARALLEL_PAGE_POOL_SIZE || "2", // Reduced from 3 to 2
     10
-  ), // Default: 3 pages for parallel processing
+  ), // Default: 2 pages for parallel processing (reduced for memory)
   COMPETITIONS_CONCURRENCY: parseInt(
-    process.env.PARALLEL_COMPETITIONS_CONCURRENCY || "3",
+    process.env.PARALLEL_COMPETITIONS_CONCURRENCY || "2", // Reduced from 3 to 2
     10
-  ), // Default: 3 concurrent associations
+  ), // Default: 2 concurrent associations (reduced for memory)
   TEAMS_CONCURRENCY: parseInt(
-    process.env.PARALLEL_TEAMS_CONCURRENCY || "3",
+    process.env.PARALLEL_TEAMS_CONCURRENCY || "2", // Reduced from 3 to 2
     10
-  ), // Default: 3 concurrent teams
+  ), // Default: 2 concurrent teams (reduced for memory)
   VALIDATION_CONCURRENCY: parseInt(
-    process.env.PARALLEL_VALIDATION_CONCURRENCY || "5",
+    process.env.PARALLEL_VALIDATION_CONCURRENCY || "3", // Reduced from 5 to 3
     10
-  ), // Default: 5 concurrent validations
+  ), // Default: 3 concurrent validations (reduced for memory)
 };
 
 // Environment Detection
