@@ -42,7 +42,7 @@ class FixtureValidationProcessor {
         accountType: this.dataObj.ACCOUNT.ACCOUNTTYPE,
       });
 
-      // Get team IDs and fetch fixtures (from today onwards, up to 14 days in the future)
+      // Get team IDs
       const teamIds = this.getTeamIds();
       if (!teamIds || teamIds.length === 0) {
         logger.warn("No team IDs found for fixture fetch");
@@ -56,79 +56,117 @@ class FixtureValidationProcessor {
         };
       }
 
-      // Fetch existing fixtures for teams (from today onwards, up to 14 days, with batching)
+      // MEMORY FIX: Use new validation endpoint with incremental processing
+      // Process fixtures page by page: fetch → validate → clear → repeat
+      // This prevents accumulating all fixtures in memory
       logger.info(
-        `Fetching existing fixtures (from today onwards, up to 14 days) for ${teamIds.length} teams (batched)`
+        `[VALIDATION] Using new validation endpoint with incremental processing for ${teamIds.length} teams`
       );
-      const databaseFixtures = await this.gameCRUD.getFixturesForTeams(teamIds);
 
-      if (!databaseFixtures || databaseFixtures.length === 0) {
+      // Calculate date range (today to today + 14 days)
+      const fromDate = new Date();
+      fromDate.setHours(0, 0, 0, 0);
+      const toDate = new Date(fromDate);
+      toDate.setDate(toDate.getDate() + 14);
+      toDate.setHours(23, 59, 59, 999);
+
+      // Process fixtures incrementally (page by page)
+      const pageSize = 100; // Process 100 fixtures at a time
+      let page = 1;
+      let hasMore = true;
+      let totalFixtures = 0;
+      const allValidationResults = [];
+      const allFixtures = [];
+
+      while (hasMore) {
         logger.info(
-          "No existing fixtures found in database (from today onwards, up to 14 days)"
+          `[VALIDATION] Fetching page ${page} (${pageSize} fixtures per page)`
         );
-        this.processingTracker.itemFound("fixture-validation", 0);
-        return {
-          validated: 0,
-          valid: 0,
-          invalid: 0,
-          results: [],
-          fixtures: [],
-        };
+
+        // Fetch one page of fixtures using new validation endpoint
+        const pageResponse = await this.gameCRUD.getFixturesForValidation(
+          teamIds,
+          fromDate,
+          toDate,
+          page,
+          pageSize
+        );
+
+        const pageFixtures = pageResponse.data || [];
+        const pagination = pageResponse.meta?.pagination || {};
+
+        if (!pageFixtures || pageFixtures.length === 0) {
+          logger.info(
+            `[VALIDATION] No fixtures found on page ${page}, stopping pagination`
+          );
+          hasMore = false;
+          break;
+        }
+
+        // Update total count from first page
+        if (page === 1) {
+          totalFixtures = pagination.total || pageFixtures.length;
+          this.processingTracker.itemFound("fixture-validation", totalFixtures);
+          logger.info(
+            `[VALIDATION] Found ${totalFixtures} total fixtures to validate across ${
+              pagination.pageCount || 1
+            } pages`
+          );
+        }
+
+        logger.info(
+          `[VALIDATION] Page ${page}/${pagination.pageCount || 1}: ${
+            pageFixtures.length
+          } fixtures (${totalFixtures} total)`
+        );
+
+        // Validate this page of fixtures
+        // PlayHQ blocks HTTP requests, so we use Puppeteer directly for all validations
+        logger.info(
+          `[VALIDATION] Validating page ${page} fixtures using Puppeteer (concurrency: ${this.concurrencyLimit}, timeout: ${this.validationService.timeout}ms)`
+        );
+        const pageValidationResults =
+          await this.validationService.validateFixturesBatch(
+            pageFixtures,
+            this.concurrencyLimit
+          );
+
+        // Accumulate results (these are minimal objects, not full fixtures)
+        allValidationResults.push(...pageValidationResults);
+        allFixtures.push(
+          ...pageFixtures.map((f) => ({
+            id: f.id,
+            gameID: f.gameID,
+          }))
+        );
+
+        // MEMORY FIX: Clear page data immediately after processing
+        pageFixtures.length = 0; // Clear array
+        pageValidationResults.length = 0; // Results already copied to allValidationResults
+
+        // Force GC hint every 5 pages
+        if (page > 0 && page % 5 === 0 && global.gc) {
+          global.gc();
+          logger.info(`[VALIDATION] GC hint after page ${page}`);
+        }
+
+        // Check if more pages
+        hasMore = page < (pagination.pageCount || 1);
+        page++;
+
+        logger.info(
+          `[VALIDATION] Page ${page - 1} complete: ${
+            allValidationResults.length
+          }/${totalFixtures} fixtures validated`
+        );
       }
 
-      logger.info(
-        `Found ${databaseFixtures.length} existing fixtures (from today onwards, up to 14 days)`
-      );
-      this.processingTracker.itemFound(
-        "fixture-validation",
-        databaseFixtures.length
-      );
-
-      // MEMORY OPTIMIZATION: Reduced logging - only log summary, not individual fixtures
-      // Logging full fixture objects consumes significant memory
-      logger.info(
-        `[VALIDATION] Found ${databaseFixtures.length} fixtures to validate (from today onwards, up to 14 days)`
-      );
-
-      // ========================================
-      // STEP 2: VALIDATE FIXTURE URLs
-      // ========================================
-      logger.info("Starting URL validation for fixtures...");
-
-      // Prepare fixtures for validation - ONLY store minimal data to reduce memory
-      // MEMORY OPTIMIZATION: Don't store full fixture objects, only essential fields
-      // Extract minimal data immediately to allow garbage collection of full objects
-      const fixturesToValidate = databaseFixtures.map((fixture) => {
-        const fixtureId = fixture.id;
-        const attributes = fixture.attributes || fixture;
-        return {
-          id: fixtureId,
-          gameID: attributes.gameID || fixture.gameID,
-          urlToScoreCard: attributes.urlToScoreCard || fixture.urlToScoreCard,
-          // REMOVED: attributes - saves significant memory (5-10KB per fixture)
-        };
-      });
-
-      // Note: databaseFixtures will be garbage collected after this function returns
-      // We've extracted all needed data into fixturesToValidate (minimal data only)
-
-      // Validate fixtures in batches
-      // PlayHQ blocks HTTP requests, so we use Puppeteer directly for all validations
-      logger.info(
-        `Validating ${fixturesToValidate.length} fixture URLs using Puppeteer (PlayHQ blocks HTTP requests, concurrency: ${this.concurrencyLimit}, timeout: ${this.validationService.timeout}ms)`
-      );
-      const validationResults =
-        await this.validationService.validateFixturesBatch(
-          fixturesToValidate,
-          this.concurrencyLimit
-        );
-
-      // Store validation results
-      this.validationResults = validationResults;
+      // Store all validation results
+      this.validationResults = allValidationResults;
 
       // Count valid/invalid
-      const validCount = validationResults.filter((r) => r.valid).length;
-      const invalidCount = validationResults.filter((r) => !r.valid).length;
+      const validCount = allValidationResults.filter((r) => r.valid).length;
+      const invalidCount = allValidationResults.filter((r) => !r.valid).length;
 
       // Track validation results
       this.processingTracker.itemUpdated("fixture-validation", validCount);
@@ -136,10 +174,10 @@ class FixtureValidationProcessor {
 
       // MEMORY OPTIMIZATION: Only log summary, not individual results (reduces memory usage)
       // Log validation results (only invalid ones to reduce memory)
-      const invalidResults = validationResults.filter((r) => !r.valid);
+      const invalidResults = allValidationResults.filter((r) => !r.valid);
       if (invalidResults.length > 0) {
         logger.info(
-          `[VALIDATION] Found ${invalidResults.length} invalid fixtures (out of ${validationResults.length} total)`
+          `[VALIDATION] Found ${invalidResults.length} invalid fixtures (out of ${allValidationResults.length} total)`
         );
         // Only log first 10 invalid fixtures to reduce memory
         invalidResults.slice(0, 10).forEach((result, index) => {
@@ -161,40 +199,34 @@ class FixtureValidationProcessor {
       }
 
       // Summary log
-      const totalFixtures = fixturesToValidate.length;
       logger.info("[VALIDATION] Fixture validation complete", {
         total: totalFixtures,
-        validated: validationResults.length,
+        validated: allValidationResults.length,
         valid: validCount,
         invalid: invalidCount,
         accountId: this.dataObj.ACCOUNT.ACCOUNTID,
         teamIdsCount: teamIds.length,
+        pagesProcessed: page - 1,
       });
 
       // MEMORY OPTIMIZATION: Return only minimal data
       // Don't return full fixture objects - only validation results with IDs
       // The comparison service only needs ID and gameID, not full fixture objects
-      const minimalFixtures = fixturesToValidate.map((f) => ({
-        id: f.id,
-        gameID: f.gameID,
-      }));
-
-      // Clear fixturesToValidate to free memory
-      fixturesToValidate.length = 0;
+      // allFixtures already contains minimal data { id, gameID } from incremental processing
 
       logger.info("[VALIDATION] Returning validation results (minimal data)", {
         accountId: this.dataObj.ACCOUNT.ACCOUNTID,
-        resultsCount: validationResults.length,
-        fixturesCount: minimalFixtures.length,
+        resultsCount: allValidationResults.length,
+        fixturesCount: allFixtures.length,
       });
 
       // Return validation results with minimal fixture data
       return {
-        validated: validationResults.length,
+        validated: allValidationResults.length,
         valid: validCount,
         invalid: invalidCount,
-        results: validationResults, // Keep validation results (needed for comparison)
-        fixtures: minimalFixtures, // Only minimal data (id, gameID) - saves memory
+        results: allValidationResults, // Keep validation results (needed for comparison)
+        fixtures: allFixtures, // Only minimal data (id, gameID) - saves memory
       };
     } catch (error) {
       this.processingTracker.errorDetected("fixture-validation");

@@ -418,6 +418,247 @@ class GameCRUD {
   }
 
   /**
+   * Fetches fixtures for validation using the new lightweight endpoint
+   * Returns only id, gameID, urlToScoreCard with pagination support
+   * @param {Array<number>} teamIds - Array of team database IDs
+   * @param {Date} fromDate - Start date (default: today)
+   * @param {Date} toDate - End date (default: today + 14 days)
+   * @param {number} page - Page number (default: 1)
+   * @param {number} pageSize - Items per page (default: 100, max: 1000)
+   * @returns {Promise<{data: Array, meta: Object}>} Paginated fixture data
+   */
+  async getFixturesForValidation(
+    teamIds,
+    fromDate = null,
+    toDate = null,
+    page = 1,
+    pageSize = 100
+  ) {
+    if (!teamIds || teamIds.length === 0) {
+      logger.warn("No team IDs provided for getFixturesForValidation");
+      return {
+        data: [],
+        meta: {
+          pagination: { page: 1, pageSize, pageCount: 0, total: 0 },
+          filters: {
+            teamIds: [],
+            fromDate: null,
+            toDate: null,
+            sportType: null,
+          },
+        },
+      };
+    }
+
+    // Set fromDate to today at midnight if not provided
+    if (!fromDate) {
+      fromDate = new Date();
+      fromDate.setHours(0, 0, 0, 0);
+    }
+
+    // Set toDate to today + 14 days if not provided
+    if (!toDate) {
+      toDate = new Date(fromDate);
+      toDate.setDate(toDate.getDate() + 14);
+      toDate.setHours(23, 59, 59, 999);
+    }
+
+    // Get sport type
+    const sportType = this.dataObj.DETAILS.Sport;
+
+    try {
+      // Build query string for new validation endpoint
+      // Note: Use 'teamIds' as key (not 'teamIds[]') and let qs.stringify add brackets
+      const queryParams = {
+        teamIds: teamIds, // Array will be formatted as teamIds[]=1&teamIds[]=2
+        fromDate: fromDate.toISOString(),
+        toDate: toDate.toISOString(),
+        sportType: sportType,
+        page: page,
+        pageSize: Math.min(pageSize, 1000), // Max 1000 per page
+      };
+
+      const query = qs.stringify(queryParams, {
+        encodeValuesOnly: true,
+        arrayFormat: "brackets", // Converts teamIds array to teamIds[]=1&teamIds[]=2
+      });
+
+      // Note: baseUrl is http://127.0.0.1:1337, so we need /api prefix for Strapi endpoints
+      // But check if baseUrl already includes /api - if so, don't add it again
+      // Strapi endpoints require /api prefix
+      // Based on error URL showing http://127.0.0.1:1337/api//api/fixtures/validation
+      // The baseUrl must be http://127.0.0.1:1337/api (includes /api)
+      // So path should be /fixtures/validation (without /api prefix)
+      const endpointPath = `fixtures/validation?${query}`;
+
+      // DEBUG: Log request details
+      logger.info(`[VALIDATION-ENDPOINT] Fetching from validation endpoint`, {
+        method: "getFixturesForValidation",
+        endpoint: endpointPath,
+        teamIdsCount: teamIds.length,
+        teamIds: teamIds.slice(0, 5), // Log first 5 team IDs
+        page,
+        pageSize,
+        sportType,
+        fromDate: fromDate.toISOString(),
+        toDate: toDate.toISOString(),
+      });
+
+      // NOTE: fetcher returns res.data, not the full { data, meta } object
+      // So we need to fetch the full response differently
+      // For now, let's use fetcher and see what we get
+      const response = await fetcher(endpointPath);
+
+      // DEBUG: Log full response structure
+      // Note: fetcher returns res.data, so response might be an array directly
+      logger.info(`[VALIDATION-ENDPOINT] Raw response received`, {
+        method: "getFixturesForValidation",
+        responseType: typeof response,
+        isArray: Array.isArray(response),
+        isNull: response === null,
+        isUndefined: response === undefined,
+        responseLength: Array.isArray(response) ? response.length : "N/A",
+        firstItem:
+          Array.isArray(response) && response.length > 0 ? response[0] : null,
+        responseKeys:
+          response && typeof response === "object" && !Array.isArray(response)
+            ? Object.keys(response)
+            : [],
+        fullResponse: JSON.stringify(response, null, 2).substring(0, 2000),
+      });
+
+      // DEBUG: Log sample data if available
+      if (Array.isArray(response) && response.length > 0) {
+        logger.info(`[VALIDATION-ENDPOINT] Sample fixture data (first item):`, {
+          method: "getFixturesForValidation",
+          sampleFixture: response[0],
+          fixtureKeys: Object.keys(response[0]),
+          hasId: response[0].id !== undefined,
+          hasGameID: response[0].gameID !== undefined,
+          hasUrlToScoreCard: response[0].urlToScoreCard !== undefined,
+        });
+      } else if (
+        response &&
+        typeof response === "object" &&
+        !Array.isArray(response)
+      ) {
+        // Response might be { data: [...], meta: {...} }
+        logger.info(`[VALIDATION-ENDPOINT] Response is object (not array):`, {
+          method: "getFixturesForValidation",
+          keys: Object.keys(response),
+          hasData: response.data !== undefined,
+          hasMeta: response.meta !== undefined,
+          dataLength: Array.isArray(response.data)
+            ? response.data.length
+            : "N/A",
+          sampleData:
+            Array.isArray(response.data) && response.data.length > 0
+              ? response.data[0]
+              : null,
+        });
+      }
+
+      if (!response) {
+        logger.warn(
+          `[VALIDATION-ENDPOINT] Fetcher returned null for validation endpoint`,
+          {
+            method: "getFixturesForValidation",
+            class: "GameCRUD",
+            teamIdsCount: teamIds.length,
+            page,
+            pageSize,
+          }
+        );
+        return {
+          data: [],
+          meta: {
+            pagination: { page, pageSize, pageCount: 0, total: 0 },
+            filters: {
+              teamIds,
+              fromDate: fromDate.toISOString(),
+              toDate: toDate.toISOString(),
+              sportType,
+            },
+          },
+        };
+      }
+
+      // NOTE: fetcher returns res.data, so response is likely just the data array
+      // If response is an array, that's the fixtures data
+      // If response is an object with data/meta, use that structure
+      let parsedData = [];
+      let parsedMeta = {
+        pagination: {
+          page: page,
+          pageSize: pageSize,
+          pageCount: 0,
+          total: 0,
+        },
+        filters: {
+          teamIds,
+          fromDate: fromDate.toISOString(),
+          toDate: toDate.toISOString(),
+          sportType,
+        },
+      };
+
+      if (Array.isArray(response)) {
+        // fetcher returned just the data array (res.data)
+        parsedData = response;
+        // We don't have meta info from fetcher, so estimate pagination
+        parsedMeta.pagination.total = response.length;
+        parsedMeta.pagination.pageCount = Math.ceil(response.length / pageSize);
+        logger.info(
+          `[VALIDATION-ENDPOINT] Response is array (fetcher returned res.data only)`,
+          {
+            method: "getFixturesForValidation",
+            dataCount: parsedData.length,
+            note: "Meta information not available - fetcher only returns res.data",
+          }
+        );
+      } else if (response && typeof response === "object" && response.data) {
+        // Response has { data, meta } structure (unlikely with current fetcher)
+        parsedData = Array.isArray(response.data) ? response.data : [];
+        parsedMeta = response.meta || parsedMeta;
+        logger.info(`[VALIDATION-ENDPOINT] Response has data/meta structure`, {
+          method: "getFixturesForValidation",
+          dataCount: parsedData.length,
+          pagination: parsedMeta.pagination,
+        });
+      } else {
+        logger.warn(`[VALIDATION-ENDPOINT] Unexpected response format`, {
+          method: "getFixturesForValidation",
+          responseType: typeof response,
+          response: response,
+        });
+      }
+
+      // DEBUG: Log parsed result
+      logger.info(`[VALIDATION-ENDPOINT] Parsed result:`, {
+        method: "getFixturesForValidation",
+        dataCount: parsedData.length,
+        pagination: parsedMeta.pagination,
+        totalFixtures: parsedMeta.pagination.total,
+        pageCount: parsedMeta.pagination.pageCount,
+      });
+
+      return {
+        data: parsedData,
+        meta: parsedMeta,
+      };
+    } catch (error) {
+      logger.error(`Error fetching fixtures for validation: ${error}`, {
+        method: "getFixturesForValidation",
+        class: "GameCRUD",
+        teamIdsCount: teamIds?.length || 0,
+        page,
+        pageSize,
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Fetches all fixtures for an account
    * @param {number} accountId - Account database ID
    * @returns {Promise<Array>} Array of fixture objects

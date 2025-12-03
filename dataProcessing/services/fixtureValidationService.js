@@ -461,6 +461,23 @@ class FixtureValidationService {
   async validateFixturesBatch(fixtures, concurrencyLimit = 5) {
     const results = [];
 
+    // TESTING: Track memory and results collection
+    const getMemoryStats = () => {
+      const memUsage = process.memoryUsage();
+      return {
+        rss: Math.round(memUsage.rss / 1024 / 1024), // MB
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024), // MB
+        external: Math.round(memUsage.external / 1024 / 1024), // MB
+      };
+    };
+
+    // TESTING: Log initial memory state
+    const initialMemory = getMemoryStats();
+    logger.info(
+      `[VALIDATION-TEST] Starting validation: ${fixtures.length} fixtures, Initial memory: RSS=${initialMemory.rss}MB, Heap=${initialMemory.heapUsed}MB`
+    );
+
     if (!this.usePuppeteer || this.skipHttpValidation) {
       // MEMORY OPTIMIZATION: Process in small batches (5 fixtures) with browser cleanup
       const batchSize = concurrencyLimit;
@@ -501,6 +518,9 @@ class FixtureValidationService {
 
           // Process fixtures in this batch in parallel using page pool (Strategy 1: Parallel Page Processing)
           const concurrency = PARALLEL_CONFIG.VALIDATION_CONCURRENCY;
+
+          // MEMORY FIX: Use streaming mode to process results immediately, preventing double accumulation
+          // This prevents batchResults.results from accumulating before being pushed to main results array
           const batchResults = await processInParallel(
             batch,
             async (fixture, i) => {
@@ -647,21 +667,75 @@ class FixtureValidationService {
               context: "fixture_validation",
               logProgress: false, // We have our own detailed logging
               continueOnError: true,
+              // MEMORY FIX: Enable streaming mode to process results immediately
+              streamResults: true,
+              onResult: async (minimalResult, index, fixture) => {
+                // Process result immediately, don't accumulate in batchResults.results
+                // The result is already minimal (fixtureId, gameID, valid, status, httpStatus)
+                try {
+                  // TESTING: Check for duplicates before adding
+                  const isDuplicate = results.some(
+                    (r) =>
+                      r.fixtureId === minimalResult.fixtureId &&
+                      r.gameID === minimalResult.gameID
+                  );
+
+                  if (isDuplicate) {
+                    logger.warn(
+                      `[VALIDATION-TEST] Duplicate result detected: fixtureId=${minimalResult.fixtureId}, gameID=${minimalResult.gameID}`
+                    );
+                  } else {
+                    results.push(minimalResult);
+
+                    // TESTING: Log every 10 results for monitoring
+                    if (results.length % 10 === 0) {
+                      const currentMemory = getMemoryStats();
+                      logger.info(
+                        `[VALIDATION-TEST] Results collected: ${
+                          results.length
+                        }/${fixtures.length}, Memory: RSS=${
+                          currentMemory.rss
+                        }MB (+${
+                          currentMemory.rss - initialMemory.rss
+                        }MB), Heap=${currentMemory.heapUsed}MB (+${
+                          currentMemory.heapUsed - initialMemory.heapUsed
+                        }MB)`
+                      );
+                    }
+                  }
+                } catch (callbackError) {
+                  // Log callback errors but don't throw - allow processing to continue
+                  logger.error(
+                    `[VALIDATION] Error in onResult callback for fixture ${
+                      index + 1
+                    }`,
+                    {
+                      error: callbackError.message,
+                      fixtureId: minimalResult?.fixtureId,
+                      gameID: minimalResult?.gameID,
+                    }
+                  );
+                }
+              },
             }
           );
 
-          // MEMORY FIX: Extract minimal data immediately, don't accumulate full result objects
-          // Results already contain minimal data (from our fix above), but ensure we're not storing extra fields
-          const minimalResults = batchResults.results.map((r) => ({
-            fixtureId: r.fixtureId,
-            gameID: r.gameID,
-            valid: r.valid,
-            status: r.status, // String status: "404", "valid", "error", "no_url", etc.
-            httpStatus: r.httpStatus, // HTTP status code number (200, 404, 403, etc.)
-            // Don't include: url, error, method, or any other fields
-          }));
+          // MEMORY FIX: With streaming enabled, batchResults.results will be empty
+          // Results are already pushed to main results array via onResult callback
+          // No need to extract and push minimalResults here
 
-          results.push(...minimalResults);
+          // TESTING: Verify batch results are empty (streaming working correctly)
+          if (batchResults.results && batchResults.results.length > 0) {
+            logger.warn(
+              `[VALIDATION-TEST] WARNING: batchResults.results is not empty (${batchResults.results.length} items) - streaming may not be working correctly`
+            );
+          } else {
+            logger.debug(
+              `[VALIDATION-TEST] Batch ${
+                batchIndex + 1
+              }: Streaming working correctly - batchResults.results is empty`
+            );
+          }
 
           // Log batch summary before clearing
           if (batchResults.errors && batchResults.errors.length > 0) {
@@ -671,6 +745,20 @@ class FixtureValidationService {
               } errors`
             );
           }
+
+          // TESTING: Log memory after each batch
+          const batchMemory = getMemoryStats();
+          logger.info(
+            `[VALIDATION-TEST] Batch ${batchIndex + 1}/${
+              batches.length
+            } complete: Results=${results.length}/${
+              fixtures.length
+            }, Memory: RSS=${batchMemory.rss}MB (+${
+              batchMemory.rss - initialMemory.rss
+            }MB), Heap=${batchMemory.heapUsed}MB (+${
+              batchMemory.heapUsed - initialMemory.heapUsed
+            }MB)`
+          );
 
           // MEMORY FIX: Clear batch results immediately after extracting minimal data
           batchResults.results = null;
@@ -778,9 +866,59 @@ class FixtureValidationService {
 
     const totalValid = results.filter((r) => r.valid).length;
     const totalInvalid = results.length - totalValid;
+
+    // TESTING: Final verification
+    const finalMemory = getMemoryStats();
+    const memoryIncrease = {
+      rss: finalMemory.rss - initialMemory.rss,
+      heapUsed: finalMemory.heapUsed - initialMemory.heapUsed,
+    };
+
+    // TESTING: Check for duplicates in final results
+    const fixtureIds = results.map((r) => r.fixtureId);
+    const gameIDs = results.map((r) => r.gameID);
+    const uniqueFixtureIds = new Set(fixtureIds);
+    const uniqueGameIDs = new Set(gameIDs);
+    const duplicateFixtureIds = fixtureIds.length - uniqueFixtureIds.size;
+    const duplicateGameIDs = gameIDs.length - uniqueGameIDs.size;
+
     logger.info(
       `[VALIDATION] Complete: ${totalValid} valid, ${totalInvalid} invalid out of ${results.length} fixtures`
     );
+
+    // TESTING: Log final verification results
+    logger.info(`[VALIDATION-TEST] Final Verification:`, {
+      totalFixtures: fixtures.length,
+      resultsCollected: results.length,
+      expectedMatch: results.length === fixtures.length,
+      duplicates: {
+        fixtureIds: duplicateFixtureIds,
+        gameIDs: duplicateGameIDs,
+      },
+      memory: {
+        initial: `${initialMemory.rss}MB RSS, ${initialMemory.heapUsed}MB Heap`,
+        final: `${finalMemory.rss}MB RSS, ${finalMemory.heapUsed}MB Heap`,
+        increase: `+${memoryIncrease.rss}MB RSS, +${memoryIncrease.heapUsed}MB Heap`,
+      },
+    });
+
+    // TESTING: Warn if results don't match expected count
+    if (results.length !== fixtures.length) {
+      logger.warn(
+        `[VALIDATION-TEST] WARNING: Results count (${
+          results.length
+        }) does not match fixtures count (${fixtures.length}) - missing ${
+          fixtures.length - results.length
+        } results`
+      );
+    }
+
+    // TESTING: Warn if duplicates found
+    if (duplicateFixtureIds > 0 || duplicateGameIDs > 0) {
+      logger.warn(
+        `[VALIDATION-TEST] WARNING: Duplicates detected - ${duplicateFixtureIds} duplicate fixtureIds, ${duplicateGameIDs} duplicate gameIDs`
+      );
+    }
 
     return results;
   }
