@@ -9,18 +9,38 @@ class AssociationCompetitionsFetcher {
 
   async fetchCompetitions() {
     try {
+      logger.info(
+        `[AssociationCompetitionsFetcher] Starting fetchCompetitions - URL: ${this.url}, Association ID: ${this.associationID}`
+      );
       logger.debug(
         `Checking competitions in fetchCompetitionInAssociation on URL: ${this.url} and this ID ${this.associationID}`
       );
-      await this.navigateToUrl();
-      await this.waitForPageLoad();
-      const competitions = await this.extractCompetitionsData();
 
-      //console.log("[fetchCompetitions]", competitions);
+      logger.info(`[AssociationCompetitionsFetcher] Navigating to URL...`);
+      await this.navigateToUrl();
+      logger.info(`[AssociationCompetitionsFetcher] Navigation complete, waiting for page load...`);
+
+      await this.waitForPageLoad();
+      logger.info(`[AssociationCompetitionsFetcher] Page loaded, extracting competitions data...`);
+
+      const competitions = await this.extractCompetitionsData();
+      logger.info(`[AssociationCompetitionsFetcher] Extracted ${competitions ? competitions.length : 0} competitions`, {
+        competitionsCount: competitions ? competitions.length : 0,
+        competitions: competitions,
+      });
 
       return competitions;
     } catch (error) {
-      logger.error(`Error in fetching competitions for association: ${error}`);
+      logger.error(`[AssociationCompetitionsFetcher] Error in fetching competitions for association`, {
+        error: error.message,
+        errorName: error.name,
+        url: this.url,
+        associationID: this.associationID,
+        stack: error.stack,
+        pageExists: !!this.page,
+        pageClosed: this.page ? this.page.isClosed() : null,
+        pageUrl: this.page ? this.page.url() : null,
+      });
       throw error;
     }
   }
@@ -33,11 +53,152 @@ class AssociationCompetitionsFetcher {
   }
 
   async waitForPageLoad() {
-    await this.page.waitForSelector('[data-testid^="season-org-"]');
+    try {
+      // Step 1: Wait for the season-org container to exist in DOM first
+      // Don't require visible immediately - element might exist but not be visible yet
+      await this.page.waitForSelector('[data-testid^="season-org-"]', {
+        timeout: 10000, // Increased timeout for slower pages
+        visible: false, // First check if element exists in DOM
+      });
+      logger.debug(`Season-org container found in DOM`, { url: this.url });
+
+      // Step 1b: Then wait for it to become visible (if needed)
+      // This gives the page more time to render
+      try {
+        await this.page.waitForSelector('[data-testid^="season-org-"]', {
+          timeout: 5000,
+          visible: true, // Now check if it's visible
+        });
+        logger.debug(`Season-org container is now visible`, { url: this.url });
+      } catch (visibilityError) {
+        // Element exists but not visible yet - that's okay, continue anyway
+        logger.debug(`Season-org container exists but not yet visible, continuing...`, {
+          url: this.url,
+          error: visibilityError.message,
+        });
+      }
+
+      // Step 2: Wait for competition links to be present (actual content)
+      try {
+        await this.page.waitForSelector(
+          '[data-testid^="season-org-"] ul > li > a',
+          {
+            timeout: 8000,
+            visible: true,
+          }
+        );
+        logger.debug(`Competition links found`, { url: this.url });
+      } catch (linkError) {
+        // Links might not exist if no competitions, but log it
+        logger.debug(
+          `Competition links not found (might be empty page)`,
+          {
+            url: this.url,
+            error: linkError.message,
+          }
+        );
+        // Don't throw - empty pages are valid
+      }
+
+      // Step 3: Wait for competition content to be fully rendered
+      // Check that competition links have actual content (not just empty links)
+      try {
+        await this.page.waitForFunction(
+          () => {
+            const competitionLinks = document.querySelectorAll(
+              '[data-testid^="season-org-"] ul > li > a'
+            );
+            if (competitionLinks.length === 0) {
+              return false; // No links yet
+            }
+            // Check if at least one link has content (has spans or text)
+            for (const link of competitionLinks) {
+              if (
+                link.children.length > 0 ||
+                (link.textContent && link.textContent.trim().length > 0)
+              ) {
+                return true; // At least one link has content
+              }
+            }
+            return false; // Links exist but no content yet
+          },
+          {
+            timeout: 10000, // Wait up to 10 seconds for content to render
+            polling: 200, // Check every 200ms
+          }
+        );
+        logger.debug(`Competition content is fully rendered`, { url: this.url });
+      } catch (contentError) {
+        // Content check failed - might be empty page or slow loading
+        logger.debug(
+          `Content check timeout (might be empty or still loading)`,
+          {
+            url: this.url,
+            error: contentError.message,
+          }
+        );
+        // Add delay to give content more time to load
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      logger.debug(`Page load complete, competitions should be ready for extraction`, {
+        url: this.url,
+      });
+    } catch (error) {
+      // Log error but never throw - allow processing to continue
+      logger.error(
+        `Waiting for page load failed: ${error.message}. This could be due to the page structure changing. Continuing anyway.`,
+        { error: error.message, url: this.url }
+      );
+      // Add a longer delay even on error to give content more time to load
+      // Try waiting for the selector with a longer timeout as a fallback
+      try {
+        logger.debug(`Attempting fallback wait for season-org container...`);
+        await this.page.waitForSelector('[data-testid^="season-org-"]', {
+          timeout: 15000, // Longer timeout for slow pages
+          visible: false, // Don't require visible, just in DOM
+        });
+        logger.debug(`Fallback wait succeeded - season-org container found`);
+      } catch (fallbackError) {
+        logger.warn(
+          `Fallback wait also failed: ${fallbackError.message}. Adding extra delay before extraction.`,
+          { url: this.url }
+        );
+        // Add extra delay before extraction
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
   }
 
   async extractCompetitionsData() {
     try {
+      // Before extraction, verify the selector exists (with retry)
+      // This handles cases where waitForPageLoad failed but content is still loading
+      let seasonOrgsParent = null;
+      let retries = 3;
+      let retryDelay = 3000; // 3 seconds between retries
+
+      while (!seasonOrgsParent && retries > 0) {
+        try {
+          seasonOrgsParent = await this.page.$('[data-testid^="season-org-"]');
+          if (seasonOrgsParent) {
+            logger.debug(`Season-org container found before extraction (attempt ${4 - retries})`);
+            break;
+          }
+        } catch (checkError) {
+          logger.debug(`Season-org container check failed, retrying... (${retries} retries left)`);
+        }
+
+        if (!seasonOrgsParent && retries > 1) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        }
+        retries--;
+      }
+
+      if (!seasonOrgsParent) {
+        logger.warn(`Season-org container not found after retries. Attempting extraction anyway.`);
+      }
+
       return await this.page.evaluate((associationID) => {
         const result = [];
 
@@ -47,8 +208,8 @@ class AssociationCompetitionsFetcher {
         );
 
         if (!seasonOrgsParent) {
-          console.error("No seasonOrgs found");
-          throw new Error("No season organizations found on the page.");
+          logger.warn("No season organizations found on the page. Returning empty array.");
+          return [];
         }
 
         // Loop over the child divs within the parent block
@@ -65,9 +226,6 @@ class AssociationCompetitionsFetcher {
           // Extract competition details within the same seasonOrg
           const competitions = seasonOrg.querySelectorAll("ul > li > a");
           if (!competitions.length) {
-            console.error(
-              `No competitions found within seasonOrg ${index + 1}`
-            );
             return; // Skip if no competitions found
           }
 
@@ -84,9 +242,19 @@ class AssociationCompetitionsFetcher {
               ? comp.querySelector("div > span").textContent.trim()
               : "Unknown Status";
             const url = comp.href;
-            const competitionId = url.split("/").slice(-1)[0];
+            // Extract competition ID correctly - handle URLs ending with /teams
+            const urlParts = url.split("/");
+            let competitionId = urlParts[urlParts.length - 1];
+            // If the last part is "teams" or empty, use the second-to-last part
+            if (competitionId === "" || competitionId === "teams") {
+              competitionId = urlParts[urlParts.length - 2];
+            }
 
             // Push the competition data into the result array
+            // NOTE: We do NOT set the association field here because:
+            // 1. For club accounts, we use club-to-competitions link table
+            // 2. For association accounts, we use association-to-competitions link table
+            // 3. Setting association field directly causes Strapi validation errors when the ID is invalid
             result.push({
               competitionName, // The correct competition name from this seasonOrg
               season,
@@ -95,7 +263,7 @@ class AssociationCompetitionsFetcher {
               status,
               url,
               competitionId,
-              association: associationID,
+              // Removed: association: associationID - use link tables instead
             });
           });
         });
@@ -103,8 +271,15 @@ class AssociationCompetitionsFetcher {
         return result;
       }, this.associationID);
     } catch (error) {
-      logger.error(`Error in extractCompetitionsData: ${error}`);
-      throw error; // Rethrow the error after logging
+      logger.error(`Error in extractCompetitionsData: ${error.message}`, {
+        error: error.message,
+        stack: error.stack,
+        url: this.url,
+      });
+      // Return empty array instead of throwing to allow processing to continue
+      // This prevents the entire job from failing due to one association's page structure
+      logger.warn(`Returning empty array due to extraction error. Processing will continue.`);
+      return [];
     }
   }
 
@@ -134,8 +309,19 @@ class AssociationCompetitionsFetcher {
       .map((date) => date.trim());
     const status = statusSpan.textContent.trim();
     const url = link.href;
-    const competitionId = url.split("/").slice(-1)[0];
+    // Extract competition ID correctly - handle URLs ending with /teams
+    const urlParts = url.split("/");
+    let competitionId = urlParts[urlParts.length - 1];
+    // If the last part is "teams" or empty, use the second-to-last part
+    if (competitionId === "" || competitionId === "teams") {
+      competitionId = urlParts[urlParts.length - 2];
+    }
 
+    // NOTE: We do NOT set the association field here because:
+    // 1. For club accounts, we use club-to-competitions link table
+    // 2. For association accounts, we use association-to-competitions link table
+    // 3. Setting association field directly causes Strapi validation errors when the ID is invalid
+    // The associationID parameter is kept for logging/debugging purposes only
     return {
       competitionName,
       season,
@@ -144,7 +330,7 @@ class AssociationCompetitionsFetcher {
       status,
       url,
       competitionId,
-      association: [associationID],
+      // Removed: association: [associationID] - use link tables instead
     };
   }
 

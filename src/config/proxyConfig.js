@@ -65,11 +65,24 @@ const buildProxyConfig = (env) => {
   // Allow host override via environment variable, otherwise use config
   const host = env.DECODO_PROXY_HOST || DECODO_PROXY_CONFIG.host;
 
+  // Allow port range override via environment variables
+  // DECODO_PROXY_PORT_START and DECODO_PROXY_PORT_END
+  const portStart = env.DECODO_PROXY_PORT_START
+    ? parseInt(env.DECODO_PROXY_PORT_START, 10)
+    : DECODO_PROXY_CONFIG.portRange.start;
+  const portEnd = env.DECODO_PROXY_PORT_END
+    ? parseInt(env.DECODO_PROXY_PORT_END, 10)
+    : DECODO_PROXY_CONFIG.portRange.end;
+
+  // Validate port range
+  if (isNaN(portStart) || isNaN(portEnd) || portStart < 1 || portEnd < portStart) {
+    throw new Error(
+      `Invalid proxy port range: ${portStart}-${portEnd}. Must be valid numbers with start <= end.`
+    );
+  }
+
   // Generate ports from configured range
-  const ports = generatePortsFromRange(
-    DECODO_PROXY_CONFIG.portRange.start,
-    DECODO_PROXY_CONFIG.portRange.end
-  );
+  const ports = generatePortsFromRange(portStart, portEnd);
 
   // Build server string for display/logging (first 5 ports as example)
   const serverDisplay = `${host}:${ports.slice(0, 5).join(",")}... (${
@@ -80,6 +93,7 @@ const buildProxyConfig = (env) => {
     enabled: env.DECODO_PROXY_ENABLED === "true",
     host,
     ports,
+    portRange: { start: portStart, end: portEnd },
     server: serverDisplay, // Display string instead of full port list
     username: env.DECODO_PROXY_USERNAME || "",
     password: env.DECODO_PROXY_PASSWORD || "",

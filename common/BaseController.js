@@ -37,10 +37,10 @@ class BaseController {
 
     this.disposables = [];
 
-    if (this.browser) {
-      await this.browser.close();
-      console.log("CLOSE BROWSER IN BASECONTROLLER");
-    }
+    // DO NOT close browser here - it's shared via PuppeteerManager singleton
+    // Closing it would break other code using the same browser instance
+    // Browser cleanup is handled by PuppeteerManager
+    this.browser = null;
   }
 }
 

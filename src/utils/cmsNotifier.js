@@ -119,4 +119,119 @@ async function notifyDirectOrgProcessing(
   }
 }
 
-module.exports = { notifyCMSAccountSync, notifyDirectOrgProcessing };
+/**
+ * Helper function to send Slack notification when a queue job starts.
+ *
+ * @param {string} queueName - Name of the queue
+ * @param {Object} job - Bull job instance
+ */
+async function notifyJobStart(queueName, job) {
+  try {
+    const slackToken = process.env.SlackToken;
+    const channel =
+      process.env.SLACK_QUEUE_JOB_START_CHANNEL ||
+      process.env.SLACK_QUEUE_MONITORING_CHANNEL ||
+      "#queue-monitoring";
+
+    if (!slackToken) {
+      logger.debug(
+        `[notifyJobStart] Slack not configured, skipping job start notification`,
+        {
+          queueName,
+          jobId: job.id,
+        }
+      );
+      return;
+    }
+
+    const accountId = job.data?.getSync?.ID || "N/A";
+    const accountPath = job.data?.getSync?.PATH || "N/A";
+    const processGameData = job.data?.getSync?.processGameData;
+
+    // Build notification message
+    const message =
+      `🚀 Queue Job Started\n` +
+      `• Queue: ${queueName}\n` +
+      `• Job ID: ${job.id}\n` +
+      `• Account/Org ID: ${accountId}\n` +
+      `• Path: ${accountPath}\n` +
+      (processGameData !== undefined
+        ? `• Process Game Data: ${processGameData}\n`
+        : "") +
+      `• Timestamp: ${new Date().toISOString()}\n` +
+      `• Job Data: \`\`\`${JSON.stringify(job.data, null, 2)}\`\`\``;
+
+    try {
+      const slackClient = new WebClient(slackToken);
+      await slackClient.chat.postMessage({
+        channel: channel,
+        text: `🚀 Queue Job Started: ${queueName}`,
+        blocks: [
+          {
+            type: "header",
+            text: {
+              type: "plain_text",
+              text: `🚀 Queue Job Started: ${queueName}`,
+            },
+          },
+          {
+            type: "section",
+            fields: [
+              {
+                type: "mrkdwn",
+                text: `*Job ID:*\n${job.id}`,
+              },
+              {
+                type: "mrkdwn",
+                text: `*Account/Org ID:*\n${accountId}`,
+              },
+              {
+                type: "mrkdwn",
+                text: `*Path:*\n${accountPath}`,
+              },
+              {
+                type: "mrkdwn",
+                text: `*Timestamp:*\n${new Date().toISOString()}`,
+              },
+            ],
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Job Data:*\n\`\`\`${JSON.stringify(job.data, null, 2)}\`\`\``,
+            },
+          },
+        ],
+      });
+
+      logger.info(`📢 Slack notification sent for job start`, {
+        queueName,
+        jobId: job.id,
+        accountId,
+        channel,
+      });
+    } catch (slackError) {
+      logger.error(`❌ Failed to send Slack notification for job start`, {
+        queueName,
+        jobId: job.id,
+        error: slackError.message,
+        channel,
+      });
+      // Don't throw - Slack failures shouldn't break job processing
+    }
+  } catch (error) {
+    logger.error(`❌ Error in notifyJobStart`, {
+      queueName,
+      jobId: job?.id,
+      error: error.message,
+    });
+    // Don't throw - notification failures shouldn't break job processing
+  }
+}
+
+module.exports = {
+  notifyCMSAccountSync,
+  notifyDirectOrgProcessing,
+  notifyJobStart,
+};

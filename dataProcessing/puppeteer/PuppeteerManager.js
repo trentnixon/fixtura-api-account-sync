@@ -1,10 +1,8 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const logger = require("../../src/utils/logger");
-const { setupPage } = require("./pageSetup");
-const { getMemoryStats, formatMemoryStats } = require("./memoryUtils");
 const { closePagesSafely, getPagesSafely } = require("./pageUtils");
-const { BROWSER_CONFIG, MEMORY_CONFIG, isDevelopment } = require("./constants");
+const { PARALLEL_CONFIG, BROWSER_CONFIG } = require("./constants");
 
 puppeteer.use(StealthPlugin());
 
@@ -32,365 +30,264 @@ class PuppeteerManager {
       );
     }
 
-    this.browser = null;
     this.disposables = [];
-    this.operationCount = 0;
-    this.maxOperationsBeforeRestart =
-      MEMORY_CONFIG.MAX_OPERATIONS_BEFORE_RESTART;
-    this.lastRestartTime = Date.now();
-    this.minRestartInterval = MEMORY_CONFIG.MIN_RESTART_INTERVAL;
     this.activePages = new Set();
-    this.currentProxyPortIndex = 0;
+    // Memory monitor (extracted for better organization)
+    const MemoryMonitor = require("./utils/MemoryMonitor");
+    this.memoryMonitor = new MemoryMonitor();
+    // Circuit breaker for proxy failures (must be created before BrowserLifecycleManager)
+    const CircuitBreaker = require("./circuitBreaker");
+    // Circuit breaker opens after 5 consecutive failures, waits 60 seconds before half-open
+    this.circuitBreaker = new CircuitBreaker(5, 60000);
+    // Proxy configuration manager (extracted for better organization)
+    const ProxyConfigManager = require("./utils/ProxyConfigManager");
+    this.proxyConfigManager = new ProxyConfigManager();
+    // Browser lifecycle manager (extracted for better organization)
+    const BrowserLifecycleManager = require("./utils/BrowserLifecycleManager");
+    this.browserLifecycleManager = new BrowserLifecycleManager(
+      this.circuitBreaker,
+      this.proxyConfigManager
+    );
+    // Expose browser property for backward compatibility
+    Object.defineProperty(this, "browser", {
+      get: () => this.browserLifecycleManager.getBrowser(),
+    });
+    // Page factory (extracted for better organization)
+    const PageFactory = require("./utils/PageFactory");
+    this.pageFactory = new PageFactory(
+      this.browserLifecycleManager,
+      this.proxyConfigManager,
+      this.memoryMonitor,
+      this.activePages,
+      this.disposables
+    );
+    // Reusable page manager (extracted for better organization)
+    const ReusePageManager = require("./utils/ReusePageManager");
+    this.reusePageManager = new ReusePageManager(
+      this.activePages,
+      () => this.createPageInNewContext(), // createPageCallback
+      (page) => this.closePage(page) // closePageCallback
+    );
+    // Page pool manager (extracted for better organization)
+    const PagePoolManager = require("./utils/PagePoolManager");
+    this.maxPagePoolSize = PARALLEL_CONFIG.PAGE_POOL_SIZE; // Maximum pages in parallel pool
+    this.pagePoolManager = new PagePoolManager(
+      this.browserLifecycleManager,
+      this.proxyConfigManager,
+      this.memoryMonitor,
+      this.activePages,
+      this.disposables,
+      this.maxPagePoolSize
+    );
+    // Expose pagePool property for backward compatibility
+    Object.defineProperty(this, "pagePool", {
+      get: () => this.pagePoolManager.getPagePool(),
+    });
+    // Proxy error handler (extracted for better organization)
+    const ProxyErrorHandler = require("./utils/ProxyErrorHandler");
+    this.proxyErrorHandler = new ProxyErrorHandler(
+      this.circuitBreaker,
+      this.proxyConfigManager,
+      this.pagePool // Pass pagePool reference directly (via getter)
+    );
   }
 
   /**
    * Get proxy configuration with port rotation support
+   * Delegates to ProxyConfigManager
    * @returns {Object|null} Proxy config with server, username, password or null if disabled
    */
   _getProxyConfig() {
-    const { PROXY_CONFIG } = require("../../src/config/environment");
-    const {
-      isProxyConfigValid,
-      getProxyServerUrl,
-    } = require("../../src/config/proxyConfig");
-
-    if (!isProxyConfigValid(PROXY_CONFIG)) {
-      return null; // No proxy configured
-    }
-
-    // Select port (rotate if multiple ports available)
-    const portIndex = this.currentProxyPortIndex % PROXY_CONFIG.ports.length;
-    const selectedPort = PROXY_CONFIG.ports[portIndex];
-    // Do NOT include credentials in URL - use page.authenticate() instead
-    // Chrome doesn't support credentials in proxy URL for HTTPS
-    const proxyServer = getProxyServerUrl(PROXY_CONFIG.host, selectedPort);
-
-    return {
-      server: proxyServer,
-      host: PROXY_CONFIG.host,
-      port: selectedPort,
-      username: PROXY_CONFIG.username,
-      password: PROXY_CONFIG.password,
-      hasMultiplePorts: PROXY_CONFIG.ports.length > 1,
-      totalPorts: PROXY_CONFIG.ports.length,
-    };
+    return this.proxyConfigManager.getConfig();
   }
 
   /**
    * Rotate to next proxy port (called on browser restart if rotation enabled)
+   * Delegates to ProxyConfigManager
    */
   _rotateProxyPort() {
-    const { PROXY_CONFIG } = require("../../src/config/environment");
-
-    if (
-      PROXY_CONFIG.enabled &&
-      PROXY_CONFIG.rotateOnRestart &&
-      PROXY_CONFIG.ports.length > 1
-    ) {
-      this.currentProxyPortIndex =
-        (this.currentProxyPortIndex + 1) % PROXY_CONFIG.ports.length;
-      logger.info(
-        `Proxy port rotated to: ${PROXY_CONFIG.host}:${
-          PROXY_CONFIG.ports[this.currentProxyPortIndex]
-        } (${this.currentProxyPortIndex + 1}/${PROXY_CONFIG.ports.length})`
-      );
-    }
+    this.proxyConfigManager.rotatePort();
   }
 
+  /**
+   * Launch browser with proxy support and circuit breaker protection
+   * Delegates to BrowserLifecycleManager
+   * @returns {Promise<void>}
+   */
   async launchBrowser() {
-    if (this.browser) {
-      // Browser is already launched, so just return.
-      return;
-    }
-
-    // Rotate proxy port if enabled (before launching new browser)
-    this._rotateProxyPort();
-
-    // Get proxy configuration
-    const proxyConfig = this._getProxyConfig();
-    const { getLaunchOptions } = require("./browserConfig");
-
-    try {
-      const launchOptions = getLaunchOptions({
-        headless: !isDevelopment(),
-        proxyServer: proxyConfig ? proxyConfig.server : null,
-        protocolTimeout: BROWSER_CONFIG.PROTOCOL_TIMEOUT,
-      });
-
-      if (proxyConfig) {
-        logger.info("Puppeteer browser launching with Decodo proxy", {
-          proxy: `${proxyConfig.host}:${proxyConfig.port}`,
-          portRotation: proxyConfig.hasMultiplePorts
-            ? `${proxyConfig.totalPorts} ports available`
-            : "single port",
-        });
-      }
-
-      this.browser = await puppeteer.launch(launchOptions);
-
-      // Authenticate browser with proxy credentials if needed
-      // EXACTLY like dependencies.js (production code)
-      if (
-        proxyConfig &&
-        proxyConfig.username &&
-        proxyConfig.password &&
-        proxyConfig.username.trim() !== "" &&
-        proxyConfig.password.trim() !== ""
-      ) {
-        try {
-          // Authenticate the default page immediately after launch
-          // EXACTLY like dependencies.js - no trimming on values
-          const pages = await this.browser.pages();
-          if (pages.length > 0) {
-            await pages[0].authenticate({
-              username: proxyConfig.username,
-              password: proxyConfig.password,
-            });
-            logger.info("Proxy authentication configured on default page", {
-              proxy: `${proxyConfig.host}:${proxyConfig.port}`,
-            });
-          }
-        } catch (authError) {
-          logger.error(
-            "Failed to authenticate browser with proxy - this will cause HTTP 407 errors",
-            {
-              error: authError.message,
-              proxy: `${proxyConfig.host}:${proxyConfig.port}`,
-              stack: authError.stack,
-            }
-          );
-          // Don't throw - allow browser to continue, but this will likely cause 407 errors
-        }
-      } else if (proxyConfig) {
-        logger.warn("Proxy configured but credentials missing or empty", {
-          hasUsername: !!proxyConfig.username,
-          hasPassword: !!proxyConfig.password,
-          proxy: `${proxyConfig.host}:${proxyConfig.port}`,
-        });
-      }
-
-      logger.info("Puppeteer browser launched", {
-        proxyEnabled: proxyConfig !== null,
-      });
-    } catch (error) {
-      logger.error("Error launching Puppeteer browser", { error });
-
-      // If proxy was enabled and launch failed, try without proxy as fallback
-      if (proxyConfig) {
-        logger.warn(
-          "Browser launch with proxy failed, retrying without proxy",
-          { error: error.message }
-        );
-        try {
-          const fallbackOptions = getLaunchOptions({
-            headless: !isDevelopment(),
-            proxyServer: null,
-            protocolTimeout: BROWSER_CONFIG.PROTOCOL_TIMEOUT,
-          });
-
-          this.browser = await puppeteer.launch(fallbackOptions);
-          logger.warn("Browser launched without proxy (fallback mode)");
-        } catch (fallbackError) {
-          logger.error("Browser launch failed even without proxy", {
-            error: fallbackError,
-          });
-          throw fallbackError;
-        }
-      } else {
-        throw error;
-      }
-    }
+    await this.browserLifecycleManager.launch();
   }
 
+  /**
+   * Create a new page in a new context
+   * Delegates to PageFactory with restart check and rate limit handling
+   * @returns {Promise<Page>} Created and configured page
+   */
   async createPageInNewContext() {
-    await this.launchBrowser();
+    // Check if we're in rate limit backoff
+    await this.proxyErrorHandler.waitForBackoff();
 
     // Only check for restart if no pages are currently active
     // Do this AFTER launchBrowser to avoid unnecessary checks
-    if (this.activePages.size === 0) {
+    const checkRestart = this.activePages.size === 0;
+    if (checkRestart) {
       await this.checkAndRestartIfNeeded();
     }
 
-    const page = await this.browser.newPage();
-
-    // Track this page as active
-    this.activePages.add(page);
-    page.once("close", () => {
-      this.activePages.delete(page);
+    // Use PageFactory to create the page
+    return await this.pageFactory.createPage({
+      checkRestart: false, // Already handled above
+      trackActive: true,
+      addToDisposables: true,
+      incrementOperationCount: true,
+      logMemory: true,
     });
-
-    // CRITICAL: Authenticate page BEFORE any other setup to prevent 407 errors
-    // Authentication must happen before any navigation or requests
-    const proxyConfig = this._getProxyConfig();
-    if (proxyConfig && proxyConfig.username && proxyConfig.password) {
-      try {
-        await page.authenticate({
-          username: proxyConfig.username,
-          password: proxyConfig.password,
-        });
-        logger.debug("Proxy authentication configured for new page", {
-          proxy: `${proxyConfig.host}:${proxyConfig.port}`,
-        });
-      } catch (authError) {
-        logger.error("Failed to authenticate new page with proxy", {
-          error: authError.message,
-          proxy: `${proxyConfig.host}:${proxyConfig.port}`,
-        });
-        // Continue - but this will likely cause 407 errors
-      }
-    }
-
-    // Set up page with default configurations (authentication already done above)
-    await setupPage(page, null); // Pass null to skip authentication in setupPage
-
-    this.addDisposable(page);
-    this.operationCount++;
-
-    // Log memory periodically
-    if (this.operationCount % MEMORY_CONFIG.MEMORY_LOG_INTERVAL === 0) {
-      const stats = getMemoryStats();
-      logger.info(
-        `[PERF] Page created (op ${
-          this.operationCount
-        }): RSS=${stats.rss.toFixed(2)}MB, Heap=${stats.heapUsed.toFixed(2)}MB`
-      );
-    }
-
-    return page;
   }
 
   /**
    * Checks if browser should be restarted based on operation count or memory
    * Restarts automatically to prevent memory accumulation
-   * OPTIMIZED: Only does expensive memory checks when necessary
+   * Delegates to MemoryMonitor
    */
   async checkAndRestartIfNeeded() {
-    const now = Date.now();
-    const timeSinceLastRestart = now - this.lastRestartTime;
-
-    // Don't restart too frequently (rate limiting) - fast check first
-    if (timeSinceLastRestart < this.minRestartInterval) {
-      return;
-    }
-
-    // Fast check: Restart if we've exceeded operation count (no memory check needed)
-    if (this.operationCount >= this.maxOperationsBeforeRestart) {
-      logger.info(
-        `[PERF] Restarting browser after ${this.operationCount} operations to free memory`
-      );
+    await this.memoryMonitor.checkAndRestartIfNeeded(async () => {
       await this.restartBrowser();
-      return;
-    }
-
-    // Only do expensive memory check if we're close to operation limit or it's time to log
-    // This avoids expensive getMemoryStats() calls on every page creation
-    const opsUntilRestart =
-      this.maxOperationsBeforeRestart - this.operationCount;
-    const shouldCheckMemory =
-      opsUntilRestart <= 10 || // Close to restart limit
-      this.operationCount % MEMORY_CONFIG.MEMORY_CHECK_INTERVAL === 0; // Time to log
-
-    if (shouldCheckMemory) {
-      const stats = getMemoryStats();
-      const shouldLogMemory =
-        this.operationCount % MEMORY_CONFIG.MEMORY_CHECK_INTERVAL === 0 ||
-        stats.heapUsed > MEMORY_CONFIG.MEMORY_WARNING_HEAP_MB ||
-        stats.rss > MEMORY_CONFIG.MEMORY_WARNING_RSS_MB;
-
-      if (shouldLogMemory) {
-        logger.info(
-          `[PERF] Memory check: ${formatMemoryStats(stats)}, Ops=${
-            this.operationCount
-          }`
-        );
-      }
-    }
+    });
   }
 
   /**
    * Force browser restart (bypasses rate limiting and operation count checks)
    * Use this between major processing stages to prevent memory accumulation
+   * Delegates to MemoryMonitor for rate limiting control
    */
   async forceRestartBrowser() {
     logger.info("[PERF] Force restarting browser between processing stages");
     // Temporarily disable rate limiting
-    const originalMinInterval = this.minRestartInterval;
-    this.minRestartInterval = 0;
+    const originalMinInterval = this.memoryMonitor.disableRateLimiting();
     await this.restartBrowser();
-    this.minRestartInterval = originalMinInterval;
+    this.memoryMonitor.restoreRateLimiting(originalMinInterval);
   }
 
   /**
    * Restarts the browser to free memory
    * Closes all pages and the browser, then launches a new one
    * Will NOT restart if there are active pages in use
+   * Delegates to BrowserLifecycleManager
    */
   async restartBrowser() {
-    // Don't restart if pages are actively being used
-    if (this.activePages.size > 0) {
-      logger.info(
-        `[PERF] Deferring browser restart - ${this.activePages.size} active page(s) in use`
-      );
-      return;
-    }
-
-    try {
-      const statsBefore = getMemoryStats();
-      logger.info(
-        `[PERF] Restarting browser to free memory (RSS before: ${statsBefore.rss.toFixed(
-          2
-        )}MB)...`
-      );
-
-      // Close all pages first
-      if (this.browser) {
-        const pages = await getPagesSafely(this.browser);
-        if (pages.length > 0) {
-          logger.info(
-            `[PERF] Closing ${pages.length} pages before browser restart`
-          );
-          await closePagesSafely(pages);
-          // Remove from active set
-          pages.forEach((page) => this.activePages.delete(page));
+    await this.browserLifecycleManager.restart(
+      this.activePages,
+      async () => {
+        // Cleanup pages before restart
+        const browser = this.browserLifecycleManager.getBrowser();
+        if (browser) {
+          const pages = await getPagesSafely(browser);
+          if (pages.length > 0) {
+            logger.info(
+              `[PERF] Closing ${pages.length} pages before browser restart`
+            );
+            await closePagesSafely(pages);
+            // Remove from active set, reuse pool, and parallel pool
+            pages.forEach((page) => {
+              this.activePages.delete(page);
+            });
+            this.reusePageManager.clearPool(pages);
+            this.pagePoolManager.removePages(pages);
+          }
         }
+      },
+      () => {
+        // Reset counters after restart
+        this.memoryMonitor.resetAfterRestart();
+        this.disposables = [];
       }
+    );
+  }
 
-      // Close browser
-      await this.closeBrowser();
+  /**
+   * Create a pool of pages for parallel processing
+   * Delegates to PagePoolManager
+   * @param {number} size - Number of pages to create in pool (defaults to PARALLEL_CONFIG.PAGE_POOL_SIZE)
+   * @returns {Promise<Page[]>} Array of ready-to-use pages
+   */
+  async createPagePool(size = null) {
+    return await this.pagePoolManager.createPool(size);
+  }
 
-      // Reset counters
-      this.operationCount = 0;
-      this.lastRestartTime = Date.now();
-      this.disposables = [];
+  /**
+   * Create a single page for the pool
+   * Delegates to PagePoolManager
+   * @private
+   * @returns {Promise<Page|null>} Created page or null if creation failed
+   */
+  async _createPoolPage() {
+    return await this.pagePoolManager._createPoolPage();
+  }
 
-      // Delay to let memory free up
-      await new Promise((resolve) =>
-        setTimeout(resolve, BROWSER_CONFIG.RESTART_DELAY)
-      );
+  /**
+   * Get next available page from pool for parallel processing
+   * Delegates to PagePoolManager
+   * @returns {Promise<Page>} A page from the pool
+   */
+  async getPageFromPool() {
+    return await this.pagePoolManager.getPage();
+  }
 
-      // Launch new browser
-      await this.launchBrowser();
+  /**
+   * Handle proxy-related errors and detect rate limits
+   * Delegates to ProxyErrorHandler
+   * @param {Error} error - The error that occurred
+   * @param {Page} page - Optional page instance (for removing from pool if needed)
+   * @param {Object} context - Optional operation context for better error messages
+   */
+  _handleProxyError(error, page = null, context = null) {
+    this.proxyErrorHandler.handleError(error, page, context);
+  }
 
-      const statsAfter = getMemoryStats();
-      const freedMB = statsBefore.rss - statsAfter.rss;
-      logger.info(
-        `[PERF] Browser restarted successfully (RSS after: ${statsAfter.rss.toFixed(
-          2
-        )}MB, freed: ${freedMB.toFixed(2)}MB)`
-      );
-    } catch (error) {
-      logger.error("Error restarting browser", { error: error.message });
-      // Try to launch a fresh browser anyway
-      this.browser = null;
-      await this.launchBrowser();
-    }
+  /**
+   * Reset rate limit state after successful operations
+   * Delegates to ProxyErrorHandler
+   */
+  _resetRateLimitState() {
+    this.proxyErrorHandler.resetRateLimitState();
+  }
+
+  /**
+   * Release a page back to the pool after parallel processing
+   * Delegates to PagePoolManager
+   * @param {Page} page - The page to release
+   */
+  async releasePageFromPool(page) {
+    return await this.pagePoolManager.releasePage(page);
+  }
+
+  /**
+   * Get a reusable page from pool, or create a new one if none available
+   * Delegates to ReusePageManager
+   * @returns {Promise<Page>} A page ready for use
+   */
+  async getReusablePage() {
+    return await this.reusePageManager.getReusablePage();
+  }
+
+  /**
+   * Release a page back to the reuse pool instead of closing it
+   * Delegates to ReusePageManager
+   * @param {Page} page - The page to release for reuse
+   */
+  async releasePageToPool(page) {
+    return await this.reusePageManager.releasePageToPool(page);
   }
 
   /**
    * Closes a specific page and frees its memory
    * Call this after you're done with a page to prevent memory leaks
+   * For page reuse, use releasePageToPool() instead
    */
   async closePage(page) {
+    // Remove from reuse pool if it was there
+    this.reusePageManager.removeFromPool(page);
+
     const closed = await require("./pageUtils").closePageSafely(page);
     this.activePages.delete(page);
     if (closed) {
@@ -400,53 +297,82 @@ class PuppeteerManager {
 
   /**
    * Cleanup orphaned pages that might be accumulating
+   * CRITICAL: Does NOT close pool pages or active pages - only truly orphaned ones
    * Call this periodically during long-running operations
    */
   async cleanupOrphanedPages() {
-    if (!this.browser) return;
+    if (!this.browserLifecycleManager.exists()) return;
 
-    const pages = await getPagesSafely(this.browser);
-    // Keep only the first page (default), close others
-    if (pages.length > 1) {
-      const pagesToClose = pages.slice(1);
-      const closedCount = await closePagesSafely(pagesToClose);
+    const browser = this.browserLifecycleManager.getBrowser();
+    const allPages = await getPagesSafely(browser);
+
+    // Get pages that are in pools or currently active (these should NOT be closed)
+    const poolPages = new Set(this.pagePoolManager.getPagePool());
+    const reusePages = this.reusePageManager.getReusablePages();
+    const protectedPages = new Set([
+      ...poolPages,
+      ...reusePages,
+      ...this.activePages,
+    ]);
+
+    // Find truly orphaned pages (not in pools, not active, not the default first page)
+    const orphanedPages = allPages.filter((page, index) => {
+      // Keep the first page (default browser page)
+      if (index === 0) return false;
+      // Don't close if it's in a pool or active
+      if (protectedPages.has(page)) return false;
+      // Don't close if it's already closed
+      if (page.isClosed()) return false;
+      // This is an orphaned page
+      return true;
+    });
+
+    if (orphanedPages.length > 0) {
+      const closedCount = await closePagesSafely(orphanedPages);
       if (closedCount > 0) {
-        logger.info(`Cleaned up ${closedCount} orphaned pages`);
+        logger.info(
+          `Cleaned up ${closedCount} orphaned pages (protected ${protectedPages.size} pool/active pages)`
+        );
       }
-    }
-  }
-
-  async closeBrowser() {
-    if (!this.browser) return;
-
-    try {
-      // Close all pages first
-      const pages = await getPagesSafely(this.browser);
-      if (pages.length > 0) {
-        await closePagesSafely(pages);
-      }
-
-      await this.browser.close();
-      this.browser = null;
-      logger.info("Puppeteer browser closed");
-    } catch (error) {
-      logger.error("Error closing Puppeteer browser", { error });
-      this.browser = null;
     }
   }
 
   /**
+   * Close browser and all pages
+   * Delegates to BrowserLifecycleManager
+   * @returns {Promise<void>}
+   */
+  async closeBrowser() {
+    await this.browserLifecycleManager.close((pages) => {
+      // Cleanup page references
+      pages.forEach((page) => {
+        this.activePages.delete(page);
+      });
+      this.reusePageManager.clearPool(pages);
+      this.pagePoolManager.removePages(pages);
+    });
+  }
+
+  /**
    * Get current memory usage statistics
+   * Delegates to MemoryMonitor
    */
   getMemoryStats() {
-    const stats = getMemoryStats();
-    return {
-      rss: stats.rss.toFixed(2) + " MB",
-      heapTotal: stats.heapTotal.toFixed(2) + " MB",
-      heapUsed: stats.heapUsed.toFixed(2) + " MB",
-      external: stats.external.toFixed(2) + " MB",
-      operationCount: this.operationCount,
-    };
+    return this.memoryMonitor.getMemoryStats();
+  }
+
+  /**
+   * Get pool utilization metrics
+   * Provides visibility into pool performance and utilization
+   * @returns {Object} Pool metrics including allocations, wait times, and utilization
+   */
+  /**
+   * Get pool utilization metrics
+   * Delegates to PagePoolManager
+   * @returns {Object} Pool metrics including allocations, wait times, and utilization
+   */
+  getPoolMetrics() {
+    return this.pagePoolManager.getMetrics();
   }
 
   addDisposable(disposable) {
@@ -465,9 +391,16 @@ class PuppeteerManager {
 
   async dispose() {
     // Close all pages first
-    if (this.browser) {
-      const pages = await getPagesSafely(this.browser);
+    if (this.browserLifecycleManager.exists()) {
+      const browser = this.browserLifecycleManager.getBrowser();
+      const pages = await getPagesSafely(browser);
       await closePagesSafely(pages);
+      // Clear reuse pool and parallel pool
+      pages.forEach((page) => {
+        this.activePages.delete(page);
+      });
+      this.reusePageManager.clearPool(pages);
+      this.pagePoolManager.clearPool();
     }
 
     // Dispose of registered disposables

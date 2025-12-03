@@ -21,34 +21,104 @@ class TeamProcessor {
   async process() {
     try {
       const grades = this.dataObj.Grades;
-      let gradeCount = 1;
-      for (const grade of grades) {
-        logger.info(`Processing grade ${gradeCount} of ${grades.length}`, {
-          gradeCount,
-          totalGrades: grades.length,
-          gradeName: grade?.name || grade?.id,
-        });
-        // Initialize GetTeams with a single grade
-        const getTeamsObj = new GetTeamsFromLadder({
-          ...this.dataObj,
-          Grades: [grade],
-        });
-        const scrapedTeams = await getTeamsObj.setup();
+      // Initialize GetTeams with all grades for parallel processing
+      const getTeamsObj = new GetTeamsFromLadder({
+        ...this.dataObj,
+        Grades: grades,
+      });
 
-        if (!scrapedTeams || scrapedTeams.length === 0) {
-          logger.warn(`No team data scraped for grade ${grade.id}.`);
-          this.processingTracker.errorDetected("teams");
-          continue; // Skip to the next grade
+      logger.info(`Processing ${grades.length} grades in parallel...`);
+      const scrapedTeams = await getTeamsObj.setup();
+
+      // ========================================
+      // [DEBUG] LOG SCRAPED DATA BEFORE SENDING TO CMS
+      // ========================================
+      logger.info("[TEAMS] ===== SCRAPED DATA BEFORE CMS =====", {
+        accountId: this.dataObj.ACCOUNT.ACCOUNTID,
+        scrapedCount: scrapedTeams ? scrapedTeams.length : 0,
+        isArray: Array.isArray(scrapedTeams),
+        dataType: scrapedTeams ? typeof scrapedTeams : "null/undefined",
+      });
+
+      if (scrapedTeams && Array.isArray(scrapedTeams)) {
+        logger.info(`[TEAMS] ===== SCRAPED ${scrapedTeams.length} TEAMS =====`);
+
+        // Log each team individually for better visibility (limit to first 10 for readability)
+        const teamsToLog = scrapedTeams.slice(0, 10);
+        teamsToLog.forEach((team, index) => {
+          const teamData = {
+            teamName: team?.teamName || "N/A",
+            teamID: team?.teamID || "N/A",
+            href: team?.href || "N/A",
+            competition: team?.competition || [],
+            grades: team?.grades || [],
+            club: team?.club || [],
+          };
+
+          logger.info(
+            `[TEAMS] Team ${index + 1}/${teamsToLog.length}: ${
+              teamData.teamName
+            } (TeamID: ${teamData.teamID})`
+          );
+          logger.info(
+            `[TEAMS]   Competition: ${
+              teamData.competition.join(", ") || "N/A"
+            }, Grades: ${teamData.grades.join(", ") || "N/A"}`
+          );
+          logger.info(
+            `[TEAMS]   Club: ${teamData.club.join(", ") || "None"}, URL: ${
+              teamData.href
+            }`
+          );
+        });
+
+        if (scrapedTeams.length > 10) {
+          logger.info(`[TEAMS] ... and ${scrapedTeams.length - 10} more teams`);
         }
 
-        // Assign the scraped team data for the current grade
-        const assignTeamsObj = new AssignTeamsToCompsAndGrades(
-          scrapedTeams,
-          this.dataObj
+        // Also log summary
+        const uniqueGrades = [
+          ...new Set(scrapedTeams.flatMap((t) => t?.grades || [])),
+        ];
+        const uniqueCompetitions = [
+          ...new Set(scrapedTeams.flatMap((t) => t?.competition || [])),
+        ];
+        const uniqueClubs = [
+          ...new Set(scrapedTeams.flatMap((t) => t?.club || [])),
+        ];
+
+        logger.info(`[TEAMS] Summary: ${scrapedTeams.length} teams scraped`, {
+          totalTeams: scrapedTeams.length,
+          uniqueGrades: uniqueGrades.length,
+          uniqueCompetitions: uniqueCompetitions.length,
+          uniqueClubs: uniqueClubs.length,
+        });
+
+        // Track teams found
+        this.processingTracker.itemFound("teams", scrapedTeams.length);
+        logger.info(
+          `[TEAMS] Tracked ${scrapedTeams.length} teams in processing tracker`
         );
-        await assignTeamsObj.setup();
-        gradeCount++;
+      } else {
+        logger.warn("[TEAMS] Scraped data is not an array:", {
+          data: scrapedTeams,
+          type: typeof scrapedTeams,
+        });
       }
+      logger.info("[TEAMS] ===== END SCRAPED DATA LOG =====");
+
+      if (!scrapedTeams || scrapedTeams.length === 0) {
+        logger.warn(`No team data scraped for any grades.`);
+        this.processingTracker.errorDetected("teams");
+        return { process: true };
+      }
+
+      // Assign the scraped team data
+      const assignTeamsObj = new AssignTeamsToCompsAndGrades(
+        scrapedTeams,
+        this.dataObj
+      );
+      await assignTeamsObj.setup();
 
       return { process: true };
     } catch (error) {

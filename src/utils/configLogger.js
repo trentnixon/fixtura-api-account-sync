@@ -44,10 +44,24 @@ const logAdminConfig = (config) => {
 const logProxyConfig = (config) => {
   if (isProxyConfigValid(config)) {
     const display = getProxyConfigDisplay(config);
+    const portRange = config.portRange
+      ? `Ports ${config.portRange.start}-${config.portRange.end} (${config.ports.length} total)`
+      : `${config.ports.length} ports`;
     console.log(`[environment.js] Decodo Proxy: Enabled (${display})`);
+    console.log(`[environment.js] Decodo Proxy Port Range: ${portRange}`);
   } else {
     console.log(`[environment.js] Decodo Proxy: Disabled`);
   }
+};
+
+/**
+ * Log parallel processing configuration
+ * @param {Object} config - Parallel processing configuration
+ */
+const logParallelConfig = (config) => {
+  console.log(
+    `[environment.js] Parallel Processing: Page Pool Size=${config.pagePoolSize}, Competitions=${config.competitionsConcurrency}, Teams=${config.teamsConcurrency}, Validation=${config.validationConcurrency}`
+  );
 };
 
 /**
@@ -58,6 +72,9 @@ const logAllConfig = (envConfig) => {
   logEnvironment(envConfig);
   logAdminConfig(envConfig.admin);
   logProxyConfig(envConfig.proxy);
+  if (envConfig.parallel) {
+    logParallelConfig(envConfig.parallel);
+  }
 };
 
 module.exports = {

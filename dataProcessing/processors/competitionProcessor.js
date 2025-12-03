@@ -29,6 +29,82 @@ class CompetitionProcessor {
       );
       const scrapedCompetitions = await getCompetitionsObj.setup();
 
+      // ========================================
+      // [DEBUG] LOG SCRAPED DATA BEFORE SENDING TO CMS
+      // ========================================
+      logger.info("[COMPETITIONS] ===== SCRAPED DATA BEFORE CMS =====", {
+        accountId: this.dataObj.ACCOUNT.ACCOUNTID,
+        scrapedCount: scrapedCompetitions ? scrapedCompetitions.length : 0,
+        isArray: Array.isArray(scrapedCompetitions),
+        dataType: scrapedCompetitions
+          ? typeof scrapedCompetitions
+          : "null/undefined",
+      });
+
+      if (scrapedCompetitions && Array.isArray(scrapedCompetitions)) {
+        logger.info(
+          `[COMPETITIONS] ===== SCRAPED ${scrapedCompetitions.length} COMPETITIONS =====`
+        );
+
+        // Log each competition individually for better visibility
+        scrapedCompetitions.forEach((comp, index) => {
+          const compData = {
+            competitionName: comp?.competitionName || "N/A",
+            season: comp?.season || "N/A",
+            startDate: comp?.startDate || "N/A",
+            endDate: comp?.endDate || "N/A",
+            status: comp?.status || "N/A",
+            url: comp?.url || "N/A",
+            competitionId: comp?.competitionId || "N/A",
+            association: comp?.association || "N/A",
+          };
+
+          logger.info(
+            `[COMPETITIONS] Competition ${index + 1}/${
+              scrapedCompetitions.length
+            }: ${compData.competitionName} (ID: ${compData.competitionId})`
+          );
+          logger.info(
+            `[COMPETITIONS]   Season: ${compData.season}, Status: ${compData.status}`
+          );
+          logger.info(
+            `[COMPETITIONS]   Dates: ${compData.startDate} - ${compData.endDate}`
+          );
+          logger.info(`[COMPETITIONS]   URL: ${compData.url}`);
+          logger.info(`[COMPETITIONS]   Association: ${compData.association}`);
+          logger.info(`[COMPETITIONS]   Full Data:`, compData);
+        });
+
+        // Also log summary
+        logger.info(
+          `[COMPETITIONS] Summary: ${scrapedCompetitions.length} competitions scraped`,
+          {
+            totalCompetitions: scrapedCompetitions.length,
+            competitionNames: scrapedCompetitions.map(
+              (c) => c?.competitionName || "Unknown"
+            ),
+            competitionIds: scrapedCompetitions.map(
+              (c) => c?.competitionId || "Unknown"
+            ),
+          }
+        );
+
+        // Track competitions found
+        this.processingTracker.itemFound(
+          "competitions",
+          scrapedCompetitions.length
+        );
+        logger.info(
+          `[COMPETITIONS] Tracked ${scrapedCompetitions.length} competitions in processing tracker`
+        );
+      } else {
+        logger.warn("[COMPETITIONS] Scraped data is not an array:", {
+          data: scrapedCompetitions,
+          type: typeof scrapedCompetitions,
+        });
+      }
+      logger.info("[COMPETITIONS] ===== END SCRAPED DATA LOG =====");
+
       // Validate scraped data - if empty or false, log and continue without throwing
       if (
         !scrapedCompetitions ||

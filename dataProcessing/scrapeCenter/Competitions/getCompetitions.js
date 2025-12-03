@@ -3,7 +3,9 @@ const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
 const AssociationCompetitionsFetcher = require("./AssociationCompetitionsFetcher");
 const CRUDOperations = require("../../services/CRUDoperations");
 const ProcessingTracker = require("../../services/processingTracker");
-const { error } = require("winston");
+const { processInParallel } = require("../../utils/parallelUtils");
+const { PARALLEL_CONFIG } = require("../../puppeteer/constants");
+const OperationContext = require("../../utils/OperationContext");
 
 /**
  * Handles scraping of competition data from websites.
@@ -20,9 +22,9 @@ class GetCompetitions {
     this.CRUDOperations = new CRUDOperations();
   }
 
-  // Initialize Puppeteer and create a new page
+  // Initialize Puppeteer and get a reusable page (Strategy 2: Page Reuse)
   async initPage() {
-    return await this.puppeteerManager.createPageInNewContext();
+    return await this.puppeteerManager.getReusablePage();
   }
 
   // Fetch competitions for associations
@@ -35,71 +37,313 @@ class GetCompetitions {
     return fetcher.fetchCompetitions();
   }
 
-  // Process club competitions
-  async processClubCompetitions(page) {
-    let competitions = [];
-    const associationData = await this.CRUDOperations.fetchDataForClub(
-      this.AccountID
+  // OPTIMIZED PARALLEL PROCESSING: Process multiple associations concurrently using page pool
+  // Uses same pattern as Teams/Games/Validation stages for consistency and performance
+  async processClubCompetitions() {
+    const context = new OperationContext("processClubCompetitions", "competitions", {
+      accountID: this.AccountID,
+      accountType: this.ACCOUNTTYPE,
+    });
+
+    // Check account type and use the appropriate CRUD method
+    let associationData;
+    if (this.ACCOUNTTYPE === "ASSOCIATION") {
+      // For associations, fetch association data
+      associationData = await this.CRUDOperations.fetchDataForAssociation(
+        this.AccountID
+      );
+      // For associations, we process the association itself (not its clubs)
+      // This method is designed for clubs with multiple associations, so for associations
+      // we should treat it as a single association to process
+      const associations = [associationData];
+      return await this.processAssociationsList(associations);
+    } else {
+      // CLUB account type - fetch club and get its associations
+      associationData = await this.CRUDOperations.fetchDataForClub(
+        this.AccountID
+      );
+    }
+    const associations = associationData.attributes.associations.data;
+
+    if (associations.length === 0) {
+      context.log("No associations found");
+      return [];
+    }
+
+    context.log(`Processing ${associations.length} associations`, {
+      associationsCount: associations.length,
+    });
+
+    const concurrency = PARALLEL_CONFIG.COMPETITIONS_CONCURRENCY;
+    logger.info(
+      `[PARALLEL] Processing ${associations.length} associations with concurrency=${concurrency}`
     );
 
-    for (const association of associationData.attributes.associations.data) {
-      try {
-        const comp = await this.fetchAssociationCompetitions(
-          page,
-          association.attributes.href,
-          association.id
-        );
-        competitions = [...competitions, ...comp];
-      } catch (error) {
-        logger.error(
-          `Error fetching competitions for association: ${association.attributes.href}`,
-          { error, method: "processClubCompetitions" }
-        );
-      }
+    // CRITICAL: Create page pool ONCE before processing (not per chunk)
+    // This eliminates repeated proxy authentication overhead (3-4 seconds per page)
+    if (this.puppeteerManager.pagePool.length === 0) {
+      logger.info(
+        `[PARALLEL] Creating page pool of size ${concurrency} for competitions stage`
+      );
+      await this.puppeteerManager.createPagePool(concurrency);
     }
-    return competitions;
+
+    // Use processInParallel utility (consistent with other stages)
+    // This provides better error handling, logging, and concurrency control
+    const { results, errors, summary } = await processInParallel(
+      associations,
+      async (association, index) => {
+        // Get a page from the pool (waits if none available)
+        const page = await this.puppeteerManager.getPageFromPool();
+
+        try {
+          logger.debug(
+            `[PARALLEL] Processing association ${index + 1}/${
+              associations.length
+            }: ${association.attributes.href || association.id}`
+          );
+
+          const comp = await this.fetchAssociationCompetitions(
+            page,
+            association.attributes.href,
+            association.id
+          );
+
+          return comp || [];
+        } catch (error) {
+          logger.error(
+            `[PARALLEL] Error processing association ${association.id}: ${error.message}`,
+            {
+              error: error.message,
+              associationId: association.id,
+              index,
+            }
+          );
+          throw error; // Re-throw to be caught by processInParallel
+        } finally {
+          // Release page back to pool for reuse (don't close it)
+          await this.puppeteerManager.releasePageFromPool(page);
+        }
+      },
+      concurrency,
+      {
+        context: "competitions",
+        logProgress: true,
+        continueOnError: true,
+      }
+    );
+
+    context.log("Competitions processing completed", {
+      total: associations.length,
+      successful: summary.successful,
+      failed: summary.failed,
+      duration: summary.duration,
+    });
+
+    if (errors.length > 0) {
+      context.warn("Some associations failed to process", {
+        failedCount: errors.length,
+        errors: errors.map((e) => ({
+          associationId: e.item?.id,
+          error: e.error,
+        })),
+      });
+    }
+
+    return results.filter((comp) => comp !== null).flat();
+  }
+
+  // Helper method to process a list of associations
+  async processAssociationsList(associations) {
+    if (associations.length === 0) {
+      return [];
+    }
+
+    const concurrency = PARALLEL_CONFIG.COMPETITIONS_CONCURRENCY;
+    logger.info(
+      `[PARALLEL] Processing ${associations.length} associations with concurrency=${concurrency}`
+    );
+
+    // CRITICAL: Create page pool ONCE before processing (not per chunk)
+    if (this.puppeteerManager.pagePool.length === 0) {
+      logger.info(
+        `[PARALLEL] Creating page pool of size ${concurrency} for competitions stage`
+      );
+      await this.puppeteerManager.createPagePool(concurrency);
+    }
+
+    const { results, errors, summary } = await processInParallel(
+      associations,
+      async (association, index) => {
+        const page = await this.puppeteerManager.getPageFromPool();
+        try {
+          logger.debug(
+            `[PARALLEL] Processing association ${index + 1}/${associations.length}: ${
+              association.attributes?.href || association.id
+            }`
+          );
+
+          const comp = await this.fetchAssociationCompetitions(
+            page,
+            association.attributes?.href || this.URL,
+            association.id
+          );
+
+          return comp || [];
+        } catch (error) {
+          logger.error(
+            `[PARALLEL] Error processing association ${association.id}: ${error.message}`,
+            {
+              error: error.message,
+              associationId: association.id,
+              index,
+            }
+          );
+          throw error;
+        } finally {
+          await this.puppeteerManager.releasePageFromPool(page);
+        }
+      },
+      concurrency,
+      {
+        context: "competitions",
+        logProgress: true,
+        continueOnError: true,
+      }
+    );
+
+    if (errors.length > 0) {
+      logger.warn("Some associations failed to process", {
+        failedCount: errors.length,
+        errors: errors.map((e) => ({
+          associationId: e.item?.id,
+          error: e.error,
+        })),
+      });
+    }
+
+    return results.filter((comp) => comp !== null).flat();
   }
 
   // Main method to setup competition scraping
   async setup() {
-    let page = null;
     try {
-      page = await this.initPage();
-      let competitions = [];
+      // DEBUG: Add test mode to force parallel processing
+      const FORCE_PARALLEL = process.env.FORCE_PARALLEL_COMPETITIONS === "true";
 
-      if (this.ACCOUNTTYPE === "ASSOCIATION") {
-        competitions = await this.fetchAssociationCompetitions(
-          page,
-          this.URL,
-          this.AccountID
+      // If we have multiple associations (fetched inside processClubCompetitions), process in parallel
+      // For now, we'll assume single association unless FORCE_PARALLEL is true
+      // The previous logic was fetching associations here which caused 404s
+
+      let associations = [];
+      if (FORCE_PARALLEL) {
+        logger.warn(
+          `[GetCompetitions] FORCE_PARALLEL mode: Creating fake associations for testing`
         );
+        // Create fake associations from the single URL for testing
+        associations = [
+          { id: this.AccountID, attributes: { href: this.URL } },
+          { id: this.AccountID, attributes: { href: this.URL } },
+          { id: this.AccountID, attributes: { href: this.URL } },
+        ];
       } else {
-        competitions = await this.processClubCompetitions(page);
-      }
-
-      if (competitions.length === 0) {
-        //throw new Error("No competitions found");
-        logger.info("No competitions found");
-      }
-
-      this.processingTracker.itemFound("competitions", competitions.length);
-      return competitions;
-    } catch (error) {
-      logger.error(
-        "Error in GetCompetitions setup method, returning empty array",
-        {
-          error,
-          method: "setup",
-          accountId: this.AccountID,
+        // Try to fetch associations to see if we should run in parallel
+        // Check account type and use the appropriate CRUD method
+        try {
+          let associationData;
+          if (this.ACCOUNTTYPE === "ASSOCIATION") {
+            // For associations, fetch the association data
+            associationData = await this.CRUDOperations.fetchDataForAssociation(
+              this.AccountID
+            );
+            // For associations, check if there are clubs to process
+            associations = associationData?.attributes?.clubs?.data || [];
+          } else {
+            // For clubs, fetch club data and get its associations
+            associationData = await this.CRUDOperations.fetchDataForClub(
+              this.AccountID
+            );
+            associations = associationData?.attributes?.associations?.data || [];
+          }
+        } catch (e) {
+          // Ignore errors here - likely just means no associations/clubs found or wrong endpoint for this account type
+          // We'll fall back to single processing
+          logger.debug(
+            `[GetCompetitions] Could not fetch data for parallel check: ${e.message}`
+          );
         }
-      );
-      // Return empty array instead of throwing - allows processing to continue
-      return [];
-    } finally {
-      // Close page individually - DO NOT call dispose() on shared singleton
-      if (page) {
-        await this.puppeteerManager.closePage(page);
       }
+
+      // If we have multiple associations, process in parallel
+      if (associations.length > 1) {
+        logger.info(
+          `[GetCompetitions] Processing ${associations.length} associations in PARALLEL`
+        );
+        const competitions = await this.processClubCompetitions();
+        this.processingTracker.itemFound("competitions", competitions.length);
+        return competitions;
+      } else {
+        // Single association - process normally
+        logger.info(
+          `[GetCompetitions] Processing single association (ID: ${this.AccountID}) - NO PARALLEL`
+        );
+        logger.info(`[GetCompetitions] URL to scrape: ${this.URL}`);
+        logger.info(`[GetCompetitions] Initializing page...`);
+
+        let page = null;
+        try {
+          page = await this.initPage();
+          logger.info(`[GetCompetitions] Page initialized successfully`);
+
+          logger.info(`[GetCompetitions] Fetching competitions from URL: ${this.URL}`);
+          const competitions = await this.fetchAssociationCompetitions(
+            page,
+            this.URL,
+            this.AccountID
+          );
+
+          logger.info(`[GetCompetitions] Fetched ${competitions ? competitions.length : 0} competitions`, {
+            competitionsCount: competitions ? competitions.length : 0,
+            competitions: competitions,
+          });
+
+          this.processingTracker.itemFound("competitions", competitions ? competitions.length : 0);
+          return competitions || [];
+        } catch (innerError) {
+          logger.error("[GetCompetitions] Error in single association processing", {
+            error: innerError.message,
+            errorName: innerError.name,
+            accountId: this.AccountID,
+            url: this.URL,
+            stack: innerError.stack,
+            pageExists: !!page,
+            pageClosed: page ? page.isClosed() : null,
+          });
+          throw innerError; // Re-throw to be caught by outer catch
+        } finally {
+          if (page) {
+            logger.info(`[GetCompetitions] Releasing page back to pool`);
+            try {
+              await this.puppeteerManager.releasePageToPool(page);
+            } catch (releaseError) {
+              logger.error("[GetCompetitions] Error releasing page", {
+                error: releaseError.message,
+              });
+            }
+          }
+        }
+      }
+    } catch (error) {
+      logger.error("[GetCompetitions] Error in GetCompetitions setup", {
+        error: error.message,
+        errorName: error.name,
+        accountId: this.AccountID,
+        url: this.URL,
+        stack: error.stack,
+        errorString: String(error),
+        errorJSON: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      });
+      return [];
     }
   }
 }

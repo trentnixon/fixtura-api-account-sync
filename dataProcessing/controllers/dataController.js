@@ -107,6 +107,7 @@ class DataController {
       await this.processingTracker.updateDatabaseAfterAction(collectionID);
 
       // ========================================
+      // ========================================
       // [STAGE] PROCESS COMPETITIONS
       // ========================================
       logger.info("[STAGE] Starting competitions stage", {
@@ -120,10 +121,22 @@ class DataController {
       logger.info("[STAGE] setCurrentStage('competitions') completed", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      await this.ProcessCompetitions(dataObj);
+      try {
+        await this.ProcessCompetitions(dataObj);
+      } catch (error) {
+        logger.error(
+          "[STAGE] Error in ProcessCompetitions, but continuing to next stage",
+          {
+            error: error.message,
+            accountId: dataObj.ACCOUNT.ACCOUNTID,
+          }
+        );
+        // Don't throw - allow processing to continue
+      }
       await this.processingTracker.completeStage("competitions", collectionID);
       logger.info("[STAGE] completeStage('competitions') completed", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
+        trackerData: this.processingTracker.getTracker().competitions,
       });
 
       // MEMORY OPTIMIZATION: Force browser restart between stages to free memory
@@ -149,10 +162,22 @@ class DataController {
       logger.info("[STAGE] setCurrentStage('teams') completed", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      await this.ProcessTeams(dataObj);
+      try {
+        await this.ProcessTeams(dataObj);
+      } catch (error) {
+        logger.error(
+          "[STAGE] Error in ProcessTeams, but continuing to next stage",
+          {
+            error: error.message,
+            accountId: dataObj.ACCOUNT.ACCOUNTID,
+          }
+        );
+        // Don't throw - allow processing to continue
+      }
       await this.processingTracker.completeStage("teams", collectionID);
       logger.info("[STAGE] completeStage('teams') completed", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
+        trackerData: this.processingTracker.getTracker().teams,
       });
 
       // MEMORY OPTIMIZATION: Force browser restart between stages to free memory
@@ -181,14 +206,26 @@ class DataController {
       logger.info("[GAMES] Calling ProcessGames", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      await this.ProcessGames(dataObj);
-      logger.info("[GAMES] ProcessGames returned successfully", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-        scrapedFixturesCount: (this.scrapedFixtures || []).length,
-      });
+      try {
+        await this.ProcessGames(dataObj);
+        logger.info("[GAMES] ProcessGames returned successfully", {
+          accountId: dataObj.ACCOUNT.ACCOUNTID,
+          scrapedFixturesCount: (this.scrapedFixtures || []).length,
+        });
+      } catch (error) {
+        logger.error(
+          "[STAGE] Error in ProcessGames, but continuing to next stage",
+          {
+            error: error.message,
+            accountId: dataObj.ACCOUNT.ACCOUNTID,
+          }
+        );
+        // Don't throw - allow processing to continue
+      }
       await this.processingTracker.completeStage("games", collectionID);
       logger.info("[STAGE] completeStage('games') completed", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
+        trackerData: this.processingTracker.getTracker().games,
       });
 
       // MEMORY OPTIMIZATION: Force browser restart between stages to free memory
@@ -205,6 +242,7 @@ class DataController {
       // ========================================
       // [STAGE] PROCESS FIXTURE VALIDATION
       // ========================================
+      // NOTE: Validation must run before Cleanup - Cleanup needs validation results
       logger.info("[STAGE] Starting fixture-validation stage", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
         collectionID: collectionID,
@@ -453,6 +491,96 @@ class DataController {
       // Store validation results and fixtures (minimal data only)
       this.fixtureValidationResults = validationResult.results || [];
       this.fetchedFixtures = validationResult.fixtures || []; // Now contains only { id, gameID }
+
+      // ========================================
+      // [DEBUG] LOG VALIDATION RESULTS BEFORE USE
+      // ========================================
+      logger.info("[VALIDATION] ===== VALIDATION RESULTS =====", {
+        accountId: dataObj.ACCOUNT.ACCOUNTID,
+        validationResultsCount: this.fixtureValidationResults.length,
+        fetchedFixturesCount: this.fetchedFixtures.length,
+        validated: validationResult.validated || 0,
+        valid: validationResult.valid || 0,
+        invalid: validationResult.invalid || 0,
+      });
+
+      if (
+        this.fixtureValidationResults &&
+        this.fixtureValidationResults.length > 0
+      ) {
+        logger.info(
+          `[VALIDATION] ===== ${this.fixtureValidationResults.length} VALIDATION RESULTS =====`
+        );
+
+        // Log summary statistics
+        const validCount = this.fixtureValidationResults.filter(
+          (r) => r.valid === true
+        ).length;
+        const invalidCount = this.fixtureValidationResults.filter(
+          (r) => r.valid === false
+        ).length;
+        const noUrlCount = this.fixtureValidationResults.filter(
+          (r) => r.status === "no_url"
+        ).length;
+        const status404Count = this.fixtureValidationResults.filter(
+          (r) => r.status === "404"
+        ).length;
+
+        logger.info(`[VALIDATION] Summary Statistics:`, {
+          total: this.fixtureValidationResults.length,
+          valid: validCount,
+          invalid: invalidCount,
+          noUrl: noUrlCount,
+          status404: status404Count,
+        });
+
+        // Log first 10 validation results for inspection
+        const resultsToLog = this.fixtureValidationResults.slice(0, 10);
+        resultsToLog.forEach((result, index) => {
+          logger.info(
+            `[VALIDATION] Result ${index + 1}/${resultsToLog.length}:`,
+            {
+              fixtureId: result.fixtureId || "N/A",
+              gameID: result.gameID || "N/A",
+              valid: result.valid,
+              status: result.status || "N/A",
+              url: result.url || "N/A",
+              httpStatus: result.httpStatus || "N/A",
+            }
+          );
+        });
+
+        if (this.fixtureValidationResults.length > 10) {
+          logger.info(
+            `[VALIDATION] ... and ${
+              this.fixtureValidationResults.length - 10
+            } more validation results`
+          );
+        }
+
+        // Log invalid fixtures specifically
+        const invalidResults = this.fixtureValidationResults.filter(
+          (r) => r.valid === false
+        );
+        if (invalidResults.length > 0) {
+          logger.info(
+            `[VALIDATION] Found ${invalidResults.length} invalid fixtures:`,
+            {
+              invalidFixtures: invalidResults.slice(0, 5).map((r) => ({
+                fixtureId: r.fixtureId,
+                gameID: r.gameID,
+                status: r.status,
+                url: r.url,
+              })),
+            }
+          );
+        }
+      } else {
+        logger.warn("[VALIDATION] No validation results found:", {
+          validationResult: validationResult,
+        });
+      }
+
       logger.info(
         "[VALIDATION] Stored validation results and fixtures (minimal data)",
         {
@@ -472,6 +600,7 @@ class DataController {
         invalid: validationResult.invalid || 0,
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
+      logger.info("[VALIDATION] ===== END VALIDATION RESULTS LOG =====");
     } catch (error) {
       logger.error("[VALIDATION] Error in ProcessFixtureValidation:", error);
 
@@ -539,30 +668,89 @@ class DataController {
         fixturesToDelete: comparisonResult.fixturesToDelete?.length || 0,
       });
 
+      // ========================================
+      // [DEBUG] LOG CLEANUP RESULTS BEFORE DELETION
+      // ========================================
+      logger.info("[CLEANUP] ===== CLEANUP RESULTS =====", {
+        accountId: dataObj.ACCOUNT.ACCOUNTID,
+      });
+
       logger.info("[CLEANUP] Fixture comparison complete", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
         summary: comparisonResult.summary,
         fixturesToDelete: comparisonResult.fixturesToDelete.length,
-        invalidUrls: comparisonResult.invalidFixtures.length,
-        missingFromSource: comparisonResult.missingFixtures.length,
+        invalidUrls: comparisonResult.invalidFixtures?.length || 0,
+        missingFromSource: comparisonResult.missingFixtures?.length || 0,
       });
+
+      // Log detailed summary
+      logger.info(`[CLEANUP] ===== CLEANUP SUMMARY =====`);
+      logger.info(
+        `[CLEANUP] Total fixtures to delete: ${comparisonResult.fixturesToDelete.length}`
+      );
+      logger.info(
+        `[CLEANUP] Invalid URLs (404): ${
+          comparisonResult.invalidFixtures?.length || 0
+        }`
+      );
+      logger.info(
+        `[CLEANUP] Missing from source: ${
+          comparisonResult.missingFixtures?.length || 0
+        }`
+      );
 
       // Log fixtures that would be deleted
       if (comparisonResult.fixturesToDelete.length > 0) {
         logger.info(
-          `[CLEANUP] === FIXTURES TO DELETE (${comparisonResult.fixturesToDelete.length} total) ===`
+          `[CLEANUP] ===== FIXTURES TO DELETE (${comparisonResult.fixturesToDelete.length} total) =====`
         );
-        comparisonResult.fixturesToDelete.forEach((fixture, index) => {
+
+        // Group by reason for better visibility
+        const fixturesByReason = {};
+        comparisonResult.fixturesToDelete.forEach((fixture) => {
+          const reason = fixture.reason || "unknown";
+          if (!fixturesByReason[reason]) {
+            fixturesByReason[reason] = [];
+          }
+          fixturesByReason[reason].push(fixture);
+        });
+
+        // Log grouped by reason
+        Object.keys(fixturesByReason).forEach((reason) => {
           logger.info(
-            `[CLEANUP] Fixture ${index + 1}/${
-              comparisonResult.fixturesToDelete.length
-            } - GameID: ${fixture.gameID || "N/A"}, Reason: ${
-              fixture.reason || "unknown"
-            }, Status: ${fixture.status || "N/A"}`
+            `[CLEANUP] Reason: ${reason} (${fixturesByReason[reason].length} fixtures)`
           );
         });
-        logger.info("[CLEANUP] === END OF FIXTURES TO DELETE ===");
+
+        // Log first 10 fixtures with details
+        const fixturesToLog = comparisonResult.fixturesToDelete.slice(0, 10);
+        fixturesToLog.forEach((fixture, index) => {
+          logger.info(
+            `[CLEANUP] Fixture ${index + 1}/${fixturesToLog.length}:`,
+            {
+              fixtureId: fixture.fixtureId || "N/A",
+              gameID: fixture.gameID || "N/A",
+              reason: fixture.reason || "unknown",
+              status: fixture.status || "N/A",
+              url: fixture.url || "N/A",
+            }
+          );
+        });
+
+        if (comparisonResult.fixturesToDelete.length > 10) {
+          logger.info(
+            `[CLEANUP] ... and ${
+              comparisonResult.fixturesToDelete.length - 10
+            } more fixtures to delete`
+          );
+        }
+
+        logger.info("[CLEANUP] ===== END OF FIXTURES TO DELETE =====");
+      } else {
+        logger.info("[CLEANUP] No fixtures to delete - all fixtures are valid");
       }
+
+      logger.info("[CLEANUP] ===== END CLEANUP RESULTS =====");
 
       // Step 2: Delete fixtures
       // Deletion is now ENABLED

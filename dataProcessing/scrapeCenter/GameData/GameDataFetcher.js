@@ -1,5 +1,6 @@
 const logger = require("../../../src/utils/logger");
 const moment = require("moment");
+const OperationContext = require("../../utils/OperationContext");
 
 const {
   scrapeRound,
@@ -19,6 +20,12 @@ class GameDataFetcher {
     // XPath to locate game data on the web page
     this.xpath =
       "/html/body/div/section/main/div/div/div[1]/section/section/div/ul/li";
+    // Create operation context for better error tracking
+    this.context = new OperationContext("fetchGameData", "games", {
+      href,
+      gradeID,
+      pageUrl: page ? page.url() : null,
+    });
   }
 
   async fetchGameData() {
@@ -164,9 +171,20 @@ class GameDataFetcher {
           timeout: 15000,
           waitUntil: "domcontentloaded",
         });
+
+        // Reset rate limit state on successful navigation
+        const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
+        const puppeteerManager = PuppeteerManager.getInstance();
+        puppeteerManager._resetRateLimitState();
+
         return;
       } catch (error) {
         const errorMessage = error.message || "";
+
+        // Handle proxy errors (rate limits, auth failures) with context
+        const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
+        const puppeteerManager = PuppeteerManager.getInstance();
+        puppeteerManager._handleProxyError(error, this.page, this.context);
 
         // Check if error is non-retryable - exit immediately
         const isNonRetryable = nonRetryableErrors.some((err) =>
@@ -174,24 +192,35 @@ class GameDataFetcher {
         );
 
         if (isNonRetryable) {
-          logger.warn(
-            `Non-retryable error for ${this.href}, skipping retries: ${errorMessage}`,
-            { url: this.href, error: errorMessage }
+          this.context.warn(
+            `Non-retryable error, skipping retries`,
+            {
+              error: errorMessage,
+              errorType: "non-retryable",
+              attempt,
+            }
           );
           return; // Don't retry non-retryable errors
         }
 
-        // Log error using logger for consistency
-        logger.error(
-          `Attempt ${attempt}/${maxRetries} - Navigating to URL (${this.href}) failed in navigateToUrl:`,
-          { error: error.message, url: this.href }
+        // Log error with context
+        this.context.error(
+          `Navigation attempt ${attempt}/${maxRetries} failed`,
+          error,
+          {
+            attempt,
+            maxRetries,
+            isLastAttempt: attempt === maxRetries,
+          }
         );
 
         if (attempt === maxRetries) {
           // After all retries failed, log but don't throw - allow processing to continue
-          logger.warn(
-            `All navigation retries exhausted for ${this.href}, continuing anyway`,
-            { url: this.href }
+          this.context.warn(
+            `All navigation retries exhausted, continuing anyway`,
+            {
+              totalAttempts: maxRetries,
+            }
           );
           return; // Don't throw - allow processing to continue
         }
@@ -200,12 +229,11 @@ class GameDataFetcher {
         const delay = Math.floor(
           initialDelay * Math.pow(backoffMultiplier, attempt - 1)
         );
-        logger.debug(
-          `Retrying navigation in ${delay}ms (attempt ${
-            attempt + 1
-          }/${maxRetries})`,
-          { url: this.href, delay }
-        );
+        this.context.debug(`Retrying navigation`, {
+          delay,
+          nextAttempt: attempt + 1,
+          maxRetries,
+        });
         await new Promise((res) => setTimeout(res, delay));
       }
     }
@@ -213,54 +241,123 @@ class GameDataFetcher {
 
   async waitForPageLoad() {
     try {
-      // Try multiple selectors as fallback in case page structure changed
-      const selectors = [
+      // CRITICAL: Wait for the actual fixture list structure to be present AND loaded
+      // The XPath used for extraction: /html/body/div/section/main/div/div/div[1]/section/section/div/ul/li
+      // We need to wait for this structure AND ensure fixture content is rendered
+
+      // Step 1: Wait for the fixture list container to exist and be visible
+      const fixtureListSelectors = [
         'li[data-testid="games-on-date"]',
         'li[data-testid*="games"]',
         "ul li[data-testid]",
-        "body", // Fallback to ensure page loaded
       ];
 
-      let found = false;
-      for (const selector of selectors) {
+      let fixtureListFound = false;
+      for (const selector of fixtureListSelectors) {
         try {
           await this.page.waitForSelector(selector, {
-            timeout: 5000, // Shorter timeout per selector
+            timeout: 8000, // Increased timeout to allow content to load
+            visible: true, // Ensure element is visible, not just in DOM
           });
-          found = true;
-          logger.debug(`Page loaded successfully using selector: ${selector}`, {
+          fixtureListFound = true;
+          logger.debug(`Fixture list found using selector: ${selector}`, {
             url: this.href,
           });
           break;
-        } catch (selectorError) {
+        } catch (e) {
           // Try next selector
           continue;
         }
       }
 
-      if (!found) {
-        // If all selectors fail, wait for any content to load
-        try {
-          await this.page.waitForSelector("body", { timeout: 5000 });
-          logger.warn(
-            `Primary selectors not found, but page loaded. Page structure may have changed.`,
-            { url: this.href }
-          );
-        } catch (bodyError) {
-          // Even body selector failed - page might be completely broken
-          logger.warn(`Page load verification failed, but continuing anyway`, {
-            url: this.href,
-            error: bodyError.message,
-          });
-        }
+      if (!fixtureListFound) {
+        // Fallback: wait for body and log warning
+        await this.page.waitForSelector("body", { timeout: 2000 });
+        logger.warn(
+          `Primary fixture selectors not found, but page loaded. Page structure may have changed.`,
+          { url: this.href }
+        );
+        // Still add delay for content to potentially load
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return;
       }
+
+      // Step 2: Wait for the actual game divs to be present (the content we extract)
+      // These are the divs with class "sc-1pr338c-0.cNVAcP" that contain fixture details
+      try {
+        await this.page.waitForSelector("div.sc-1pr338c-0.cNVAcP", {
+          timeout: 8000,
+          visible: true, // Ensure game divs are visible and rendered
+        });
+        logger.debug(`Game divs found, fixture data structure is present`, {
+          url: this.href,
+        });
+      } catch (gameDivError) {
+        // Game divs might not exist if there are no fixtures, or page structure changed
+        logger.debug(
+          `Game divs not found (might be empty page or structure change)`,
+          {
+            url: this.href,
+            error: gameDivError.message,
+          }
+        );
+        // Don't throw - empty pages are valid, but still add delay
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        return;
+      }
+
+      // Step 3: Wait for fixture content to be fully rendered
+      // Check that game divs have actual content (not just empty divs)
+      try {
+        await this.page.waitForFunction(
+          () => {
+            const gameDivs = document.querySelectorAll(
+              "div.sc-1pr338c-0.cNVAcP"
+            );
+            if (gameDivs.length === 0) {
+              return false; // No game divs yet
+            }
+            // Check if at least one game div has content (has child elements or text)
+            for (const div of gameDivs) {
+              if (
+                div.children.length > 0 ||
+                (div.textContent && div.textContent.trim().length > 0)
+              ) {
+                return true; // At least one div has content
+              }
+            }
+            return false; // Divs exist but no content yet
+          },
+          {
+            timeout: 10000, // Wait up to 10 seconds for content to render
+            polling: 200, // Check every 200ms
+          }
+        );
+        logger.debug(`Fixture content is fully rendered`, { url: this.href });
+      } catch (contentError) {
+        // Content check failed - might be empty page or slow loading
+        logger.debug(
+          `Content check timeout (might be empty or still loading)`,
+          {
+            url: this.href,
+            error: contentError.message,
+          }
+        );
+        // Add delay to give content more time to load
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      logger.debug(`Page load complete, fixtures should be ready for extraction`, {
+        url: this.href,
+      });
     } catch (error) {
       // Log error but never throw - allow processing to continue
       logger.error(
         `Waiting for page load failed: ${error.message}. This could be due to the page structure changing. Continuing anyway.`,
         { error: error.message, url: this.href }
       );
-      // Don't throw - allow processing to continue even if selector fails
+      // Add a delay even on error to give content time to load
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
 }

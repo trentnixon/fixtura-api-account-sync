@@ -32,38 +32,74 @@ class GetTeams {
     return teamFetcher.fetchTeams();
   }
 
-  async processTeams(page) {
-    let teams = [];
-    for (const GradeInfo of this.GRADES) {
-      try {
-        const fetcherInfo = {
-          href: GradeInfo.url,
-          compID: GradeInfo.compID,
-          id: GradeInfo.id,
-        };
-
-        const teamData = await this.fetchTeamData(page, fetcherInfo);
-
-        teams = [...teams, ...teamData];
-      } catch (error) {
-        logger.error(
-          `Error in GetTeams processTeams method: ${GradeInfo.href}`,
-          { error, method: "processTeams", class: "GetTeams" }
-        );
-      }
+  async processTeamsBatch(grades) {
+    if (!grades || grades.length === 0) {
+      return [];
     }
-    return this.removeDuplicateTeams(teams);
+
+    const { PARALLEL_CONFIG } = require("../../puppeteer/constants");
+    const { processInParallel } = require("../../utils/parallelUtils");
+    const concurrency = PARALLEL_CONFIG.TEAMS_CONCURRENCY;
+
+    // CRITICAL: Create page pool BEFORE parallel processing starts
+    if (this.puppeteerManager.pagePool.length === 0) {
+      logger.info(
+        `Creating page pool of size ${concurrency} before parallel processing`
+      );
+      await this.puppeteerManager.createPagePool(concurrency);
+    }
+
+    // Process grades in parallel
+    const { results, errors } = await processInParallel(
+      grades,
+      async (GradeInfo, index) => {
+        // Get a page from the pool
+        const page = await this.puppeteerManager.getPageFromPool();
+
+        try {
+          const fetcherInfo = {
+            href: GradeInfo.url,
+            compID: GradeInfo.compID,
+            id: GradeInfo.id,
+          };
+
+          logger.debug(
+            `Processing grade ${index + 1}/${grades.length}: ${GradeInfo.name || GradeInfo.id}`
+          );
+
+          const teamData = await this.fetchTeamData(page, fetcherInfo);
+          return teamData;
+        } catch (error) {
+          logger.error(
+            `Error processing grade ${GradeInfo.id}: ${error.message}`,
+            { error, gradeId: GradeInfo.id }
+          );
+          throw error;
+        } finally {
+          // Release page back to pool
+          await this.puppeteerManager.releasePageFromPool(page);
+        }
+      },
+      concurrency,
+      {
+        context: "teams_ladder",
+        logProgress: true,
+        continueOnError: true,
+      }
+    );
+
+    // Flatten results
+    return results.flat();
   }
 
   async setup() {
-    let page = null;
     try {
-      page = await this.initPage();
-      const teams = await this.processTeams(page);
+      // Process grades in parallel using page pool
+      let teams = await this.processTeamsBatch(this.GRADES);
+      teams = this.removeDuplicateTeams(teams);
 
       if (teams.length === 0) {
         logger.warn(`No teams found`);
-        //throw new Error("No teams found");
         return false;
       }
 
@@ -77,11 +113,6 @@ class GetTeams {
       });
       console.error(error);
       throw error;
-    } finally {
-      // Close page individually - DO NOT call dispose() on shared singleton
-      if (page) {
-        await this.puppeteerManager.closePage(page);
-      }
     }
   }
 

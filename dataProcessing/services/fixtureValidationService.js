@@ -1,5 +1,9 @@
 const logger = require("../../src/utils/logger");
 const PuppeteerManager = require("../../dataProcessing/puppeteer/PuppeteerManager");
+const {
+  processInParallel,
+} = require("../../dataProcessing/utils/parallelUtils");
+const { PARALLEL_CONFIG } = require("../../dataProcessing/puppeteer/constants");
 
 /**
  * FixtureValidationService handles URL validation for fixtures.
@@ -100,25 +104,63 @@ class FixtureValidationService {
       }
 
       // Wait for page to render (PlayHQ is a SPA - needs time for content to load)
-      // OPTIMIZED: Use waitForFunction instead of fixed delay for faster detection
+      // CRITICAL: Wait for actual content, not just body existence
       try {
         // Check if page is still connected
         if (page.isClosed()) {
           throw new Error("Page is closed");
         }
         // Wait for body to exist first
-        await page.waitForSelector("body", { timeout: 3000 });
-        // Wait for content to render using waitForFunction (faster than fixed delay)
-        // This will return as soon as content is available, or timeout after 2 seconds
+        await page.waitForSelector("body", {
+          timeout: 5000,
+          visible: true,
+        });
+
+        // Wait for content to render - check for actual page content, not just body
+        // For validation, we need to check for either:
+        // 1. 404 page content (h1 with "404" text)
+        // 2. Valid game page content (scorecard elements or game data)
         try {
           await page.waitForFunction(
-            () => document.body && document.body.innerText.length > 50,
-            { timeout: 2000 }
+            () => {
+              if (!document.body) return false;
+
+              const bodyText = document.body.innerText || "";
+              const bodyHtml = document.body.innerHTML || "";
+
+              // Check for 404 indicators
+              const h1Elements = Array.from(document.querySelectorAll("h1"));
+              const has404 = h1Elements.some(
+                (h1) =>
+                  h1.innerText &&
+                  h1.innerText.toLowerCase().includes("404")
+              );
+
+              // Check for valid game content indicators
+              const hasGameContent =
+                bodyText.length > 100 || // Substantial content
+                bodyHtml.includes("scorecard") ||
+                bodyHtml.includes("game") ||
+                bodyHtml.includes("fixture") ||
+                document.querySelector('[data-testid*="score"]') ||
+                document.querySelector('[data-testid*="game"]');
+
+              // Page is ready if it has either 404 content OR game content
+              return has404 || hasGameContent;
+            },
+            {
+              timeout: 8000, // Increased timeout for content to load
+              polling: 200, // Check every 200ms
+            }
           );
+          logger.debug(`[VALIDATION] Page content loaded for ${fullUrl}`);
         } catch (waitFuncError) {
-          // If waitForFunction times out, use minimal fallback delay (500ms)
-          // This handles edge cases where content is slow to render
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          // If waitForFunction times out, add delay for content to potentially load
+          logger.debug(
+            `[VALIDATION] Content check timeout for ${fullUrl}, adding delay`,
+            { error: waitFuncError.message }
+          );
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second delay
         }
       } catch (waitError) {
         // If body doesn't load or page is closed, return error result
@@ -128,10 +170,11 @@ class FixtureValidationService {
         ) {
           throw new Error(`Page closed during wait: ${waitError.message}`);
         }
-        // If timeout, continue to check content anyway
+        // If timeout, continue to check content anyway but add delay
         logger.debug(
           `[VALIDATION] Wait error for ${fullUrl}: ${waitError.message}`
         );
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Add delay
       }
 
       // Check if page is still connected before evaluation
@@ -434,7 +477,6 @@ class FixtureValidationService {
       // Process each batch separately with browser cleanup between batches
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batch = batches[batchIndex];
-        let page = null;
 
         try {
           // Initialize browser for this batch
@@ -443,196 +485,169 @@ class FixtureValidationService {
             throw new Error("PuppeteerManager not initialized");
           }
 
-          // Create a new page for this batch
-          page = await this.puppeteerManager.createPageInNewContext();
-
-          // Set user agent
-          try {
-            await page.setUserAgent(
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            );
-          } catch (uaError) {
-            // Ignore
-          }
-
-          // MEMORY OPTIMIZATION: Block non-essential resources aggressively
-          // Note: Request interception may already be set up by PuppeteerManager
-          // Check if it's already enabled to avoid "Request is already handled!" error
-          try {
-            const isInterceptionEnabled = page.listenerCount("request") > 0;
-
-            if (!isInterceptionEnabled) {
-              await page.setRequestInterception(true);
-              page.on("request", (request) => {
-                const resourceType = request.resourceType();
-                // Block everything except document and script (needed for SPA)
-                if (
-                  [
-                    "image",
-                    "font",
-                    "media",
-                    "websocket",
-                    "manifest",
-                    "stylesheet",
-                  ].includes(resourceType)
-                ) {
-                  request.abort();
-                } else {
-                  request.continue();
-                }
-              });
-            } else {
-              // Request interception already enabled by PuppeteerManager
-              // The existing handler will work, but we won't get the more aggressive blocking
-              logger.debug(
-                "Request interception already enabled by PuppeteerManager, skipping additional setup"
-              );
-            }
-          } catch (interceptError) {
-            // Ignore - request interception not critical
-            logger.debug("Request interception setup failed", {
-              error: interceptError.message,
-            });
-          }
-
           logger.info(
             `[VALIDATION] Processing batch ${batchIndex + 1}/${
               batches.length
             } (${batch.length} fixtures)`
           );
 
-          // Process fixtures in this batch sequentially
-          for (let i = 0; i < batch.length; i++) {
-            const fixture = batch[i];
-            const globalIndex = batchIndex * batchSize + i;
-            const fixtureUrl =
-              fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard;
-            const fixtureId = fixture.id || fixture.attributes?.id;
-            const fixtureGameID = fixture.gameID || fixture.attributes?.gameID;
-            const fullUrl = fixtureUrl?.startsWith("http")
-              ? fixtureUrl
-              : `${this.domain}${fixtureUrl}`;
-
-            // Log iteration start with URL
+          // CRITICAL: Create page pool BEFORE parallel processing starts
+          // This ensures all pages are ready and we get true parallel processing
+          if (this.puppeteerManager.pagePool.length === 0) {
             logger.info(
-              `[VALIDATION] Iteration ${globalIndex + 1}/${
-                fixtures.length
-              } - Processing URL: ${fullUrl}`
+              `[VALIDATION] Creating page pool of size ${this.concurrencyLimit} before parallel processing`
             );
-
-            try {
-              // Check if page is still valid before validation
-              if (!page || page.isClosed()) {
-                throw new Error("Page is closed or invalid - cannot validate");
-              }
-
-              const result = await this.validateFixtureUrlWithPuppeteer(
-                fixtureUrl,
-                fixtureId,
-                fixtureGameID,
-                page
-              );
-              result.method = "puppeteer";
-
-              // Log detailed result for every iteration: URL, Response, Verdict
-              logger.info(
-                `[VALIDATION] Iteration ${globalIndex + 1}/${
-                  fixtures.length
-                } - RESULT`,
-                {
-                  url: fullUrl,
-                  fixtureId,
-                  gameID: fixtureGameID,
-                  httpStatus: result.httpStatus || "N/A",
-                  responseStatus: result.status,
-                  valid: result.valid,
-                  verdict: result.valid ? "VALID" : "INVALID",
-                  method: result.method,
-                  error: result.error || null,
-                }
-              );
-
-              // Also log a concise one-liner for easy reading
-              const verdict = result.valid ? "✓ VALID" : "✗ INVALID";
-              logger.info(
-                `[VALIDATION] ${globalIndex + 1}/${
-                  fixtures.length
-                } - ${verdict} | URL: ${fullUrl} | HTTP: ${
-                  result.httpStatus || "N/A"
-                } | Status: ${result.status}`
-              );
-
-              results.push(result);
-
-              // Small delay between validations
-              if (i < batch.length - 1) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-              }
-            } catch (error) {
-              // Log error with full details
-              const errorMsg = error.message || String(error);
-              logger.error(
-                `[VALIDATION] Iteration ${globalIndex + 1}/${
-                  fixtures.length
-                } - ERROR`,
-                {
-                  url: fullUrl,
-                  fixtureId,
-                  gameID: fixtureGameID,
-                  error: errorMsg,
-                  stack: error.stack,
-                }
-              );
-
-              const errorResult = {
-                valid: false,
-                status: "error",
-                fixtureId,
-                gameID: fixtureGameID,
-                url: fixtureUrl,
-                error: errorMsg,
-              };
-              results.push(errorResult);
-
-              // Log error result
-              logger.info(
-                `[VALIDATION] ${globalIndex + 1}/${
-                  fixtures.length
-                } - ✗ ERROR | URL: ${fullUrl} | Error: ${errorMsg}`
-              );
-
-              // If page is closed/disconnected, we need to break and recreate the browser
-              if (
-                errorMsg.includes("closed") ||
-                errorMsg.includes("Target closed") ||
-                errorMsg.includes("Session closed") ||
-                errorMsg.includes("Protocol error") ||
-                errorMsg.includes("Page disconnected") ||
-                errorMsg.includes("Navigation failed")
-              ) {
-                logger.warn(
-                  `[VALIDATION] Page disconnected for iteration ${
-                    globalIndex + 1
-                  }, breaking batch to recreate browser`
-                );
-                // Break out of inner loop to trigger browser cleanup
-                break;
-              }
-            }
+            await this.puppeteerManager.createPagePool(this.concurrencyLimit);
           }
 
-          // Close page after batch (safely)
-          try {
-            if (page && !page.isClosed()) {
-              await page.close().catch(() => {
-                // Ignore close errors - page might already be closed
-              });
+          // Process fixtures in this batch in parallel using page pool (Strategy 1: Parallel Page Processing)
+          const concurrency = PARALLEL_CONFIG.VALIDATION_CONCURRENCY;
+          const batchResults = await processInParallel(
+            batch,
+            async (fixture, i) => {
+              // Get a page from the pool for this fixture
+              const page = await this.puppeteerManager.getPageFromPool();
+
+              try {
+                const globalIndex = batchIndex * batchSize + i;
+                const fixtureUrl =
+                  fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard;
+                const fixtureId = fixture.id || fixture.attributes?.id;
+                const fixtureGameID =
+                  fixture.gameID || fixture.attributes?.gameID;
+                const fullUrl = fixtureUrl?.startsWith("http")
+                  ? fixtureUrl
+                  : `${this.domain}${fixtureUrl}`;
+
+                // Log iteration start with URL
+                logger.debug(
+                  `[VALIDATION] Processing fixture ${globalIndex + 1}/${
+                    fixtures.length
+                  }: ${fullUrl}`
+                );
+
+                // Set user agent on page
+                try {
+                  await page.setUserAgent(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                  );
+                } catch (uaError) {
+                  // Ignore
+                }
+
+                // Check if page is still valid before validation
+                if (!page || page.isClosed()) {
+                  throw new Error(
+                    "Page is closed or invalid - cannot validate"
+                  );
+                }
+
+                const result = await this.validateFixtureUrlWithPuppeteer(
+                  fixtureUrl,
+                  fixtureId,
+                  fixtureGameID,
+                  page
+                );
+                result.method = "puppeteer";
+
+                // Log detailed result for every iteration: URL, Response, Verdict
+                logger.info(
+                  `[VALIDATION] Iteration ${globalIndex + 1}/${
+                    fixtures.length
+                  } - RESULT`,
+                  {
+                    url: fullUrl,
+                    fixtureId,
+                    gameID: fixtureGameID,
+                    httpStatus: result.httpStatus || "N/A",
+                    responseStatus: result.status,
+                    valid: result.valid,
+                    verdict: result.valid ? "VALID" : "INVALID",
+                    method: result.method,
+                    error: result.error || null,
+                  }
+                );
+
+                // Also log a concise one-liner for easy reading
+                const verdict = result.valid ? "✓ VALID" : "✗ INVALID";
+                logger.info(
+                  `[VALIDATION] ${globalIndex + 1}/${
+                    fixtures.length
+                  } - ${verdict} | URL: ${fullUrl} | HTTP: ${
+                    result.httpStatus || "N/A"
+                  } | Status: ${result.status}`
+                );
+
+                return result;
+              } catch (error) {
+                // Log error with full details
+                const errorMsg = error.message || String(error);
+                const fixtureUrl =
+                  fixture.urlToScoreCard || fixture.attributes?.urlToScoreCard;
+                const fixtureId = fixture.id || fixture.attributes?.id;
+                const fixtureGameID =
+                  fixture.gameID || fixture.attributes?.gameID;
+                const globalIndex = batchIndex * batchSize + i;
+                const fullUrl = fixtureUrl?.startsWith("http")
+                  ? fixtureUrl
+                  : `${this.domain}${fixtureUrl}`;
+
+                logger.error(
+                  `[VALIDATION] Iteration ${globalIndex + 1}/${
+                    fixtures.length
+                  } - ERROR`,
+                  {
+                    url: fullUrl,
+                    fixtureId,
+                    gameID: fixtureGameID,
+                    error: errorMsg,
+                    stack: error.stack,
+                  }
+                );
+
+                const errorResult = {
+                  valid: false,
+                  status: "error",
+                  fixtureId,
+                  gameID: fixtureGameID,
+                  url: fixtureUrl,
+                  error: errorMsg,
+                };
+
+                // Log error result
+                logger.info(
+                  `[VALIDATION] ${globalIndex + 1}/${
+                    fixtures.length
+                  } - ✗ ERROR | URL: ${fullUrl} | Error: ${errorMsg}`
+                );
+
+                throw error; // Re-throw to be caught by processInParallel
+              } finally {
+                // Release page back to pool after processing
+                await this.puppeteerManager
+                  .releasePageFromPool(page)
+                  .catch(() => {
+                    // Ignore errors - page might already be closed
+                  });
+              }
+            },
+            concurrency,
+            {
+              context: "fixture_validation",
+              logProgress: false, // We have our own detailed logging
+              continueOnError: true,
             }
-            page = null;
-          } catch (pageCloseError) {
-            // Ignore - page might already be closed
-            logger.debug(
-              `[VALIDATION] Page close error (ignored): ${pageCloseError.message}`
+          );
+
+          // Add all results from this batch
+          results.push(...batchResults.results);
+
+          // Log batch summary
+          if (batchResults.errors.length > 0) {
+            logger.warn(
+              `[VALIDATION] Batch ${batchIndex + 1} completed with ${
+                batchResults.errors.length
+              } errors`
             );
           }
 

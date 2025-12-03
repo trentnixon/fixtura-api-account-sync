@@ -1,7 +1,7 @@
-const queueErrorHandler = require("./queueErrorHandler");
 const logger = require("../utils/logger");
-const { notifyDirectOrgProcessing } = require("../utils/cmsNotifier");
+const queueStateManager = require("../utils/queueStateManager");
 const { syncAssociationDirect } = require("../config/queueConfig");
+const setupQueueHandler = require("./baseQueueHandler");
 
 /**
  * Function to handle direct association ID processing from the queue.
@@ -61,121 +61,77 @@ async function handleAssociationDirectSync(testData = null) {
     }
   };
 
-  if (testData) {
-    // For testing: process the test data directly
-    try {
-      await processJob(testData);
+  // Setup queue handler with base handler
+  const handler = setupQueueHandler(
+    syncAssociationDirect,
+    "syncAssociationDirect",
+    {
+      processor: async (job) => {
+        await processJob(job.data);
+      },
+      browserCleanup: true,
+      notifications: {
+        type: "direct_org",
+        orgType: "ASSOCIATION",
+        onSuccess: true,
+        onFailure: true,
+      },
+      eventListeners: {
+        failed: true,
+        completed: true,
+        stalled: true,
+      },
+      testDataSupport: true,
+      queueErrorHandler: "syncAssociationDirect",
+      onFailed: async (job, error) => {
+        const associationId = job.data.getSync?.ID;
 
-      logger.info("✅ syncAssociationDirect test data processed successfully", {
-        associationId: testData.getSync?.ID,
-      });
-    } catch (error) {
-      logger.error("❌ Error processing syncAssociationDirect test data", {
-        associationId: testData.getSync?.ID,
-        error: error.message,
-      });
-      throw error; // Re-throw to maintain original error behavior
-    }
-  } else {
-    // Normal queue processing
-    syncAssociationDirect.process(async (job) => {
-      await processJob(job.data);
-    });
-
-    // Event listeners
-    syncAssociationDirect.on("completed", async (job, result) => {
-      const associationId = job.data.getSync?.ID;
-      const accountPath = job.data.getSync?.PATH;
-
-      // Validate job data before proceeding
-      if (!associationId) {
-        logger.error(
-          "❌ CRITICAL: No association ID found in completed job data",
-          {
+        // Only treat as error if it's not a stall-related error
+        // Stall errors are handled by the stalled event above
+        if (error.message && error.message.includes("stalled")) {
+          logger.info("ℹ️ syncAssociationDirect job exceeded stall limit", {
             jobId: job.id,
-            jobData: job.data,
-            getSync: job.data.getSync,
+            associationId: associationId,
+            message:
+              "Job took longer than 2 hours. This may indicate a very large association or performance issue.",
+          });
+
+          // Safety net: Resume queues even for stalled jobs
+          try {
+            await queueStateManager.resumeAllQueues(
+              `Job stalled: syncAssociationDirect (ID: ${
+                job.id
+              }, Association: ${associationId || "UNKNOWN"})`
+            );
+          } catch (resumeError) {
+            logger.error(
+              "[syncAssociationDirect] Error resuming queues in stalled handler",
+              { error: resumeError.message }
+            );
           }
-        );
-        return;
-      }
 
-      logger.info("✅ syncAssociationDirect job completed successfully", {
-        jobId: job.id,
-        associationId: associationId,
-        accountPath: accountPath,
-        result: result,
-      });
+          // Log failure with prominent org ID
+          if (associationId) {
+            logger.error("❌ syncAssociationDirect job failed", {
+              jobId: job.id,
+              associationId: associationId,
+              orgType: "ASSOCIATION",
+              error: error.message,
+              stack: error.stack,
+            });
+          }
 
-      // Notify via Slack/webhook (not CMS account endpoint)
-      await notifyDirectOrgProcessing(
-        associationId,
-        "ASSOCIATION",
-        "completed"
-      );
-    });
-
-    // Handle stalled jobs gracefully - log as info instead of error
-    // Stalled jobs are normal for long-running processing (30-90 minutes)
-    syncAssociationDirect.on("stalled", (jobId) => {
-      logger.info(
-        "⏳ syncAssociationDirect job detected as stalled (still processing)",
-        {
-          jobId: jobId,
-          message:
-            "Job is taking longer than expected but still processing. This is normal for large associations.",
+          // Return true to skip default failed handling
+          return true;
         }
-      );
-    });
 
-    syncAssociationDirect.on("failed", async (job, error) => {
-      const associationId = job.data.getSync?.ID;
+        // Return false to continue with default failed handling
+        return false;
+      },
+    }
+  );
 
-      // Only treat as error if it's not a stall-related error
-      // Stall errors are handled by the stalled event above
-      if (error.message && error.message.includes("stalled")) {
-        logger.info("ℹ️ syncAssociationDirect job exceeded stall limit", {
-          jobId: job.id,
-          associationId: associationId,
-          message:
-            "Job took longer than 2 hours. This may indicate a very large association or performance issue.",
-        });
-        return; // Don't treat as critical error, just log and return
-      }
-
-      // Handle queue error for actual failures
-      queueErrorHandler("syncAssociationDirect")(job, error);
-
-      // Log failure with prominent org ID
-      if (associationId) {
-        logger.error("❌ syncAssociationDirect job failed", {
-          jobId: job.id,
-          associationId: associationId,
-          orgType: "ASSOCIATION",
-          error: error.message,
-          stack: error.stack,
-        });
-
-        // Notify via Slack/webhook (not CMS account endpoint)
-        await notifyDirectOrgProcessing(
-          associationId,
-          "ASSOCIATION",
-          "failed",
-          error.message
-        );
-      } else {
-        logger.error(
-          "❌ No association ID available for error logging on job failure",
-          {
-            jobId: job.id,
-            jobData: job.data,
-            error: error.message,
-            stack: error.stack,
-          }
-        );
-      }
-    });
-  }
+  await handler(testData);
 }
 
 module.exports = handleAssociationDirectSync;

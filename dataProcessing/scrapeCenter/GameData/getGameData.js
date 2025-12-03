@@ -2,6 +2,8 @@ const logger = require("../../../src/utils/logger");
 const GameDataFetcher = require("./GameDataFetcher");
 const ProcessingTracker = require("../../services/processingTracker");
 const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
+const { processInParallel } = require("../../utils/parallelUtils");
+const { PARALLEL_CONFIG } = require("../../puppeteer/constants");
 
 class GetTeamsGameData {
   constructor(dataObj) {
@@ -14,31 +16,91 @@ class GetTeamsGameData {
     this.domain = "https://www.playhq.com";
   }
 
-  // Initialize Puppeteer and create a new page
+  // Initialize Puppeteer and get a reusable page (Strategy 2: Page Reuse)
   async initPage() {
-    return await this.puppeteerManager.createPageInNewContext();
+    return await this.puppeteerManager.getReusablePage();
   }
 
-  async processGamesBatch(page, teamsBatch) {
-    logger.info(`Processing games batch with ${teamsBatch.length} teams`);
-    let storedGames = [];
-    for (const team of teamsBatch) {
-      try {
-        const { teamName, id, href, grade } = team;
-
-        const url = `${this.domain}${href}`; // Assuming full URL is provided in team.href
-        logger.info(`Processing team ${teamName} id ${id} ${url}...`);
-        const gameDataFetcher = new GameDataFetcher(page, url, grade);
-        const gameData = await gameDataFetcher.fetchGameData();
-
-        storedGames.push(...gameData.flat().filter((match) => match !== null)); // Flatten and filter the data
-      } catch (error) {
-        logger.error(`Error processing team game data: ${team.teamName}`, {
-          error,
-        });
-      }
+  // Process teams in parallel using page pool (Strategy 1: Parallel Page Processing)
+  async processGamesBatch(teamsBatch) {
+    if (!teamsBatch || teamsBatch.length === 0) {
+      logger.info("No teams to process in batch");
+      return [];
     }
-    return storedGames;
+
+    const concurrency = PARALLEL_CONFIG.TEAMS_CONCURRENCY;
+    logger.info(
+      `Processing ${teamsBatch.length} teams in parallel (concurrency: ${concurrency})`
+    );
+
+    // CRITICAL: Create page pool BEFORE parallel processing starts
+    // This ensures all pages are ready and we get true parallel processing
+    if (this.puppeteerManager.pagePool.length === 0) {
+      logger.info(
+        `Creating page pool of size ${concurrency} before parallel processing`
+      );
+      await this.puppeteerManager.createPagePool(concurrency);
+    }
+
+    // Process teams in parallel
+    const { results, errors, summary } = await processInParallel(
+      teamsBatch,
+      async (team, index) => {
+        // Get a page from the pool for this team
+        const page = await this.puppeteerManager.getPageFromPool();
+
+        try {
+          const { teamName, id, href, grade } = team;
+          const url = `${this.domain}${href}`;
+
+          logger.debug(
+            `Processing team ${index + 1}/${
+              teamsBatch.length
+            }: ${teamName} (ID: ${id})`
+          );
+
+          const gameDataFetcher = new GameDataFetcher(page, url, grade);
+          const gameData = await gameDataFetcher.fetchGameData();
+
+          // Flatten and filter the data
+          return gameData.flat().filter((match) => match !== null);
+        } catch (error) {
+          logger.error(`Error processing team game data: ${team.teamName}`, {
+            error: error.message,
+            teamId: team.id,
+            index,
+          });
+          throw error; // Re-throw to be caught by processInParallel
+        } finally {
+          // Release page back to pool after processing
+          await this.puppeteerManager.releasePageFromPool(page);
+        }
+      },
+      concurrency,
+      {
+        context: "teams_game_data",
+        logProgress: true,
+        continueOnError: true,
+      }
+    );
+
+    // Log summary
+    logger.info(
+      `Teams game data processing completed: ${summary.successful}/${teamsBatch.length} successful, ${summary.failed} failed, ${summary.duration}ms`
+    );
+
+    if (errors.length > 0) {
+      logger.warn(`Failed to fetch game data for ${errors.length} teams`, {
+        errors: errors.map((e) => ({
+          teamName: e.item?.teamName,
+          teamId: e.item?.id,
+          error: e.error,
+        })),
+      });
+    }
+
+    // Flatten all results into a single array
+    return results.flat();
   }
 
   async fetchAndProcessTeamGameData(page, url) {
@@ -56,10 +118,9 @@ class GetTeamsGameData {
   }
 
   async setup() {
-    let page = null;
     try {
-      page = await this.initPage();
-      let fetchedGames = await this.processGamesBatch(page, this.teams);
+      // Process teams in parallel using page pool (no need for single page anymore)
+      let fetchedGames = await this.processGamesBatch(this.teams);
 
       fetchedGames = this.removeDuplicateGames(fetchedGames);
       if (fetchedGames.length === 0) {
@@ -76,12 +137,8 @@ class GetTeamsGameData {
       });
       // Return empty array instead of throwing - allows processing to continue
       return [];
-    } finally {
-      // Close page individually - DO NOT call dispose() on shared singleton
-      if (page) {
-        await this.puppeteerManager.closePage(page);
-      }
     }
+    // No finally block needed - pages are released in processGamesBatch()
   }
 
   removeDuplicateGames(games) {

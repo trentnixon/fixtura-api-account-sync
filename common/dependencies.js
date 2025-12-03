@@ -89,41 +89,12 @@ const getClubRelationsForAssociation = () => {
 
 module.exports = {
   getPuppeteerInstance: async () => {
-    const { PROXY_CONFIG } = require("../src/config/environment");
-    const {
-      isProxyConfigValid,
-      getProxyServerUrl,
-    } = require("../src/config/proxyConfig");
-    const {
-      getLegacyLaunchOptions,
-    } = require("../dataProcessing/puppeteer/browserConfig");
-
-    let proxyServer = null;
-    if (isProxyConfigValid(PROXY_CONFIG)) {
-      // Use first port for legacy launcher (no rotation for simplicity)
-      const selectedPort = PROXY_CONFIG.ports[0];
-      proxyServer = getProxyServerUrl(PROXY_CONFIG.host, selectedPort);
-    }
-
-    const launchOptions = getLegacyLaunchOptions({
-      headless: process.env.NODE_ENV !== "development",
-      proxyServer,
-    });
-
-    const browser = await puppeteer.launch(launchOptions);
-
-    // Authenticate with proxy if needed
-    if (proxyServer && PROXY_CONFIG.username && PROXY_CONFIG.password) {
-      const pages = await browser.pages();
-      if (pages.length > 0) {
-        await pages[0].authenticate({
-          username: PROXY_CONFIG.username,
-          password: PROXY_CONFIG.password,
-        });
-      }
-    }
-
-    return browser;
+    // Use PuppeteerManager singleton to prevent multiple browser instances
+    // This ensures all code shares the same browser instance and saves memory
+    const PuppeteerManager = require("../dataProcessing/puppeteer/PuppeteerManager");
+    const puppeteerManager = PuppeteerManager.getInstance();
+    await puppeteerManager.launchBrowser();
+    return puppeteerManager.browser;
   },
   changeisUpdating,
   createDataCollection,

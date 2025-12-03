@@ -1,7 +1,7 @@
-const queueErrorHandler = require("./queueErrorHandler");
 const logger = require("../utils/logger");
-const { notifyDirectOrgProcessing } = require("../utils/cmsNotifier");
+const queueStateManager = require("../utils/queueStateManager");
 const { syncClubDirect } = require("../config/queueConfig");
+const setupQueueHandler = require("./baseQueueHandler");
 
 /**
  * Function to handle direct club ID processing from the queue.
@@ -59,67 +59,26 @@ async function handleClubDirectSync(testData = null) {
     }
   };
 
-  if (testData) {
-    // For testing: process the test data directly
-    try {
-      await processJob(testData);
-
-      logger.info("✅ syncClubDirect test data processed successfully", {
-        clubId: testData.getSync?.ID,
-      });
-    } catch (error) {
-      logger.error("❌ Error processing syncClubDirect test data", {
-        clubId: testData.getSync?.ID,
-        error: error.message,
-      });
-      throw error; // Re-throw to maintain original error behavior
-    }
-  } else {
-    // Normal queue processing
-    syncClubDirect.process(async (job) => {
+  // Setup queue handler with base handler
+  const handler = setupQueueHandler(syncClubDirect, "syncClubDirect", {
+    processor: async (job) => {
       await processJob(job.data);
-    });
-
-    // Event listeners
-    syncClubDirect.on("completed", async (job, result) => {
-      const clubId = job.data.getSync?.ID;
-      const accountPath = job.data.getSync?.PATH;
-
-      // Validate job data before proceeding
-      if (!clubId) {
-        logger.error("❌ CRITICAL: No club ID found in completed job data", {
-          jobId: job.id,
-          jobData: job.data,
-          getSync: job.data.getSync,
-        });
-        return;
-      }
-
-      logger.info("✅ syncClubDirect job completed successfully", {
-        jobId: job.id,
-        clubId: clubId,
-        accountPath: accountPath,
-        result: result,
-      });
-
-      // Notify via Slack/webhook (not CMS account endpoint)
-      await notifyDirectOrgProcessing(clubId, "CLUB", "completed");
-    });
-
-    // Handle stalled jobs gracefully - log as info instead of error
-    // Stalled jobs are normal for long-running processing (30-90 minutes)
-    syncClubDirect.on("stalled", (jobId) => {
-      logger.info(
-        "⏳ syncClubDirect job detected as stalled (still processing)",
-        {
-          jobId: jobId,
-          message:
-            "Job is taking longer than expected but still processing. This is normal for large clubs.",
-        }
-      );
-    });
-
-    syncClubDirect.on("failed", async (job, error) => {
+    },
+    browserCleanup: true,
+    notifications: {
+      type: "direct_org",
+      orgType: "CLUB",
+      onSuccess: true,
+      onFailure: true,
+    },
+    eventListeners: {
+      failed: true,
+      completed: true,
+      stalled: true,
+    },
+    testDataSupport: true,
+    queueErrorHandler: "syncClubDirect",
+    onFailed: async (job, error) => {
       const clubId = job.data.getSync?.ID;
 
       // Only treat as error if it's not a stall-related error
@@ -131,42 +90,40 @@ async function handleClubDirectSync(testData = null) {
           message:
             "Job took longer than 2 hours. This may indicate a very large club or performance issue.",
         });
-        return; // Don't treat as critical error, just log and return
-      }
 
-      // Handle queue error for actual failures
-      queueErrorHandler("syncClubDirect")(job, error);
+        // Safety net: Resume queues even for stalled jobs
+        try {
+          await queueStateManager.resumeAllQueues(
+            `Job stalled: syncClubDirect (ID: ${job.id}, Club: ${clubId || "UNKNOWN"})`
+          );
+        } catch (resumeError) {
+          logger.error(
+            "[syncClubDirect] Error resuming queues in stalled handler",
+            { error: resumeError.message }
+          );
+        }
 
-      // Log failure with prominent org ID
-      if (clubId) {
-        logger.error("❌ syncClubDirect job failed", {
-          jobId: job.id,
-          clubId: clubId,
-          orgType: "CLUB",
-          error: error.message,
-          stack: error.stack,
-        });
-
-        // Notify via Slack/webhook (not CMS account endpoint)
-        await notifyDirectOrgProcessing(
-          clubId,
-          "CLUB",
-          "failed",
-          error.message
-        );
-      } else {
-        logger.error(
-          "❌ No club ID available for error logging on job failure",
-          {
+        // Log failure with prominent org ID
+        if (clubId) {
+          logger.error("❌ syncClubDirect job failed", {
             jobId: job.id,
-            jobData: job.data,
+            clubId: clubId,
+            orgType: "CLUB",
             error: error.message,
             stack: error.stack,
-          }
-        );
+          });
+        }
+
+        // Return true to skip default failed handling
+        return true;
       }
-    });
-  }
+
+      // Return false to continue with default failed handling
+      return false;
+    },
+  });
+
+  await handler(testData);
 }
 
 module.exports = handleClubDirectSync;

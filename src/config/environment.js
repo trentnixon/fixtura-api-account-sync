@@ -52,12 +52,60 @@ const { logAllConfig } = require("../utils/configLogger");
 
 const PROXY_CONFIG = buildProxyConfig(process.env);
 
+// Parallel Processing Configuration
+// Strategy 1: Parallel Page Processing - controls concurrency and page pool size
+const PARALLEL_CONFIG = {
+  pagePoolSize: parseInt(process.env.PARALLEL_PAGE_POOL_SIZE || "3", 10),
+  competitionsConcurrency: parseInt(
+    process.env.PARALLEL_COMPETITIONS_CONCURRENCY || "3",
+    10
+  ),
+  teamsConcurrency: parseInt(
+    process.env.PARALLEL_TEAMS_CONCURRENCY || "3",
+    10
+  ),
+  validationConcurrency: parseInt(
+    process.env.PARALLEL_VALIDATION_CONCURRENCY || "5",
+    10
+  ),
+};
+
+// Validate configurations
+const { validateConfigs } = require("../../dataProcessing/puppeteer/configValidator");
+
+try {
+  // Import constants for validation
+  const {
+    PARALLEL_CONFIG: PUPPETEER_PARALLEL_CONFIG,
+    MEMORY_CONFIG,
+    BROWSER_CONFIG,
+  } = require("../../dataProcessing/puppeteer/constants");
+
+  // Validate all configurations
+  validateConfigs({
+    parallel: PUPPETEER_PARALLEL_CONFIG,
+    memory: MEMORY_CONFIG,
+    browser: BROWSER_CONFIG,
+    proxy: PROXY_CONFIG,
+    api: API_CONFIG,
+  });
+} catch (error) {
+  // Log error but don't throw - allows graceful degradation
+  // The error will be caught and logged, but application startup continues
+  const logger = require("../utils/logger");
+  logger.error("[environment.js] Configuration validation failed", {
+    error: error.message,
+    note: "Application may continue with invalid configuration",
+  });
+}
+
 // Log all configuration
 logAllConfig({
   environment: ENVIRONMENT,
   api: API_CONFIG,
   admin: ADMIN_CONFIG,
   proxy: PROXY_CONFIG,
+  parallel: PARALLEL_CONFIG,
 });
 
 module.exports = {
@@ -65,6 +113,7 @@ module.exports = {
   API_CONFIG,
   ADMIN_CONFIG,
   PROXY_CONFIG,
+  PARALLEL_CONFIG,
   isDevelopment: ENVIRONMENT === "development",
   isProduction: ENVIRONMENT === "production",
 };

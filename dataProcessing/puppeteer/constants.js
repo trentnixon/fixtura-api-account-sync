@@ -49,6 +49,27 @@ const BLOCKED_RESOURCE_TYPES = [
   // Note: Images and stylesheets are allowed (some sites need them for proper rendering)
 ];
 
+// Parallel Processing Configuration
+// Strategy 1: Parallel Page Processing
+const PARALLEL_CONFIG = {
+  PAGE_POOL_SIZE: parseInt(
+    process.env.PARALLEL_PAGE_POOL_SIZE || "3",
+    10
+  ), // Default: 3 pages for parallel processing
+  COMPETITIONS_CONCURRENCY: parseInt(
+    process.env.PARALLEL_COMPETITIONS_CONCURRENCY || "3",
+    10
+  ), // Default: 3 concurrent associations
+  TEAMS_CONCURRENCY: parseInt(
+    process.env.PARALLEL_TEAMS_CONCURRENCY || "3",
+    10
+  ), // Default: 3 concurrent teams
+  VALIDATION_CONCURRENCY: parseInt(
+    process.env.PARALLEL_VALIDATION_CONCURRENCY || "5",
+    10
+  ), // Default: 5 concurrent validations
+};
+
 // Environment Detection
 const isDevelopment = () => {
   return process.env.NODE_ENV && process.env.NODE_ENV.trim() === "development";
@@ -59,5 +80,6 @@ module.exports = {
   MEMORY_CONFIG,
   PAGE_CONFIG,
   BLOCKED_RESOURCE_TYPES,
+  PARALLEL_CONFIG,
   isDevelopment,
 };

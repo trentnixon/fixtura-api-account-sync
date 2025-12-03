@@ -122,27 +122,70 @@ class LadderDetector {
         // Check if table exists AND has team links
         const tableExists = await this.checkTableExists();
         if (tableExists) {
-          logger.info(`✅ Ladder table found on attempt ${attempts}!`);
+          // CRITICAL: Also verify team links have actual content (not just empty links)
+          const teamLinks = await this.page.$$(
+            '[data-testid="ladder"] table:first-of-type tbody tr td:nth-child(2) a'
+          );
 
-          // Record successful attempt for performance tracking
-          performanceMetrics.recordAttempt(true, attempts);
+          if (teamLinks.length > 0) {
+            // Check if at least one team link has content
+            let hasContent = false;
+            for (const link of teamLinks.slice(0, 3)) { // Check first 3 links
+              try {
+                const text = await link.evaluate((el) => el.textContent?.trim());
+                if (text && text.length > 0) {
+                  hasContent = true;
+                  break;
+                }
+              } catch (e) {
+                // Continue checking other links
+              }
+            }
 
-          return true;
+            if (hasContent) {
+              logger.info(`✅ Ladder table found with content on attempt ${attempts}!`);
+
+              // Record successful attempt for performance tracking
+              performanceMetrics.recordAttempt(true, attempts);
+
+              return true;
+            } else {
+              logger.debug(
+                `Table found but team links have no content yet, continuing wait...`
+              );
+            }
+          }
         }
 
-        // Alternative check: Look directly for team links
+        // Alternative check: Look directly for team links with content
         const teamLinks = await this.page.$$(
           '[data-testid="ladder"] table:first-of-type tbody tr td:nth-child(2) a'
         );
         if (teamLinks.length > 0) {
-          logger.info(
-            `✅ Team links found directly on attempt ${attempts}! (${teamLinks.length} teams)`
-          );
+          // Verify links have content
+          let hasContent = false;
+          for (const link of teamLinks.slice(0, 3)) {
+            try {
+              const text = await link.evaluate((el) => el.textContent?.trim());
+              if (text && text.length > 0) {
+                hasContent = true;
+                break;
+              }
+            } catch (e) {
+              // Continue checking
+            }
+          }
 
-          // Record successful attempt for performance tracking
-          performanceMetrics.recordAttempt(true, attempts);
+          if (hasContent) {
+            logger.info(
+              `✅ Team links found with content on attempt ${attempts}! (${teamLinks.length} teams)`
+            );
 
-          return true;
+            // Record successful attempt for performance tracking
+            performanceMetrics.recordAttempt(true, attempts);
+
+            return true;
+          }
         }
 
         // If this was the last attempt, break
