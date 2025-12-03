@@ -147,7 +147,7 @@ class DataController {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
       // MEMORY FIX: Clear old dataObj reference before fetching new one
-      const oldDataObj = dataObj;
+      let oldDataObj = dataObj;
       dataObj = await this.reSyncData();
       oldDataObj = null; // Help GC free old dataObj
       logger.info("[START] Data refreshed successfully after competitions", {
@@ -191,7 +191,7 @@ class DataController {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
       // MEMORY FIX: Clear old dataObj reference before fetching new one
-      let oldDataObj = dataObj;
+      oldDataObj = dataObj; // Reuse variable, don't redeclare
       dataObj = await this.reSyncData();
       oldDataObj = null; // Help GC free old dataObj
       logger.info("[START] Data refreshed successfully after teams", {
@@ -241,7 +241,7 @@ class DataController {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
       // MEMORY FIX: Clear old dataObj reference before fetching new one
-      let oldDataObj = dataObj;
+      oldDataObj = dataObj; // Reuse variable, don't redeclare
       dataObj = await this.reSyncData();
       oldDataObj = null; // Help GC free old dataObj
 
