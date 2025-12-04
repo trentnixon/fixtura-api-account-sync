@@ -18,7 +18,7 @@ class FixtureProcessor {
     const fromDate = new Date();
     fromDate.setHours(0, 0, 0, 0);
     const toDate = new Date(fromDate);
-    toDate.setDate(toDate.getDate() + 14);
+    toDate.setDate(toDate.getDate() + 7);
     toDate.setHours(23, 59, 59, 999);
     return { fromDate, toDate };
   }
@@ -113,4 +113,3 @@ class FixtureProcessor {
 }
 
 module.exports = FixtureProcessor;
-

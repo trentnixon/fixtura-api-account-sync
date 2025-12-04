@@ -110,8 +110,6 @@ class DataController {
       // ========================================
       // [STAGE] PROCESS COMPETITIONS
       // ========================================
-      // TESTING MODE: Commented out to test validation only
-      /*
       logger.info("[STAGE] Starting competitions stage", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
         collectionID: collectionID,
@@ -155,13 +153,10 @@ class DataController {
       logger.info("[START] Data refreshed successfully after competitions", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      */
 
       // ========================================
       // [STAGE] PROCESS TEAMS
       // ========================================
-      // TESTING MODE: Commented out to test validation only
-      /*
       logger.info("[STAGE] Starting teams stage", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
         collectionID: collectionID,
@@ -202,13 +197,10 @@ class DataController {
       logger.info("[START] Data refreshed successfully after teams", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      */
 
       // ========================================
       // [STAGE] PROCESS GAMES
       // ========================================
-      // TESTING MODE: Commented out to test validation only
-      /*
       logger.info("[STAGE] Starting games stage", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
         collectionID: collectionID,
@@ -259,18 +251,6 @@ class DataController {
       }
 
       logger.info("[START] Data refreshed successfully after games", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      */
-
-      // TESTING MODE: Refresh data before validation (needed for validation to work)
-      logger.info("[TESTING] Refreshing data before validation", {
-        accountId: dataObj.ACCOUNT.ACCOUNTID,
-      });
-      let oldDataObj = dataObj;
-      dataObj = await this.reSyncData();
-      oldDataObj = null;
-      logger.info("[TESTING] Data refreshed successfully before validation", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
 
