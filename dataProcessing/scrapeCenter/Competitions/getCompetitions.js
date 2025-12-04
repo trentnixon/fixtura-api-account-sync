@@ -40,10 +40,14 @@ class GetCompetitions {
   // OPTIMIZED PARALLEL PROCESSING: Process multiple associations concurrently using page pool
   // Uses same pattern as Teams/Games/Validation stages for consistency and performance
   async processClubCompetitions() {
-    const context = new OperationContext("processClubCompetitions", "competitions", {
-      accountID: this.AccountID,
-      accountType: this.ACCOUNTTYPE,
-    });
+    const context = new OperationContext(
+      "processClubCompetitions",
+      "competitions",
+      {
+        accountID: this.AccountID,
+        accountType: this.ACCOUNTTYPE,
+      }
+    );
 
     // Check account type and use the appropriate CRUD method
     let associationData;
@@ -79,13 +83,18 @@ class GetCompetitions {
       `[PARALLEL] Processing ${associations.length} associations with concurrency=${concurrency}`
     );
 
-    // CRITICAL: Create page pool ONCE before processing (not per chunk)
-    // This eliminates repeated proxy authentication overhead (3-4 seconds per page)
+    // CRITICAL: Create page pool ONCE before processing
+    // Use concurrency (not PAGE_POOL_SIZE) - we only need 2 pages for competitions
+    // PAGE_POOL_SIZE is for other stages that need more
     if (this.puppeteerManager.pagePool.length === 0) {
       logger.info(
         `[PARALLEL] Creating page pool of size ${concurrency} for competitions stage`
       );
       await this.puppeteerManager.createPagePool(concurrency);
+    } else {
+      logger.info(
+        `[PARALLEL] Page pool already exists (${this.puppeteerManager.pagePool.length} pages), reusing`
+      );
     }
 
     // Use processInParallel utility (consistent with other stages)
@@ -100,7 +109,9 @@ class GetCompetitions {
 
         try {
           logger.info(
-            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] START association: ${association.attributes.href || association.id} (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
+            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] START association: ${
+              association.attributes.href || association.id
+            } (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
           );
 
           const comp = await this.fetchAssociationCompetitions(
@@ -111,7 +122,11 @@ class GetCompetitions {
 
           const taskDuration = Date.now() - taskStartTime;
           logger.info(
-            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] COMPLETE association: ${association.attributes.href || association.id} (duration: ${taskDuration}ms, competitions: ${comp?.length || 0})`
+            `[PARALLEL_COMPETITIONS] [TASK-${
+              index + 1
+            }] COMPLETE association: ${
+              association.attributes.href || association.id
+            } (duration: ${taskDuration}ms, competitions: ${comp?.length || 0})`
           );
 
           return comp || [];
@@ -159,6 +174,7 @@ class GetCompetitions {
   }
 
   // Helper method to process a list of associations
+  // NOTE: Does NOT create page pool - assumes pool already created by caller
   async processAssociationsList(associations) {
     if (associations.length === 0) {
       return [];
@@ -169,12 +185,16 @@ class GetCompetitions {
       `[PARALLEL] Processing ${associations.length} associations with concurrency=${concurrency}`
     );
 
-    // CRITICAL: Create page pool ONCE before processing (not per chunk)
+    // Pool should already be created by processClubCompetitions() - just verify
     if (this.puppeteerManager.pagePool.length === 0) {
-      logger.info(
-        `[PARALLEL] Creating page pool of size ${concurrency} for competitions stage`
+      logger.warn(
+        `[PARALLEL] WARNING: Page pool is empty! This should not happen. Creating pool now.`
       );
       await this.puppeteerManager.createPagePool(concurrency);
+    } else {
+      logger.debug(
+        `[PARALLEL] Using existing page pool (${this.puppeteerManager.pagePool.length} pages)`
+      );
     }
 
     const { results, errors, summary } = await processInParallel(
@@ -185,7 +205,9 @@ class GetCompetitions {
         const pageAcquiredTime = Date.now();
         try {
           logger.info(
-            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] START association: ${association.attributes?.href || association.id} (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
+            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] START association: ${
+              association.attributes?.href || association.id
+            } (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
           );
 
           const comp = await this.fetchAssociationCompetitions(
@@ -196,7 +218,11 @@ class GetCompetitions {
 
           const taskDuration = Date.now() - taskStartTime;
           logger.info(
-            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] COMPLETE association: ${association.attributes?.href || association.id} (duration: ${taskDuration}ms, competitions: ${comp?.length || 0})`
+            `[PARALLEL_COMPETITIONS] [TASK-${
+              index + 1
+            }] COMPLETE association: ${
+              association.attributes?.href || association.id
+            } (duration: ${taskDuration}ms, competitions: ${comp?.length || 0})`
           );
 
           return comp || [];
@@ -273,7 +299,8 @@ class GetCompetitions {
             associationData = await this.CRUDOperations.fetchDataForClub(
               this.AccountID
             );
-            associations = associationData?.attributes?.associations?.data || [];
+            associations =
+              associationData?.attributes?.associations?.data || [];
           }
         } catch (e) {
           // Ignore errors here - likely just means no associations/clubs found or wrong endpoint for this account type
@@ -305,30 +332,43 @@ class GetCompetitions {
           page = await this.initPage();
           logger.info(`[GetCompetitions] Page initialized successfully`);
 
-          logger.info(`[GetCompetitions] Fetching competitions from URL: ${this.URL}`);
+          logger.info(
+            `[GetCompetitions] Fetching competitions from URL: ${this.URL}`
+          );
           const competitions = await this.fetchAssociationCompetitions(
             page,
             this.URL,
             this.AccountID
           );
 
-          logger.info(`[GetCompetitions] Fetched ${competitions ? competitions.length : 0} competitions`, {
-            competitionsCount: competitions ? competitions.length : 0,
-            competitions: competitions,
-          });
+          logger.info(
+            `[GetCompetitions] Fetched ${
+              competitions ? competitions.length : 0
+            } competitions`,
+            {
+              competitionsCount: competitions ? competitions.length : 0,
+              competitions: competitions,
+            }
+          );
 
-          this.processingTracker.itemFound("competitions", competitions ? competitions.length : 0);
+          this.processingTracker.itemFound(
+            "competitions",
+            competitions ? competitions.length : 0
+          );
           return competitions || [];
         } catch (innerError) {
-          logger.error("[GetCompetitions] Error in single association processing", {
-            error: innerError.message,
-            errorName: innerError.name,
-            accountId: this.AccountID,
-            url: this.URL,
-            stack: innerError.stack,
-            pageExists: !!page,
-            pageClosed: page ? page.isClosed() : null,
-          });
+          logger.error(
+            "[GetCompetitions] Error in single association processing",
+            {
+              error: innerError.message,
+              errorName: innerError.name,
+              accountId: this.AccountID,
+              url: this.URL,
+              stack: innerError.stack,
+              pageExists: !!page,
+              pageClosed: page ? page.isClosed() : null,
+            }
+          );
           throw innerError; // Re-throw to be caught by outer catch
         } finally {
           if (page) {

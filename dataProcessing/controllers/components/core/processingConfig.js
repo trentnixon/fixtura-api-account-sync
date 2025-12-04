@@ -2,7 +2,7 @@ const logger = require("../../../../src/utils/logger");
 
 /**
  * Processing configuration manager
- * Handles stage enable/disable, presets, and validation
+ * Simple true/false flags for each stage
  */
 class ProcessingConfig {
   /**
@@ -18,18 +18,7 @@ class ProcessingConfig {
   };
 
   /**
-   * Processing presets
-   */
-  static PRESETS = {
-    FULL: "full", // All stages enabled
-    QUICK: "quick", // Skip validation and cleanup
-    VALIDATION_ONLY: "validation-only", // Only validation and cleanup stages
-    DATA_ONLY: "data-only", // Only competitions, teams, games (no validation/cleanup)
-    MINIMAL: "minimal", // Only competitions and teams
-  };
-
-  /**
-   * Default configuration
+   * Default configuration - all stages enabled
    */
   static DEFAULT_CONFIG = {
     stages: {
@@ -49,151 +38,61 @@ class ProcessingConfig {
   };
 
   /**
-   * Preset configurations
-   */
-  static PRESET_CONFIGS = {
-    [ProcessingConfig.PRESETS.FULL]: {
-      stages: {
-        [ProcessingConfig.STAGES.COMPETITIONS]: true,
-        [ProcessingConfig.STAGES.TEAMS]: true,
-        [ProcessingConfig.STAGES.GAMES]: true,
-        [ProcessingConfig.STAGES.FIXTURE_VALIDATION]: true,
-        [ProcessingConfig.STAGES.FIXTURE_CLEANUP]: true,
-        [ProcessingConfig.STAGES.TRACKING]: true,
-      },
-      refreshDataBetweenStages: true,
-      forceBrowserRestart: {
-        afterGames: true,
-        afterCompetitions: false,
-        afterTeams: false,
-      },
-    },
-    [ProcessingConfig.PRESETS.QUICK]: {
-      stages: {
-        [ProcessingConfig.STAGES.COMPETITIONS]: true,
-        [ProcessingConfig.STAGES.TEAMS]: true,
-        [ProcessingConfig.STAGES.GAMES]: true,
-        [ProcessingConfig.STAGES.FIXTURE_VALIDATION]: false,
-        [ProcessingConfig.STAGES.FIXTURE_CLEANUP]: false,
-        [ProcessingConfig.STAGES.TRACKING]: true,
-      },
-      refreshDataBetweenStages: true,
-      forceBrowserRestart: {
-        afterGames: true,
-        afterCompetitions: false,
-        afterTeams: false,
-      },
-    },
-    [ProcessingConfig.PRESETS.VALIDATION_ONLY]: {
-      stages: {
-        [ProcessingConfig.STAGES.COMPETITIONS]: false,
-        [ProcessingConfig.STAGES.TEAMS]: false,
-        [ProcessingConfig.STAGES.GAMES]: false,
-        [ProcessingConfig.STAGES.FIXTURE_VALIDATION]: true,
-        [ProcessingConfig.STAGES.FIXTURE_CLEANUP]: true,
-        [ProcessingConfig.STAGES.TRACKING]: true,
-      },
-      refreshDataBetweenStages: false,
-      forceBrowserRestart: {
-        afterGames: false,
-        afterCompetitions: false,
-        afterTeams: false,
-      },
-    },
-    [ProcessingConfig.PRESETS.DATA_ONLY]: {
-      stages: {
-        [ProcessingConfig.STAGES.COMPETITIONS]: true,
-        [ProcessingConfig.STAGES.TEAMS]: true,
-        [ProcessingConfig.STAGES.GAMES]: true,
-        [ProcessingConfig.STAGES.FIXTURE_VALIDATION]: false,
-        [ProcessingConfig.STAGES.FIXTURE_CLEANUP]: false,
-        [ProcessingConfig.STAGES.TRACKING]: true,
-      },
-      refreshDataBetweenStages: true,
-      forceBrowserRestart: {
-        afterGames: true,
-        afterCompetitions: false,
-        afterTeams: false,
-      },
-    },
-    [ProcessingConfig.PRESETS.MINIMAL]: {
-      stages: {
-        [ProcessingConfig.STAGES.COMPETITIONS]: true,
-        [ProcessingConfig.STAGES.TEAMS]: true,
-        [ProcessingConfig.STAGES.GAMES]: false,
-        [ProcessingConfig.STAGES.FIXTURE_VALIDATION]: false,
-        [ProcessingConfig.STAGES.FIXTURE_CLEANUP]: false,
-        [ProcessingConfig.STAGES.TRACKING]: true,
-      },
-      refreshDataBetweenStages: true,
-      forceBrowserRestart: {
-        afterGames: false,
-        afterCompetitions: false,
-        afterTeams: false,
-      },
-    },
-  };
-
-  /**
-   * Create configuration from preset or custom config
-   * @param {string|object} presetOrConfig - Preset name or custom configuration object
+   * Create configuration from environment variables or custom config
+   * @param {object} customConfig - Optional custom configuration object
    * @returns {object} Validated configuration object
    */
-  static create(presetOrConfig) {
-    if (typeof presetOrConfig === "string") {
-      // Preset name provided
-      if (!ProcessingConfig.PRESET_CONFIGS[presetOrConfig]) {
-        throw new Error(
-          `Invalid preset: ${presetOrConfig}. Available presets: ${Object.keys(
-            ProcessingConfig.PRESET_CONFIGS
-          ).join(", ")}`
-        );
+  static create(customConfig = null) {
+    // Start with default config
+    const config = ProcessingConfig.deepClone(ProcessingConfig.DEFAULT_CONFIG);
+
+    // Override with environment variables if set
+    if (process.env.ENABLE_COMPETITIONS !== undefined) {
+      config.stages[ProcessingConfig.STAGES.COMPETITIONS] =
+        process.env.ENABLE_COMPETITIONS === "true";
+    }
+    if (process.env.ENABLE_TEAMS !== undefined) {
+      config.stages[ProcessingConfig.STAGES.TEAMS] =
+        process.env.ENABLE_TEAMS === "true";
+    }
+    if (process.env.ENABLE_GAMES !== undefined) {
+      config.stages[ProcessingConfig.STAGES.GAMES] =
+        process.env.ENABLE_GAMES === "true";
+    }
+    if (process.env.ENABLE_FIXTURE_VALIDATION !== undefined) {
+      config.stages[ProcessingConfig.STAGES.FIXTURE_VALIDATION] =
+        process.env.ENABLE_FIXTURE_VALIDATION === "true";
+    }
+    if (process.env.ENABLE_FIXTURE_CLEANUP !== undefined) {
+      config.stages[ProcessingConfig.STAGES.FIXTURE_CLEANUP] =
+        process.env.ENABLE_FIXTURE_CLEANUP === "true";
+    }
+    if (process.env.ENABLE_TRACKING !== undefined) {
+      config.stages[ProcessingConfig.STAGES.TRACKING] =
+        process.env.ENABLE_TRACKING === "true";
+    }
+
+    // Override with custom config if provided
+    if (customConfig && typeof customConfig === "object") {
+      if (customConfig.stages) {
+        Object.keys(customConfig.stages).forEach((stage) => {
+          if (config.stages.hasOwnProperty(stage)) {
+            config.stages[stage] = customConfig.stages[stage];
+          }
+        });
       }
-      const config = ProcessingConfig.deepClone(
-        ProcessingConfig.PRESET_CONFIGS[presetOrConfig]
-      );
-      return ProcessingConfig.validate(config);
-    } else if (typeof presetOrConfig === "object" && presetOrConfig !== null) {
-      // Custom configuration provided
-      const config = ProcessingConfig.mergeWithDefault(presetOrConfig);
-      return ProcessingConfig.validate(config);
-    } else {
-      // Use default
-      return ProcessingConfig.deepClone(ProcessingConfig.DEFAULT_CONFIG);
-    }
-  }
-
-  /**
-   * Merge custom config with default config
-   * @param {object} customConfig - Custom configuration to merge
-   * @returns {object} Merged configuration
-   */
-  static mergeWithDefault(customConfig) {
-    const merged = ProcessingConfig.deepClone(ProcessingConfig.DEFAULT_CONFIG);
-
-    // Merge stages
-    if (customConfig.stages) {
-      Object.keys(customConfig.stages).forEach((stage) => {
-        if (merged.stages.hasOwnProperty(stage)) {
-          merged.stages[stage] = customConfig.stages[stage];
-        }
-      });
+      if (customConfig.refreshDataBetweenStages !== undefined) {
+        config.refreshDataBetweenStages = customConfig.refreshDataBetweenStages;
+      }
+      if (customConfig.forceBrowserRestart) {
+        config.forceBrowserRestart = {
+          ...config.forceBrowserRestart,
+          ...customConfig.forceBrowserRestart,
+        };
+      }
     }
 
-    // Merge refreshDataBetweenStages
-    if (customConfig.refreshDataBetweenStages !== undefined) {
-      merged.refreshDataBetweenStages = customConfig.refreshDataBetweenStages;
-    }
-
-    // Merge forceBrowserRestart
-    if (customConfig.forceBrowserRestart) {
-      merged.forceBrowserRestart = {
-        ...merged.forceBrowserRestart,
-        ...customConfig.forceBrowserRestart,
-      };
-    }
-
-    return merged;
+    return ProcessingConfig.validate(config);
   }
 
   /**
@@ -298,35 +197,6 @@ class ProcessingConfig {
    */
   static deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
-  }
-
-  /**
-   * Get available presets
-   * @returns {Array<string>} List of preset names
-   */
-  static getAvailablePresets() {
-    return Object.keys(ProcessingConfig.PRESET_CONFIGS);
-  }
-
-  /**
-   * Get preset description
-   * @param {string} preset - Preset name
-   * @returns {string} Description of the preset
-   */
-  static getPresetDescription(preset) {
-    const descriptions = {
-      [ProcessingConfig.PRESETS.FULL]:
-        "All stages enabled - complete data processing pipeline",
-      [ProcessingConfig.PRESETS.QUICK]:
-        "Skip validation and cleanup - faster processing for data updates",
-      [ProcessingConfig.PRESETS.VALIDATION_ONLY]:
-        "Only validation and cleanup stages - for fixture maintenance",
-      [ProcessingConfig.PRESETS.DATA_ONLY]:
-        "Only data processing stages (competitions, teams, games) - no validation",
-      [ProcessingConfig.PRESETS.MINIMAL]:
-        "Minimal processing - only competitions and teams",
-    };
-    return descriptions[preset] || "Unknown preset";
   }
 }
 

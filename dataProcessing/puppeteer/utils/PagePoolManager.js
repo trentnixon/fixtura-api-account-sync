@@ -85,19 +85,42 @@ class PagePoolManager {
       logger.info(
         `Page pool exists but needs ${neededPages} more pages (current: ${this.pagePool.length}, target: ${poolSize})`
       );
-      // Continue to create only the needed pages
-    } else {
+      // Create ONLY the needed pages, not the full poolSize
+      const results = [];
+      for (let i = 0; i < neededPages; i++) {
+        try {
+          const page = await this._createPoolPage();
+          results.push(page);
+          if (i < neededPages - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+        } catch (error) {
+          logger.error(`Failed to create replacement page ${i + 1}`, {
+            error: error.message,
+          });
+          results.push(null);
+        }
+      }
+      const successfulPages = results.filter((page) => page !== null);
+      for (const page of successfulPages) {
+        if (!this.pagePool.includes(page)) {
+          this.pagePool.push(page);
+        }
+      }
       logger.info(
-        `Creating page pool of ${poolSize} pages for parallel processing`
+        `Created ${successfulPages.length}/${neededPages} replacement pages, pool size now: ${this.pagePool.length}`
       );
+      return this.pagePool.filter((page) => !page.isClosed());
     }
 
-    const pages = [];
-    const errors = [];
+    logger.info(
+      `Creating page pool of ${poolSize} pages for parallel processing`
+    );
 
     // Create pages sequentially to avoid "Requesting main frame too early!" errors
     // from stealth plugin when creating pages in parallel
     const results = [];
+    const errors = [];
     for (let i = 0; i < poolSize; i++) {
       try {
         const page = await this._createPoolPage();
@@ -177,13 +200,18 @@ class PagePoolManager {
     // Filter out closed pages from pool first
     this.pagePool = this.pagePool.filter((page) => !page.isClosed());
 
-    // NEW: Maintain minimum pool size automatically
-    // This prevents pool from shrinking below target size when pages crash
+    // Maintain minimum pool size automatically
+    // Only replenish if pool was intentionally created (not if it's empty from start)
+    // This prevents creating pages when we only want competitions-only mode
     const minPoolSize = this.maxPagePoolSize;
-    if (this.pagePool.length < minPoolSize) {
-      const needed = minPoolSize - this.pagePool.length;
+    const currentPoolSize = this.pagePool.length;
+
+    // Only auto-replenish if pool exists but is below minimum (pages crashed/closed)
+    // Don't auto-create if pool is empty and we're in competitions-only mode
+    if (currentPoolSize > 0 && currentPoolSize < minPoolSize) {
+      const needed = minPoolSize - currentPoolSize;
       logger.info(
-        `[PagePoolManager] Pool below minimum (${this.pagePool.length}/${minPoolSize}), creating ${needed} replacement page(s)`
+        `[PagePoolManager] Pool below minimum (${currentPoolSize}/${minPoolSize}), creating ${needed} replacement page(s)`
       );
 
       // Create replacement pages in parallel

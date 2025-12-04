@@ -10,18 +10,21 @@ class GameProcessorComponent {
    * @param {object} dataObj - The data object containing account and game data
    * @returns {Promise<object>} - Object containing scraped fixtures array
    */
-  static async process(dataObj) {
+  static async process(dataObj, options = {}) {
     let gameDataProcessor = null;
     try {
       logger.info("[GAMES] Starting game data processing", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
+        isolateByCategory:
+          options.isolateByCategory ||
+          process.env.ISOLATE_BY_CATEGORY === "true",
       });
 
       // Process and assign game data
       logger.info("[GAMES] Creating GameDataProcessor", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
       });
-      gameDataProcessor = new GameDataProcessor(dataObj);
+      gameDataProcessor = new GameDataProcessor(dataObj, options);
 
       logger.info("[GAMES] Calling gameDataProcessor.process()", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
@@ -71,4 +74,3 @@ class GameProcessorComponent {
 }
 
 module.exports = GameProcessorComponent;
-
