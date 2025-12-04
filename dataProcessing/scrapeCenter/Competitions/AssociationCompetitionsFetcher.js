@@ -69,9 +69,26 @@ class AssociationCompetitionsFetcher {
     try {
       // OPTIMIZED: Faster checks with shorter timeouts
       // Step 1: Wait for the season-org container to exist in DOM first
+      const elapsedBeforeContainer = Date.now() - waitStartTime;
+      const remainingTimeForContainer = MAX_TOTAL_WAIT_TIME - elapsedBeforeContainer;
+
+      if (remainingTimeForContainer <= 0) {
+        logger.warn(
+          `[PARALLEL_COMPETITIONS] [WAIT] Max wait time exceeded before checking container`,
+          {
+            url: this.url,
+            elapsed: elapsedBeforeContainer,
+          }
+        );
+        throw new Error(
+          `Page structure not found after ${MAX_TOTAL_WAIT_TIME}ms - likely page structure changed`
+        );
+      }
+
       try {
+        const timeoutForContainer = Math.min(QUICK_CHECK_TIMEOUT, remainingTimeForContainer);
         await this.page.waitForSelector('[data-testid^="season-org-"]', {
-          timeout: QUICK_CHECK_TIMEOUT, // Reduced from 10000ms to 2000ms
+          timeout: timeoutForContainer,
           visible: false, // First check if element exists in DOM
         });
         logger.debug(`Season-org container found in DOM`, {
@@ -80,7 +97,9 @@ class AssociationCompetitionsFetcher {
         });
       } catch (selectorError) {
         const elapsed = Date.now() - waitStartTime;
-        if (elapsed > MAX_TOTAL_WAIT_TIME) {
+        const remainingTime = MAX_TOTAL_WAIT_TIME - elapsed;
+
+        if (remainingTime <= 0) {
           logger.warn(
             `[PARALLEL_COMPETITIONS] [WAIT] Max wait time exceeded, failing fast`,
             {
@@ -92,10 +111,11 @@ class AssociationCompetitionsFetcher {
             `Page structure not found after ${MAX_TOTAL_WAIT_TIME}ms - likely page structure changed`
           );
         }
-        // Try visible check as fallback
+        // Try visible check as fallback (with remaining time)
         try {
+          const timeoutForVisible = Math.min(1000, remainingTime);
           await this.page.waitForSelector('[data-testid^="season-org-"]', {
-            timeout: 1000,
+            timeout: timeoutForVisible,
             visible: true,
           });
         } catch (visibilityError) {
@@ -112,11 +132,26 @@ class AssociationCompetitionsFetcher {
 
       // OPTIMIZED: Shorter timeout for competition links
       // Step 2: Wait for competition links to be present (actual content)
+      const elapsedBeforeLinks = Date.now() - waitStartTime;
+      const remainingTimeForLinks = MAX_TOTAL_WAIT_TIME - elapsedBeforeLinks;
+
+      if (remainingTimeForLinks <= 0) {
+        logger.debug(
+          `[PARALLEL_COMPETITIONS] [WAIT] Max wait time exceeded before checking links`,
+          {
+            url: this.url,
+            elapsed: elapsedBeforeLinks,
+          }
+        );
+        return; // Fail fast - no time to check links
+      }
+
       try {
+        const timeoutForLinks = Math.min(QUICK_CHECK_TIMEOUT, remainingTimeForLinks);
         await this.page.waitForSelector(
           '[data-testid^="season-org-"] ul > li > a',
           {
-            timeout: QUICK_CHECK_TIMEOUT, // Reduced from 8000ms to 2000ms
+            timeout: timeoutForLinks,
             visible: true,
           }
         );
@@ -141,7 +176,22 @@ class AssociationCompetitionsFetcher {
 
       // OPTIMIZED: Faster content check with shorter timeout
       // Step 3: Wait for competition content to be fully rendered
+      const elapsedBeforeContent = Date.now() - waitStartTime;
+      const remainingTimeForContent = MAX_TOTAL_WAIT_TIME - elapsedBeforeContent;
+
+      if (remainingTimeForContent <= 0) {
+        logger.debug(
+          `[PARALLEL_COMPETITIONS] [WAIT] Max wait time exceeded before content check`,
+          {
+            url: this.url,
+            elapsed: elapsedBeforeContent,
+          }
+        );
+        return; // Fail fast - no time for content check
+      }
+
       try {
+        const timeoutForContent = Math.min(CONTENT_CHECK_TIMEOUT, remainingTimeForContent);
         await this.page.waitForFunction(
           () => {
             const competitionLinks = document.querySelectorAll(
@@ -162,7 +212,7 @@ class AssociationCompetitionsFetcher {
             return false;
           },
           {
-            timeout: CONTENT_CHECK_TIMEOUT, // Reduced from 10000ms to 3000ms
+            timeout: timeoutForContent,
             polling: POLLING_INTERVAL, // Faster polling (100ms instead of 200ms)
           }
         );

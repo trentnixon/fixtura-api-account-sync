@@ -68,8 +68,8 @@ class GetTeamsGameData {
             `[PARALLEL_GAMES] [TASK-${index + 1}] COMPLETE team: ${teamName} (duration: ${taskDuration}ms, games: ${gameCount})`
           );
 
-          // Flatten and filter the data
-          return gameData.flat().filter((match) => match !== null);
+          // Filter null results (gameData is already flat from parallel processing)
+          return gameData.filter((match) => match !== null);
         } catch (error) {
           logger.error(`Error processing team game data: ${team.teamName}`, {
             error: error.message,
@@ -105,14 +105,15 @@ class GetTeamsGameData {
       });
     }
 
-    // MEMORY FIX: Flatten results and extract immediately
-    const flattenedResults = results.flat();
+    // OPTIMIZATION: Results are already flat from parallel processing
+    // No need to flatten again - just filter and return
+    const allResults = results.flat(); // Flatten once (results is array of arrays from parallel processing)
 
     // MEMORY FIX: Clear intermediate arrays immediately after use
     results.length = 0; // Clear results array
     errors.length = 0; // Clear errors array (already logged)
 
-    return flattenedResults;
+    return allResults;
   }
 
   async fetchAndProcessTeamGameData(page, url) {
