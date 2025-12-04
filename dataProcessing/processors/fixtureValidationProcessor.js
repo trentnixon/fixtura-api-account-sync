@@ -2,7 +2,12 @@ const logger = require("../../src/utils/logger");
 const GameCRUD = require("../assignCenter/games/GameCrud");
 const FixtureValidationService = require("../services/fixtureValidationService");
 const ProcessingTracker = require("../services/processingTracker");
-// Note: getMemoryStats imported lazily in process() to avoid circular dependency issues
+
+// Import validation components
+const MemoryTracker = require("./components/validation/memoryTracker");
+const ResultAggregator = require("./components/validation/resultAggregator");
+const FixtureProcessor = require("./components/validation/fixtureProcessor");
+const ValidationHelpers = require("./components/validation/validationHelpers");
 
 /**
  * FixtureValidationProcessor handles validation of existing database fixtures.
@@ -38,80 +43,47 @@ class FixtureValidationProcessor {
    */
   async process() {
     try {
-      // MEMORY TRACKING: Get memory stats (inline require to avoid circular deps)
-      let initialMemory = { rss: 0, heapUsed: 0, heapTotal: 0, external: 0 };
-      try {
-        const memoryUtils = require("../puppeteer/memoryUtils");
-        initialMemory = memoryUtils.getMemoryStats();
-      } catch (memError) {
-        logger.warn(
-          "[VALIDATION] Could not get initial memory stats:",
-          memError.message
-        );
-      }
-      logger.info("[VALIDATION] Starting fixture validation process", {
-        accountId: this.dataObj.ACCOUNT.ACCOUNTID,
-        accountType: this.dataObj.ACCOUNT.ACCOUNTTYPE,
-        initialMemory: {
-          rss: `${initialMemory.rss}MB`,
-          heapUsed: `${initialMemory.heapUsed}MB`,
-          heapTotal: `${initialMemory.heapTotal}MB`,
-          external: `${initialMemory.external}MB`,
-        },
-      });
+      // Initialize memory tracking
+      const initialMemory = MemoryTracker.logInitialMemory(this.dataObj);
 
       // Get team IDs
-      const teamIds = this.getTeamIds();
+      const teamIds = ValidationHelpers.getTeamIds(this.dataObj);
       if (!teamIds || teamIds.length === 0) {
         logger.warn("No team IDs found for fixture fetch");
         this.processingTracker.itemFound("fixture-validation", 0);
-        return {
-          validated: 0,
-          valid: 0,
-          invalid: 0,
-          results: [],
-          fixtures: [],
-        };
+        return ValidationHelpers.createEmptyResult();
       }
 
+      // Initialize components
+      const fixtureProcessor = new FixtureProcessor(
+        this.gameCRUD,
+        this.validationService,
+        this.concurrencyLimit
+      );
+      const resultAggregator = new ResultAggregator();
+
       // MEMORY FIX: Use new validation endpoint with incremental processing
-      // Process fixtures page by page: fetch → validate → clear → repeat
-      // This prevents accumulating all fixtures in memory
       logger.info(
         `[VALIDATION] Using new validation endpoint with incremental processing for ${teamIds.length} teams`
       );
 
-      // Calculate date range (today to today + 14 days)
-      const fromDate = new Date();
-      fromDate.setHours(0, 0, 0, 0);
-      const toDate = new Date(fromDate);
-      toDate.setDate(toDate.getDate() + 14);
-      toDate.setHours(23, 59, 59, 999);
+      // Calculate date range
+      const { fromDate, toDate } = fixtureProcessor.calculateDateRange();
 
-      // Process fixtures incrementally (page by page)
-      const pageSize = 100; // Process 100 fixtures at a time
+      // MEMORY CRITICAL FIX: Use very small page size to prevent immediate memory spikes
+      const pageSize = 25; // CRITICAL: Small page size to prevent memory spikes
       let page = 1;
       let hasMore = true;
       let totalFixtures = 0;
 
-      // MEMORY FIX: For large associations with HUNDREDS of teams and THOUSANDS of fixtures,
-      // we cannot accumulate all results. Only store invalid fixtures for cleanup.
-      const invalidResults = []; // Only invalid fixture results
-      const invalidFixtureIds = new Set(); // Track invalid IDs for quick lookup
-      let totalValidCount = 0;
-      let totalInvalidCount = 0;
-
-      // For comparison, we only need minimal fixture data ({ id, gameID })
-      // Use Map to avoid duplicates and use minimal memory
-      const allFixtureIds = new Map(); // Map<id, { id, gameID }>
-
+      // Process fixtures page by page
       while (hasMore) {
-        logger.info(
-          `[VALIDATION] Fetching page ${page} (${pageSize} fixtures per page)`
-        );
-
-        // Fetch one page of fixtures using new validation endpoint
-        const pageResponse = await this.gameCRUD.getFixturesForValidation(
+        // Fetch page
+        const {
+          pageFixtures,
+          pagination,
+          hasMore: pageHasMore,
+        } = await fixtureProcessor.fetchPage(
           teamIds,
           fromDate,
           toDate,
@@ -119,13 +91,7 @@ class FixtureValidationProcessor {
           pageSize
         );
 
-        const pageFixtures = pageResponse.data || [];
-        const pagination = pageResponse.meta?.pagination || {};
-
         if (!pageFixtures || pageFixtures.length === 0) {
-          logger.info(
-            `[VALIDATION] No fixtures found on page ${page}, stopping pagination`
-          );
           hasMore = false;
           break;
         }
@@ -147,105 +113,45 @@ class FixtureValidationProcessor {
           } fixtures (${totalFixtures} total)`
         );
 
-        // Validate this page of fixtures
-        // PlayHQ blocks HTTP requests, so we use Puppeteer directly for all validations
-        logger.info(
-          `[VALIDATION] Validating page ${page} fixtures using Puppeteer (concurrency: ${this.concurrencyLimit}, timeout: ${this.validationService.timeout}ms)`
+        // Validate page
+        const pageValidationResults = await fixtureProcessor.validatePage(
+          pageFixtures,
+          page
         );
-        const pageValidationResults =
-          await this.validationService.validateFixturesBatch(
-            pageFixtures,
-            this.concurrencyLimit
-          );
 
-        // MEMORY FIX: Only accumulate invalid results, count valid ones
-        // For large associations, this prevents storing thousands of valid result objects
-        for (const result of pageValidationResults) {
-          if (result.valid) {
-            totalValidCount++;
-          } else {
-            totalInvalidCount++;
-            // Only store invalid results (needed for cleanup)
-            if (!invalidFixtureIds.has(result.fixtureId)) {
-              invalidFixtureIds.add(result.fixtureId);
-              invalidResults.push({
-                fixtureId: result.fixtureId,
-                gameID: result.gameID,
-                valid: false,
-                status: result.status,
-                httpStatus: result.httpStatus,
-              });
-            }
-          }
-        }
+        // Aggregate results (only stores invalid fixtures)
+        resultAggregator.processPageResults(
+          pageValidationResults,
+          pageFixtures
+        );
 
-        // Store minimal fixture data for comparison ({ id, gameID } only)
-        // Use Map to avoid duplicates by fixture ID
-        for (const fixture of pageFixtures) {
-          if (fixture.id && !allFixtureIds.has(fixture.id)) {
-            allFixtureIds.set(fixture.id, {
-              id: fixture.id,
-              gameID: fixture.gameID || null,
-            });
-          }
-        }
+        // Clear page data to free memory
+        fixtureProcessor.clearPageData(pageFixtures, pageValidationResults);
 
-        // MEMORY FIX: Clear page data immediately after processing
-        pageFixtures.length = 0; // Clear array
-        pageValidationResults.length = 0; // Results already processed
-
-        // Force GC hint every 3 pages (more frequent for large associations)
-        if (page > 0 && page % 3 === 0 && global.gc) {
-          global.gc();
-          logger.info(`[VALIDATION] GC hint after page ${page}`, {
-            invalidCount: invalidResults.length,
-            validCount: totalValidCount,
-            totalProcessed: totalValidCount + totalInvalidCount,
-          });
-        }
+        // Hint GC if needed
+        const stats = resultAggregator.getStats();
+        fixtureProcessor.hintGarbageCollection(page, {
+          ...stats,
+          totalFixtures,
+        });
 
         // Check if more pages
-        hasMore = page < (pagination.pageCount || 1);
+        hasMore = pageHasMore;
         page++;
 
-        // MEMORY TRACKING: Log memory and object sizes after each page
-        let pageMemory = { rss: 0, heapUsed: 0 };
-        try {
-          const memoryUtils = require("../puppeteer/memoryUtils");
-          pageMemory = memoryUtils.getMemoryStats();
-        } catch (memError) {
-          // Ignore - memory tracking failed
-        }
-        logger.info(
-          `[VALIDATION] Page ${page - 1} complete: Validated ${
-            totalValidCount + totalInvalidCount
-          }/${totalFixtures} fixtures (${totalValidCount} valid, ${totalInvalidCount} invalid, ${
-            invalidResults.length
-          } invalid stored)`,
-          {
-            memory: {
-              rss: `${pageMemory.rss}MB (+${
-                pageMemory.rss - initialMemory.rss
-              }MB)`,
-              heapUsed: `${pageMemory.heapUsed}MB (+${
-                pageMemory.heapUsed - initialMemory.heapUsed
-              }MB)`,
-            },
-            objectSizes: {
-              invalidResults: invalidResults.length,
-              invalidFixtureIds: invalidFixtureIds.size,
-              allFixtureIds: allFixtureIds.size,
-            },
-          }
-        );
+        // Log page memory
+        MemoryTracker.logPageMemory(page - 1, initialMemory, {
+          ...stats,
+          totalFixtures,
+        });
       }
 
-      // MEMORY FIX: Only store invalid results (not all results)
-      // For large associations: 10,000 fixtures with 90% valid = only 1,000 invalid results stored
-      // vs storing all 10,000 results = 80% memory savings
-      this.validationResults = invalidResults;
+      // Get aggregated results
+      const { invalidResults, totalValidCount, totalInvalidCount } =
+        resultAggregator.getResults();
 
-      // Count valid/invalid (already counted during processing)
+      // Store results
+      this.validationResults = invalidResults;
       const validCount = totalValidCount;
       const invalidCount = totalInvalidCount;
 
@@ -253,91 +159,33 @@ class FixtureValidationProcessor {
       this.processingTracker.itemUpdated("fixture-validation", validCount);
       this.processingTracker.itemDeleted("fixture-validation", invalidCount);
 
-      // MEMORY OPTIMIZATION: Only log summary, not individual results (reduces memory usage)
-      // Log validation results (only invalid ones stored)
-      if (invalidResults.length > 0) {
-        logger.info(
-          `[VALIDATION] Found ${invalidResults.length} invalid fixtures (out of ${totalFixtures} total validated)`
-        );
-        // Only log first 10 invalid fixtures to reduce memory
-        invalidResults.slice(0, 10).forEach((result, index) => {
-          logger.info(
-            `[VALIDATION] ❌ Invalid ${index + 1}/${
-              invalidResults.length
-            } - GameID: ${result.gameID || "N/A"}, Status: ${
-              result.status
-            }, HTTP: ${result.httpStatus || "N/A"}`
-          );
-        });
-        if (invalidResults.length > 10) {
-          logger.info(
-            `[VALIDATION] ... and ${
-              invalidResults.length - 10
-            } more invalid fixtures (not logged to save memory)`
-          );
-        }
-      }
+      // Log validation summary
+      ValidationHelpers.logValidationSummary(invalidResults, totalFixtures);
 
-      // MEMORY TRACKING: Log final memory state and object sizes
-      let finalMemory = { rss: 0, heapUsed: 0 };
-      try {
-        const memoryUtils = require("../puppeteer/memoryUtils");
-        finalMemory = memoryUtils.getMemoryStats();
-      } catch (memError) {
-        logger.warn(
-          "[VALIDATION] Could not get final memory stats:",
-          memError.message
-        );
-      }
-      logger.info("[VALIDATION] Fixture validation complete", {
-        total: totalFixtures,
-        validated: totalValidCount + totalInvalidCount,
-        valid: validCount,
-        invalid: invalidCount,
-        invalidStored: invalidResults.length,
+      // Get fixtures array for comparison
+      const fixturesArray = resultAggregator.getFixturesArray();
+
+      // Log final memory
+      const finalStats = resultAggregator.getStats();
+      MemoryTracker.logFinalMemory(initialMemory, {
+        ...finalStats,
+        totalFixtures,
+        validCount,
+        invalidCount,
         accountId: this.dataObj.ACCOUNT.ACCOUNTID,
         teamIdsCount: teamIds.length,
         pagesProcessed: page - 1,
-        memoryNote: "Only invalid results stored (not all results)",
-        memory: {
-          initial: {
-            rss: `${initialMemory.rss}MB`,
-            heapUsed: `${initialMemory.heapUsed}MB`,
-          },
-          final: {
-            rss: `${finalMemory.rss}MB`,
-            heapUsed: `${finalMemory.heapUsed}MB`,
-          },
-          delta: {
-            rss: `+${finalMemory.rss - initialMemory.rss}MB`,
-            heapUsed: `+${finalMemory.heapUsed - initialMemory.heapUsed}MB`,
-          },
-        },
-        objectSizes: {
-          invalidResults: invalidResults.length,
-          invalidFixtureIds: invalidFixtureIds.size,
-          allFixtureIds: allFixtureIds.size,
-          fixturesArray: fixturesArray.length,
-        },
+        fixturesArrayLength: fixturesArray.length,
       });
 
-      // MEMORY FIX: Convert Map to Array for fixtures (minimal data only)
-      // Map uses less memory than array, but comparison service expects array
-      const fixturesArray = Array.from(allFixtureIds.values());
-
-      logger.info(
-        "[VALIDATION] Returning validation results (invalid-only storage)",
-        {
-          accountId: this.dataObj.ACCOUNT.ACCOUNTID,
-          resultsCount: invalidResults.length,
-          fixturesCount: fixturesArray.length,
-          note: "Only invalid results stored - major memory savings for large associations",
-        }
+      // Log return summary
+      ValidationHelpers.logReturnSummary(
+        this.dataObj,
+        invalidResults.length,
+        fixturesArray.length
       );
 
       // Return validation results - only invalid ones stored
-      // For large associations: 10,000 fixtures with 90% valid = only 1,000 results stored
-      // vs storing all 10,000 = 80-90% memory savings
       return {
         validated: totalValidCount + totalInvalidCount,
         valid: validCount,
@@ -366,11 +214,7 @@ class FixtureValidationProcessor {
    * @returns {Array<number>} Array of team database IDs
    */
   getTeamIds() {
-    if (!this.dataObj.TEAMS || !Array.isArray(this.dataObj.TEAMS)) {
-      return [];
-    }
-
-    return this.dataObj.TEAMS.map((team) => team.id).filter(Boolean);
+    return ValidationHelpers.getTeamIds(this.dataObj);
   }
 
   /**
