@@ -22,7 +22,7 @@ class TeamProcessor {
     try {
       // MEMORY TRACKING: Log memory before starting
       const MemoryTracker = require("../utils/memoryTracker");
-      const memoryTracker = MemoryTracker.getInstance();
+      const memoryTracker = new MemoryTracker();
       if (memoryTracker) {
         const beforeStats = memoryTracker.logMemoryStats("[TEAMS] BEFORE START");
         logger.info(`[TEAMS] Memory before start: RSS=${beforeStats.rss.toFixed(2)} MB, Heap=${beforeStats.heapUsed.toFixed(2)} MB`);
