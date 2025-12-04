@@ -20,34 +20,50 @@ class AssociationCompetitionsFetcher {
       logger.info(`[PARALLEL_COMPETITIONS] [NAV] Navigating to ${this.url}`);
       await this.navigateToUrl();
       const navDuration = Date.now() - navStartTime;
-      logger.info(`[PARALLEL_COMPETITIONS] [NAV] Navigation complete: ${navDuration}ms`);
+      logger.info(
+        `[PARALLEL_COMPETITIONS] [NAV] Navigation complete: ${navDuration}ms`
+      );
 
       const waitStartTime = Date.now();
       await this.waitForPageLoad();
       const waitDuration = Date.now() - waitStartTime;
-      logger.info(`[PARALLEL_COMPETITIONS] [WAIT] Page load complete: ${waitDuration}ms`);
+      logger.info(
+        `[PARALLEL_COMPETITIONS] [WAIT] Page load complete: ${waitDuration}ms`
+      );
 
       const extractStartTime = Date.now();
       const competitions = await this.extractCompetitionsData();
       const extractDuration = Date.now() - extractStartTime;
-      logger.info(`[PARALLEL_COMPETITIONS] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${Date.now() - navStartTime}ms)`);
-      logger.info(`[AssociationCompetitionsFetcher] Extracted ${competitions ? competitions.length : 0} competitions`, {
-        competitionsCount: competitions ? competitions.length : 0,
-        competitions: competitions,
-      });
+      logger.info(
+        `[PARALLEL_COMPETITIONS] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${
+          Date.now() - navStartTime
+        }ms)`
+      );
+      logger.info(
+        `[AssociationCompetitionsFetcher] Extracted ${
+          competitions ? competitions.length : 0
+        } competitions`,
+        {
+          competitionsCount: competitions ? competitions.length : 0,
+          competitions: competitions,
+        }
+      );
 
       return competitions;
     } catch (error) {
-      logger.error(`[AssociationCompetitionsFetcher] Error in fetching competitions for association`, {
-        error: error.message,
-        errorName: error.name,
-        url: this.url,
-        associationID: this.associationID,
-        stack: error.stack,
-        pageExists: !!this.page,
-        pageClosed: this.page ? this.page.isClosed() : null,
-        pageUrl: this.page ? this.page.url() : null,
-      });
+      logger.error(
+        `[AssociationCompetitionsFetcher] Error in fetching competitions for association`,
+        {
+          error: error.message,
+          errorName: error.name,
+          url: this.url,
+          associationID: this.associationID,
+          stack: error.stack,
+          pageExists: !!this.page,
+          pageClosed: this.page ? this.page.isClosed() : null,
+          pageUrl: this.page ? this.page.url() : null,
+        }
+      );
       throw error;
     }
   }
@@ -70,7 +86,8 @@ class AssociationCompetitionsFetcher {
       // OPTIMIZED: Faster checks with shorter timeouts
       // Step 1: Wait for the season-org container to exist in DOM first
       const elapsedBeforeContainer = Date.now() - waitStartTime;
-      const remainingTimeForContainer = MAX_TOTAL_WAIT_TIME - elapsedBeforeContainer;
+      const remainingTimeForContainer =
+        MAX_TOTAL_WAIT_TIME - elapsedBeforeContainer;
 
       if (remainingTimeForContainer <= 0) {
         logger.warn(
@@ -86,7 +103,10 @@ class AssociationCompetitionsFetcher {
       }
 
       try {
-        const timeoutForContainer = Math.min(QUICK_CHECK_TIMEOUT, remainingTimeForContainer);
+        const timeoutForContainer = Math.min(
+          QUICK_CHECK_TIMEOUT,
+          remainingTimeForContainer
+        );
         await this.page.waitForSelector('[data-testid^="season-org-"]', {
           timeout: timeoutForContainer,
           visible: false, // First check if element exists in DOM
@@ -147,7 +167,10 @@ class AssociationCompetitionsFetcher {
       }
 
       try {
-        const timeoutForLinks = Math.min(QUICK_CHECK_TIMEOUT, remainingTimeForLinks);
+        const timeoutForLinks = Math.min(
+          QUICK_CHECK_TIMEOUT,
+          remainingTimeForLinks
+        );
         await this.page.waitForSelector(
           '[data-testid^="season-org-"] ul > li > a',
           {
@@ -177,7 +200,8 @@ class AssociationCompetitionsFetcher {
       // OPTIMIZED: Faster content check with shorter timeout
       // Step 3: Wait for competition content to be fully rendered
       const elapsedBeforeContent = Date.now() - waitStartTime;
-      const remainingTimeForContent = MAX_TOTAL_WAIT_TIME - elapsedBeforeContent;
+      const remainingTimeForContent =
+        MAX_TOTAL_WAIT_TIME - elapsedBeforeContent;
 
       if (remainingTimeForContent <= 0) {
         logger.debug(
@@ -191,7 +215,10 @@ class AssociationCompetitionsFetcher {
       }
 
       try {
-        const timeoutForContent = Math.min(CONTENT_CHECK_TIMEOUT, remainingTimeForContent);
+        const timeoutForContent = Math.min(
+          CONTENT_CHECK_TIMEOUT,
+          remainingTimeForContent
+        );
         await this.page.waitForFunction(
           () => {
             const competitionLinks = document.querySelectorAll(
@@ -236,10 +263,13 @@ class AssociationCompetitionsFetcher {
       }
 
       const totalWait = Date.now() - waitStartTime;
-      logger.debug(`Page load complete, competitions should be ready for extraction`, {
-        url: this.url,
-        totalWaitTime: totalWait,
-      });
+      logger.debug(
+        `Page load complete, competitions should be ready for extraction`,
+        {
+          url: this.url,
+          totalWaitTime: totalWait,
+        }
+      );
     } catch (error) {
       const elapsed = Date.now() - waitStartTime;
       // Better error handling - fail fast for structure issues
@@ -254,7 +284,8 @@ class AssociationCompetitionsFetcher {
             error: error.message,
             url: this.url,
             elapsed,
-            action: "Continuing with extraction attempt (may return empty results)",
+            action:
+              "Continuing with extraction attempt (may return empty results)",
           }
         );
         // Don't add extra delay - fail fast
@@ -287,11 +318,17 @@ class AssociationCompetitionsFetcher {
         try {
           seasonOrgsParent = await this.page.$('[data-testid^="season-org-"]');
           if (seasonOrgsParent) {
-            logger.debug(`Season-org container found before extraction (attempt ${4 - retries})`);
+            logger.debug(
+              `Season-org container found before extraction (attempt ${
+                4 - retries
+              })`
+            );
             break;
           }
         } catch (checkError) {
-          logger.debug(`Season-org container check failed, retrying... (${retries} retries left)`);
+          logger.debug(
+            `Season-org container check failed, retrying... (${retries} retries left)`
+          );
         }
 
         if (!seasonOrgsParent && retries > 1) {
@@ -301,10 +338,12 @@ class AssociationCompetitionsFetcher {
       }
 
       if (!seasonOrgsParent) {
-        logger.warn(`Season-org container not found after retries. Attempting extraction anyway.`);
+        logger.warn(
+          `Season-org container not found after retries. Attempting extraction anyway.`
+        );
       }
 
-      return await this.page.evaluate((associationID) => {
+      const result = await this.page.evaluate(() => {
         const result = [];
 
         // Select the parent block (the entire container with all competitions)
@@ -313,7 +352,8 @@ class AssociationCompetitionsFetcher {
         );
 
         if (!seasonOrgsParent) {
-          logger.warn("No season organizations found on the page. Returning empty array.");
+          // Note: Cannot use logger here - this code runs in browser context
+          // Logging is handled outside this evaluate block
           return [];
         }
 
@@ -374,7 +414,20 @@ class AssociationCompetitionsFetcher {
         });
 
         return result;
-      }, this.associationID);
+      });
+
+      // Log if no competitions were found (after evaluate completes)
+      if (!result || result.length === 0) {
+        logger.debug(
+          `No season organizations found on the page. Returning empty array.`,
+          {
+            url: this.url,
+            associationID: this.associationID,
+          }
+        );
+      }
+
+      return result;
     } catch (error) {
       logger.error(`Error in extractCompetitionsData: ${error.message}`, {
         error: error.message,
@@ -383,7 +436,9 @@ class AssociationCompetitionsFetcher {
       });
       // Return empty array instead of throwing to allow processing to continue
       // This prevents the entire job from failing due to one association's page structure
-      logger.warn(`Returning empty array due to extraction error. Processing will continue.`);
+      logger.warn(
+        `Returning empty array due to extraction error. Processing will continue.`
+      );
       return [];
     }
   }
