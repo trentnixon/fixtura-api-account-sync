@@ -516,10 +516,11 @@ class DataController {
   };
 
   ProcessFixtureValidation = async (dataObj) => {
+    // MEMORY TRACKING: Import at function level so it's accessible throughout
+    const { getMemoryStats } = require("../puppeteer/memoryUtils");
+    const validationInitialMemory = getMemoryStats();
+
     try {
-      // MEMORY TRACKING: Log initial state
-      const { getMemoryStats } = require("../puppeteer/memoryUtils");
-      const validationInitialMemory = getMemoryStats();
       logger.info("[VALIDATION] Starting fixture validation process", {
         accountId: dataObj.ACCOUNT.ACCOUNTID,
         initialMemory: {
@@ -660,12 +661,38 @@ class DataController {
       // MEMORY OPTIMIZATION: Clear validation results after cleanup if not needed
       // The cleanup phase will use these, then we can clear them
 
+      // MEMORY TRACKING: Log final state
+      const validationFinalMemory = getMemoryStats();
       logger.info("[VALIDATION] Fixture validation complete", {
         fixturesFound: this.fetchedFixtures.length,
         validated: validationResult.validated || 0,
         valid: validationResult.valid || 0,
         invalid: validationResult.invalid || 0,
         accountId: dataObj.ACCOUNT.ACCOUNTID,
+        memory: {
+          initial: {
+            rss: `${Math.round(validationInitialMemory.rss)}MB`,
+            heapUsed: `${Math.round(validationInitialMemory.heapUsed)}MB`,
+          },
+          final: {
+            rss: `${Math.round(validationFinalMemory.rss)}MB`,
+            heapUsed: `${Math.round(validationFinalMemory.heapUsed)}MB`,
+          },
+          delta: {
+            rss: `+${Math.round(
+              validationFinalMemory.rss - validationInitialMemory.rss
+            )}MB`,
+            heapUsed: `+${Math.round(
+              validationFinalMemory.heapUsed - validationInitialMemory.heapUsed
+            )}MB`,
+          },
+        },
+        objectSizes: {
+          fixtureValidationResults: (this.fixtureValidationResults || [])
+            .length,
+          fetchedFixtures: (this.fetchedFixtures || []).length,
+          scrapedFixtures: (this.scrapedFixtures || []).length,
+        },
       });
       logger.info("[VALIDATION] ===== END VALIDATION RESULTS LOG =====");
     } catch (error) {

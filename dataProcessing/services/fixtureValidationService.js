@@ -459,6 +459,17 @@ class FixtureValidationService {
    * MEMORY OPTIMIZED: Process in small batches with browser cleanup between batches
    */
   async validateFixturesBatch(fixtures, concurrencyLimit = 5) {
+    // MEMORY TRACKING: Define memory stats function FIRST before using it
+    const getMemoryStats = () => {
+      const memUsage = process.memoryUsage();
+      return {
+        rss: Math.round(memUsage.rss / 1024 / 1024), // MB
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024), // MB
+        external: Math.round(memUsage.external / 1024 / 1024), // MB
+      };
+    };
+
     // MEMORY TRACKING: Log initial state
     const batchInitialMemory = getMemoryStats();
     logger.info("[VALIDATION-BATCH] Starting batch validation", {
@@ -471,17 +482,6 @@ class FixtureValidationService {
     });
 
     const results = [];
-
-    // TESTING: Track memory and results collection
-    const getMemoryStats = () => {
-      const memUsage = process.memoryUsage();
-      return {
-        rss: Math.round(memUsage.rss / 1024 / 1024), // MB
-        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
-        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024), // MB
-        external: Math.round(memUsage.external / 1024 / 1024), // MB
-      };
-    };
 
     // TESTING: Log initial memory state
     const initialMemory = getMemoryStats();

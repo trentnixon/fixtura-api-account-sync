@@ -2,7 +2,7 @@ const logger = require("../../src/utils/logger");
 const GameCRUD = require("../assignCenter/games/GameCrud");
 const FixtureValidationService = require("../services/fixtureValidationService");
 const ProcessingTracker = require("../services/processingTracker");
-const { getMemoryStats } = require("../puppeteer/memoryUtils");
+// Note: getMemoryStats imported lazily in process() to avoid circular dependency issues
 
 /**
  * FixtureValidationProcessor handles validation of existing database fixtures.
@@ -38,8 +38,17 @@ class FixtureValidationProcessor {
    */
   async process() {
     try {
-      // MEMORY TRACKING: Log initial memory state
-      const initialMemory = getMemoryStats();
+      // MEMORY TRACKING: Get memory stats (inline require to avoid circular deps)
+      let initialMemory = { rss: 0, heapUsed: 0, heapTotal: 0, external: 0 };
+      try {
+        const memoryUtils = require("../puppeteer/memoryUtils");
+        initialMemory = memoryUtils.getMemoryStats();
+      } catch (memError) {
+        logger.warn(
+          "[VALIDATION] Could not get initial memory stats:",
+          memError.message
+        );
+      }
       logger.info("[VALIDATION] Starting fixture validation process", {
         accountId: this.dataObj.ACCOUNT.ACCOUNTID,
         accountType: this.dataObj.ACCOUNT.ACCOUNTTYPE,
@@ -200,7 +209,13 @@ class FixtureValidationProcessor {
         page++;
 
         // MEMORY TRACKING: Log memory and object sizes after each page
-        const pageMemory = getMemoryStats();
+        let pageMemory = { rss: 0, heapUsed: 0 };
+        try {
+          const memoryUtils = require("../puppeteer/memoryUtils");
+          pageMemory = memoryUtils.getMemoryStats();
+        } catch (memError) {
+          // Ignore - memory tracking failed
+        }
         logger.info(
           `[VALIDATION] Page ${page - 1} complete: Validated ${
             totalValidCount + totalInvalidCount
@@ -264,7 +279,16 @@ class FixtureValidationProcessor {
       }
 
       // MEMORY TRACKING: Log final memory state and object sizes
-      const finalMemory = getMemoryStats();
+      let finalMemory = { rss: 0, heapUsed: 0 };
+      try {
+        const memoryUtils = require("../puppeteer/memoryUtils");
+        finalMemory = memoryUtils.getMemoryStats();
+      } catch (memError) {
+        logger.warn(
+          "[VALIDATION] Could not get final memory stats:",
+          memError.message
+        );
+      }
       logger.info("[VALIDATION] Fixture validation complete", {
         total: totalFixtures,
         validated: totalValidCount + totalInvalidCount,
