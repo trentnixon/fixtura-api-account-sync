@@ -58,7 +58,21 @@ function validateParallelConfig(config) {
     );
   }
 
-  // Warn if concurrency > pool size (will cause waiting)
+  // ERROR if concurrency > pool size (will cause waiting and performance degradation)
+  // This is critical - if pool size is too small, tasks wait instead of processing in parallel
+  const maxConcurrency = Math.max(
+    config.COMPETITIONS_CONCURRENCY,
+    config.TEAMS_CONCURRENCY,
+    config.VALIDATION_CONCURRENCY
+  );
+
+  if (config.PAGE_POOL_SIZE < maxConcurrency) {
+    errors.push(
+      `PAGE_POOL_SIZE (${config.PAGE_POOL_SIZE}) < max concurrency (${maxConcurrency}) - tasks will wait for pages instead of processing in parallel. Set PAGE_POOL_SIZE >= ${maxConcurrency}`
+    );
+  }
+
+  // Also warn for individual mismatches (less critical but still important)
   if (config.COMPETITIONS_CONCURRENCY > config.PAGE_POOL_SIZE) {
     warnings.push(
       `COMPETITIONS_CONCURRENCY (${config.COMPETITIONS_CONCURRENCY}) > PAGE_POOL_SIZE (${config.PAGE_POOL_SIZE}) - may cause waiting for pages`

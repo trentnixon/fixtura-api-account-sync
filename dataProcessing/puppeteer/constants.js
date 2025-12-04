@@ -51,12 +51,13 @@ const BLOCKED_RESOURCE_TYPES = [
 
 // Parallel Processing Configuration
 // Strategy 1: Parallel Page Processing
-// MEMORY FIX: Reduced concurrency for 2GB instances to prevent memory exhaustion
+// PERFORMANCE FIX: PAGE_POOL_SIZE must be >= max concurrency to prevent waiting
+// If pool size < concurrency, tasks wait for pages instead of processing in parallel
 const PARALLEL_CONFIG = {
   PAGE_POOL_SIZE: parseInt(
-    process.env.PARALLEL_PAGE_POOL_SIZE || "2", // Reduced from 3 to 2
+    process.env.PARALLEL_PAGE_POOL_SIZE || "4", // Increased from 2 to 4 to match max concurrency
     10
-  ), // Default: 2 pages for parallel processing (reduced for memory)
+  ), // Default: 4 pages for parallel processing (must be >= max concurrency)
   COMPETITIONS_CONCURRENCY: parseInt(
     process.env.PARALLEL_COMPETITIONS_CONCURRENCY || "2", // Reduced from 3 to 2
     10
