@@ -37,6 +37,7 @@ class PagePoolManager {
     }
     this.pagePool = []; // Array of pages for parallel processing
     this.pagePoolIndex = 0; // Current index for round-robin page allocation
+    this.intendedPoolSize = null; // Track the intentionally created pool size
     // Pool utilization metrics
     this.poolMetrics = {
       totalAllocations: 0,
@@ -66,26 +67,26 @@ class PagePoolManager {
       `[PagePoolManager] Browser launched, proceeding with pool creation`
     );
 
-    const poolSize = size || this.maxPagePoolSize;
+    // Use provided size, or intended pool size if set, or maxPagePoolSize as last resort
+    const poolSize = size || this.intendedPoolSize || this.maxPagePoolSize;
 
-    // If pool already exists and has pages, don't create new ones - just ensure we have enough
+    // If pool already exists and has pages, respect the intended size
     if (this.pagePool.length > 0) {
-      const availablePages = this.pagePool.filter(
-        (page) => !page.isClosed() && !this.activePages.has(page)
-      );
-      const neededPages = poolSize - this.pagePool.length;
+      // Use intended pool size if available, otherwise use current pool size as target
+      const targetSize = this.intendedPoolSize || this.pagePool.length;
+      const neededPages = targetSize - this.pagePool.length;
 
       if (neededPages <= 0) {
         logger.debug(
-          `Page pool already exists with ${this.pagePool.length} pages (need ${poolSize}), skipping creation`
+          `Page pool already exists with ${this.pagePool.length} pages (target: ${targetSize}), skipping creation`
         );
         return this.pagePool.filter((page) => !page.isClosed());
       }
 
       logger.info(
-        `Page pool exists but needs ${neededPages} more pages (current: ${this.pagePool.length}, target: ${poolSize})`
+        `Page pool exists but needs ${neededPages} more pages (current: ${this.pagePool.length}, target: ${targetSize})`
       );
-      // Create ONLY the needed pages, not the full poolSize
+      // Create ONLY the needed pages to reach intended size
       const results = [];
       for (let i = 0; i < neededPages; i++) {
         try {
@@ -112,6 +113,9 @@ class PagePoolManager {
       );
       return this.pagePool.filter((page) => !page.isClosed());
     }
+
+    // Store intended pool size for future reference
+    this.intendedPoolSize = poolSize;
 
     logger.info(
       `Creating page pool of ${poolSize} pages for parallel processing`
@@ -200,28 +204,27 @@ class PagePoolManager {
     // Filter out closed pages from pool first
     this.pagePool = this.pagePool.filter((page) => !page.isClosed());
 
-    // Maintain minimum pool size automatically
-    // Only replenish if pool was intentionally created (not if it's empty from start)
-    // This prevents creating pages when we only want competitions-only mode
-    const minPoolSize = this.maxPagePoolSize;
+    // CRITICAL FIX: Only auto-replenish if pool is completely empty (all pages crashed)
+    // Do NOT auto-replenish to maxPagePoolSize - respect the intentionally created pool size
+    // This prevents creating 10 pages when competitions only needs 2
     const currentPoolSize = this.pagePool.length;
 
-    // Only auto-replenish if pool exists but is below minimum (pages crashed/closed)
-    // Don't auto-create if pool is empty and we're in competitions-only mode
-    if (currentPoolSize > 0 && currentPoolSize < minPoolSize) {
-      const needed = minPoolSize - currentPoolSize;
-      logger.info(
-        `[PagePoolManager] Pool below minimum (${currentPoolSize}/${minPoolSize}), creating ${needed} replacement page(s)`
+    // Only auto-replenish if pool was created but ALL pages crashed/closed
+    // This maintains the pool at its original size, not maxPagePoolSize
+    if (currentPoolSize === 0 && this.maxPagePoolSize > 0) {
+      // Pool was created but all pages are gone - recreate minimal pool
+      // Use a conservative size (2) instead of maxPagePoolSize to avoid memory issues
+      const emergencyPoolSize = Math.min(2, this.maxPagePoolSize);
+      logger.warn(
+        `[PagePoolManager] Pool is empty (all pages closed), recreating emergency pool of ${emergencyPoolSize} pages`
       );
 
-      // Create replacement pages in parallel
       const newPages = await Promise.all(
-        Array(needed)
+        Array(emergencyPoolSize)
           .fill(null)
           .map(() => this._createPoolPage())
       );
 
-      // Add successful pages to pool
       const successfulPages = newPages.filter((p) => p !== null);
       for (const page of successfulPages) {
         if (!this.pagePool.includes(page)) {
@@ -231,17 +234,22 @@ class PagePoolManager {
 
       if (successfulPages.length > 0) {
         logger.info(
-          `[PagePoolManager] Created ${successfulPages.length}/${needed} replacement page(s), pool size now: ${this.pagePool.length}`
+          `[PagePoolManager] Created ${successfulPages.length}/${emergencyPoolSize} emergency pages, pool size now: ${this.pagePool.length}`
         );
       }
     }
+    // NOTE: We intentionally do NOT auto-replenish if pool has some pages but is below maxPagePoolSize
+    // This respects the intentionally created pool size (e.g., 2 for competitions)
 
-    // If pool is still empty after replenishment, create new pool
+    // If pool is still empty after replenishment, recreate using intended size
     if (this.pagePool.length === 0) {
       logger.warn(
-        "Page pool is empty after replenishment attempt, creating new pool"
+        "Page pool is empty after replenishment attempt, recreating pool"
       );
-      await this.createPool();
+      // Use intended pool size if available, otherwise minimal emergency size
+      const recreateSize =
+        this.intendedPoolSize || Math.min(2, this.maxPagePoolSize);
+      await this.createPool(recreateSize);
     }
 
     // Try to find an available (non-active) page in the pool

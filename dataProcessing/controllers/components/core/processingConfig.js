@@ -23,7 +23,7 @@ class ProcessingConfig {
   static DEFAULT_CONFIG = {
     stages: {
       [ProcessingConfig.STAGES.COMPETITIONS]: true,
-      [ProcessingConfig.STAGES.TEAMS]: true,
+      [ProcessingConfig.STAGES.TEAMS]: false,
       [ProcessingConfig.STAGES.GAMES]: true,
       [ProcessingConfig.STAGES.FIXTURE_VALIDATION]: true,
       [ProcessingConfig.STAGES.FIXTURE_CLEANUP]: true,
