@@ -85,7 +85,7 @@ async function processInParallel(
   let activeCount = 0; // Track how many are currently running
 
   logger.info(
-    `[${context}] Starting parallel processing: ${items.length} items, concurrency: ${concurrency}`
+    `[PARALLEL:${context}] INIT: ${items.length} items, concurrency: ${concurrency}`
   );
 
   // Create promises for all items with concurrency limit
@@ -98,9 +98,9 @@ async function processInParallel(
 
       try {
         logger.info(
-          `[${context}] START processing item ${index + 1}/${
-            items.length
-          } (concurrency: ${concurrency}, currently active: ${currentActive})`
+          `[PARALLEL:${context}] [TASK-${
+            index + 1
+          }] START (concurrency: ${concurrency}, active: ${currentActive}/${concurrency})`
         );
 
         const result = await processor(item, index);
@@ -108,9 +108,9 @@ async function processInParallel(
         const itemDuration = Date.now() - itemStartTime;
         activeCount--;
         logger.info(
-          `[${context}] COMPLETE item ${index + 1}/${
-            items.length
-          } in ${itemDuration}ms (remaining active: ${activeCount})`
+          `[PARALLEL:${context}] [TASK-${
+            index + 1
+          }] COMPLETE in ${itemDuration}ms (remaining active: ${activeCount})`
         );
 
         // MEMORY FIX: Stream result immediately if streaming enabled
@@ -193,12 +193,12 @@ async function processInParallel(
   };
 
   logger.info(
-    `[${context}] Parallel processing completed: ${successful}/${items.length} successful, ${failed} failed, ${duration}ms`
+    `[PARALLEL:${context}] SUMMARY: ${successful}/${items.length} successful, ${failed} failed, total duration: ${duration}ms`
   );
 
   if (failed > 0) {
     logger.warn(
-      `[${context}] ${failed} items failed during parallel processing`,
+      `[PARALLEL:${context}] ${failed} items failed during parallel processing`,
       {
         total: items.length,
         successful,

@@ -83,21 +83,27 @@ class LadderDetector {
    * @returns {Promise<boolean>} true if table found, false if timeout
    */
   async waitForLadderTable() {
+    const waitStartTime = Date.now();
+    const MAX_TOTAL_WAIT_TIME = 8000; // Fail fast after 8 seconds total (accounts for proxy latency)
+    const CONTAINER_TIMEOUT = 4000; // Accounts for proxy routing + page load (reduced from 10000ms)
+
     try {
       logger.info("Waiting for ladder table to load using smart backoff...");
 
-      // First, wait for the page to be fully loaded
-      logger.info("Waiting for page to fully load...");
+      // OPTIMIZED: Faster container check with shorter timeout
       try {
-        // Wait for the ladder container to exist first
         await this.page.waitForSelector('[data-testid="ladder"]', {
-          timeout: 10000,
+          timeout: CONTAINER_TIMEOUT, // Reduced from 10000ms to 2000ms
         });
         logger.info("✅ Ladder container found - page is loaded");
       } catch (containerError) {
+        const elapsed = Date.now() - waitStartTime;
         logger.warn(
-          "Ladder container not found after 10 seconds:",
-          containerError.message
+          `[PARALLEL_TEAMS] [WAIT] Ladder container not found after ${elapsed}ms - failing fast`,
+          {
+            error: containerError.message,
+            elapsed,
+          }
         );
         return false;
       }
@@ -106,6 +112,15 @@ class LadderDetector {
       let attempts = 0;
 
       while (attempts < this.backoffConfig.maxAttempts) {
+        // Check if we've exceeded max total wait time
+        const elapsed = Date.now() - waitStartTime;
+        if (elapsed > MAX_TOTAL_WAIT_TIME) {
+          logger.warn(
+            `[PARALLEL_TEAMS] [WAIT] Max wait time (${MAX_TOTAL_WAIT_TIME}ms) exceeded after ${attempts} attempts - failing fast`
+          );
+          return false;
+        }
+
         attempts++;
 
         // Quick initial check with minimal delay
@@ -115,8 +130,17 @@ class LadderDetector {
           );
           await this.page.waitForTimeout(this.backoffConfig.quickCheckDelay);
         } else {
-          logger.info(`Attempt ${attempts}: Waiting ${currentDelay}ms`);
-          await this.page.waitForTimeout(currentDelay);
+          // Don't wait longer than remaining time
+          const remainingTime = MAX_TOTAL_WAIT_TIME - (Date.now() - waitStartTime);
+          const delayToUse = Math.min(currentDelay, remainingTime);
+          if (delayToUse <= 0) {
+            logger.warn(
+              `[PARALLEL_TEAMS] [WAIT] No time remaining for delay - failing fast`
+            );
+            return false;
+          }
+          logger.info(`Attempt ${attempts}: Waiting ${delayToUse}ms`);
+          await this.page.waitForTimeout(delayToUse);
         }
 
         // Check if table exists AND has team links

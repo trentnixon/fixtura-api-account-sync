@@ -535,8 +535,10 @@ class FixtureValidationService {
           const batchResults = await processInParallel(
             batch,
             async (fixture, i) => {
+              const taskStartTime = Date.now();
               // Get a page from the pool for this fixture
               const page = await this.puppeteerManager.getPageFromPool();
+              const pageAcquiredTime = Date.now();
 
               try {
                 const globalIndex = batchIndex * batchSize + i;
@@ -549,11 +551,12 @@ class FixtureValidationService {
                   ? fixtureUrl
                   : `${this.domain}${fixtureUrl}`;
 
-                // Log iteration start with URL
-                logger.debug(
-                  `[VALIDATION] Processing fixture ${globalIndex + 1}/${
-                    fixtures.length
-                  }: ${fullUrl}`
+                logger.info(
+                  `[PARALLEL_VALIDATION] [TASK-${
+                    globalIndex + 1
+                  }] START fixture: ${fullUrl} (page acquired: ${
+                    pageAcquiredTime - taskStartTime
+                  }ms)`
                 );
 
                 // Set user agent on page
@@ -572,6 +575,7 @@ class FixtureValidationService {
                   );
                 }
 
+                const validateStartTime = Date.now();
                 const result = await this.validateFixtureUrlWithPuppeteer(
                   fixtureUrl,
                   fixtureId,
@@ -579,6 +583,8 @@ class FixtureValidationService {
                   page
                 );
                 result.method = "puppeteer";
+                const validateDuration = Date.now() - validateStartTime;
+                const taskDuration = Date.now() - taskStartTime;
 
                 // Log detailed result for every iteration: URL, Response, Verdict
                 logger.info(
@@ -606,6 +612,12 @@ class FixtureValidationService {
                   } - ${verdict} | URL: ${fullUrl} | HTTP: ${
                     result.httpStatus || "N/A"
                   } | Status: ${result.status}`
+                );
+
+                logger.info(
+                  `[PARALLEL_VALIDATION] [TASK-${
+                    globalIndex + 1
+                  }] COMPLETE fixture: ${fullUrl} (validation: ${validateDuration}ms, total: ${taskDuration}ms, verdict: ${verdict})`
                 );
 
                 // MEMORY FIX: Return only minimal result data, don't store full URLs or error messages

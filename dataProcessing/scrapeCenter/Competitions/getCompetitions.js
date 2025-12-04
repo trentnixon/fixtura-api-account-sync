@@ -93,20 +93,25 @@ class GetCompetitions {
     const { results, errors, summary } = await processInParallel(
       associations,
       async (association, index) => {
+        const taskStartTime = Date.now();
         // Get a page from the pool (waits if none available)
         const page = await this.puppeteerManager.getPageFromPool();
+        const pageAcquiredTime = Date.now();
 
         try {
-          logger.debug(
-            `[PARALLEL] Processing association ${index + 1}/${
-              associations.length
-            }: ${association.attributes.href || association.id}`
+          logger.info(
+            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] START association: ${association.attributes.href || association.id} (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
           );
 
           const comp = await this.fetchAssociationCompetitions(
             page,
             association.attributes.href,
             association.id
+          );
+
+          const taskDuration = Date.now() - taskStartTime;
+          logger.info(
+            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] COMPLETE association: ${association.attributes.href || association.id} (duration: ${taskDuration}ms, competitions: ${comp?.length || 0})`
           );
 
           return comp || [];
@@ -175,18 +180,23 @@ class GetCompetitions {
     const { results, errors, summary } = await processInParallel(
       associations,
       async (association, index) => {
+        const taskStartTime = Date.now();
         const page = await this.puppeteerManager.getPageFromPool();
+        const pageAcquiredTime = Date.now();
         try {
-          logger.debug(
-            `[PARALLEL] Processing association ${index + 1}/${associations.length}: ${
-              association.attributes?.href || association.id
-            }`
+          logger.info(
+            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] START association: ${association.attributes?.href || association.id} (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
           );
 
           const comp = await this.fetchAssociationCompetitions(
             page,
             association.attributes?.href || this.URL,
             association.id
+          );
+
+          const taskDuration = Date.now() - taskStartTime;
+          logger.info(
+            `[PARALLEL_COMPETITIONS] [TASK-${index + 1}] COMPLETE association: ${association.attributes?.href || association.id} (duration: ${taskDuration}ms, competitions: ${comp?.length || 0})`
           );
 
           return comp || [];

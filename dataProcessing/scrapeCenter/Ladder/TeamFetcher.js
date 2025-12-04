@@ -29,13 +29,20 @@ class TeamFetcher {
    * Fetches teams by navigating to the ladder page of the team and extracting team information.
    */
   async fetchTeams() {
+    const navStartTime = Date.now();
     try {
-      logger.info(`Navigating to ${this.teamInfo.href}/ladder`);
+      logger.info(`[PARALLEL_TEAMS] [NAV] Navigating to ${this.teamInfo.href}/ladder`);
       await this.page.goto(`${this.teamInfo.href}/ladder`, {
         timeout: 15000, // 15 seconds - faster failure detection
         waitUntil: "domcontentloaded", // Fast - same as other scrapers
       });
-      return await this.getTeamNamesAndUrls();
+      const navDuration = Date.now() - navStartTime;
+      logger.info(`[PARALLEL_TEAMS] [NAV] Navigation complete: ${navDuration}ms`);
+      const extractStartTime = Date.now();
+      const result = await this.getTeamNamesAndUrls();
+      const extractDuration = Date.now() - extractStartTime;
+      logger.info(`[PARALLEL_TEAMS] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${Date.now() - navStartTime}ms)`);
+      return result;
     } catch (error) {
       logger.error(
         `Error in TeamFetcher.fetchTeams for URL: ${this.teamInfo.href}`,

@@ -53,8 +53,10 @@ class GetTeams {
     const { results, errors } = await processInParallel(
       grades,
       async (GradeInfo, index) => {
+        const taskStartTime = Date.now();
         // Get a page from the pool
         const page = await this.puppeteerManager.getPageFromPool();
+        const pageAcquiredTime = Date.now();
 
         try {
           const fetcherInfo = {
@@ -63,11 +65,15 @@ class GetTeams {
             id: GradeInfo.id,
           };
 
-          logger.debug(
-            `Processing grade ${index + 1}/${grades.length}: ${GradeInfo.name || GradeInfo.id}`
+          logger.info(
+            `[PARALLEL_TEAMS] [TASK-${index + 1}] START grade: ${GradeInfo.name || GradeInfo.id} (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
           );
 
           const teamData = await this.fetchTeamData(page, fetcherInfo);
+          const taskDuration = Date.now() - taskStartTime;
+          logger.info(
+            `[PARALLEL_TEAMS] [TASK-${index + 1}] COMPLETE grade: ${GradeInfo.name || GradeInfo.id} (duration: ${taskDuration}ms, teams: ${teamData?.length || 0})`
+          );
           return teamData;
         } catch (error) {
           logger.error(

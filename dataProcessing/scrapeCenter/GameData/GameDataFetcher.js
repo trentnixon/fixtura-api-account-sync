@@ -30,9 +30,21 @@ class GameDataFetcher {
 
   async fetchGameData() {
     try {
+      const navStartTime = Date.now();
       await this.navigateToUrl();
+      const navDuration = Date.now() - navStartTime;
+      logger.info(`[PARALLEL_GAMES] [NAV] Navigation complete: ${navDuration}ms`);
+
+      const waitStartTime = Date.now();
       await this.waitForPageLoad();
-      return await this.getGameDetails();
+      const waitDuration = Date.now() - waitStartTime;
+      logger.info(`[PARALLEL_GAMES] [WAIT] Page load complete: ${waitDuration}ms`);
+
+      const extractStartTime = Date.now();
+      const result = await this.getGameDetails();
+      const extractDuration = Date.now() - extractStartTime;
+      logger.info(`[PARALLEL_GAMES] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${Date.now() - navStartTime}ms)`);
+      return result;
     } catch (error) {
       // Improved error logging with additional context
       logger.error(
@@ -240,12 +252,15 @@ class GameDataFetcher {
   }
 
   async waitForPageLoad() {
-    try {
-      // CRITICAL: Wait for the actual fixture list structure to be present AND loaded
-      // The XPath used for extraction: /html/body/div/section/main/div/div/div[1]/section/section/div/ul/li
-      // We need to wait for this structure AND ensure fixture content is rendered
+    const waitStartTime = Date.now();
+    const MAX_TOTAL_WAIT_TIME = 8000; // Fail fast after 8 seconds total (accounts for proxy latency)
+    const QUICK_CHECK_TIMEOUT = 4000; // Quick check timeout (accounts for proxy routing + page load)
+    const CONTENT_CHECK_TIMEOUT = 4000; // Content check timeout (accounts for proxy latency)
+    const POLLING_INTERVAL = 100; // Faster polling (reduced from 200ms)
 
-      // Step 1: Wait for the fixture list container to exist and be visible
+    try {
+      // OPTIMIZED: Check multiple selectors in parallel with shorter timeouts
+      // This reduces wait time from 8s+ to ~2s for most pages
       const fixtureListSelectors = [
         'li[data-testid="games-on-date"]',
         'li[data-testid*="games"]',
@@ -253,61 +268,95 @@ class GameDataFetcher {
       ];
 
       let fixtureListFound = false;
+      let foundSelector = null;
+
+      // Try selectors with shorter timeout - most pages load in 1-2 seconds
       for (const selector of fixtureListSelectors) {
         try {
           await this.page.waitForSelector(selector, {
-            timeout: 8000, // Increased timeout to allow content to load
-            visible: true, // Ensure element is visible, not just in DOM
+            timeout: QUICK_CHECK_TIMEOUT, // Reduced from 8000ms to 2000ms
+            visible: true,
           });
           fixtureListFound = true;
+          foundSelector = selector;
           logger.debug(`Fixture list found using selector: ${selector}`, {
             url: this.href,
+            waitTime: Date.now() - waitStartTime,
           });
           break;
         } catch (e) {
-          // Try next selector
+          // Check if we've exceeded max total wait time
+          if (Date.now() - waitStartTime > MAX_TOTAL_WAIT_TIME) {
+            logger.warn(
+              `[PARALLEL_GAMES] [WAIT] Max wait time exceeded, failing fast`,
+              {
+                url: this.href,
+                elapsed: Date.now() - waitStartTime,
+                selector,
+              }
+            );
+            throw new Error(
+              `Page structure not found after ${MAX_TOTAL_WAIT_TIME}ms - likely page structure changed or empty page`
+            );
+          }
           continue;
         }
       }
 
       if (!fixtureListFound) {
-        // Fallback: wait for body and log warning
-        await this.page.waitForSelector("body", { timeout: 2000 });
+        // Fail fast if selectors not found - don't wait unnecessarily
+        const elapsed = Date.now() - waitStartTime;
         logger.warn(
-          `Primary fixture selectors not found, but page loaded. Page structure may have changed.`,
-          { url: this.href }
+          `[PARALLEL_GAMES] [WAIT] Primary fixture selectors not found after ${elapsed}ms - page structure may have changed or page is empty`,
+          {
+            url: this.href,
+            elapsed,
+            selectorsTried: fixtureListSelectors,
+          }
         );
-        // Still add delay for content to potentially load
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Quick check if body exists, then fail fast
+        try {
+          await this.page.waitForSelector("body", { timeout: 500 });
+        } catch (e) {
+          // Body doesn't exist - page didn't load
+          throw new Error(`Page body not found - page may not have loaded`);
+        }
+        // Page loaded but structure doesn't match - return early (empty page is valid)
         return;
       }
 
+      // OPTIMIZED: Check for game divs with shorter timeout and early exit
       // Step 2: Wait for the actual game divs to be present (the content we extract)
-      // These are the divs with class "sc-1pr338c-0.cNVAcP" that contain fixture details
+      const gameDivSelector = "div.sc-1pr338c-0.cNVAcP";
+      let gameDivsFound = false;
+
       try {
-        await this.page.waitForSelector("div.sc-1pr338c-0.cNVAcP", {
-          timeout: 8000,
-          visible: true, // Ensure game divs are visible and rendered
+        await this.page.waitForSelector(gameDivSelector, {
+          timeout: QUICK_CHECK_TIMEOUT, // Reduced from 8000ms to 2000ms
+          visible: true,
         });
+        gameDivsFound = true;
         logger.debug(`Game divs found, fixture data structure is present`, {
           url: this.href,
+          waitTime: Date.now() - waitStartTime,
         });
       } catch (gameDivError) {
-        // Game divs might not exist if there are no fixtures, or page structure changed
+        // Game divs might not exist if there are no fixtures - this is OK
+        const elapsed = Date.now() - waitStartTime;
         logger.debug(
-          `Game divs not found (might be empty page or structure change)`,
+          `[PARALLEL_GAMES] [WAIT] Game divs not found (empty page or structure change) after ${elapsed}ms`,
           {
             url: this.href,
+            elapsed,
             error: gameDivError.message,
           }
         );
-        // Don't throw - empty pages are valid, but still add delay
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        // Empty pages are valid - return early
         return;
       }
 
-      // Step 3: Wait for fixture content to be fully rendered
-      // Check that game divs have actual content (not just empty divs)
+      // OPTIMIZED: Faster content check with shorter timeout and better polling
+      // Step 3: Wait for fixture content to be fully rendered (but fail fast if not)
       try {
         await this.page.waitForFunction(
           () => {
@@ -315,49 +364,81 @@ class GameDataFetcher {
               "div.sc-1pr338c-0.cNVAcP"
             );
             if (gameDivs.length === 0) {
-              return false; // No game divs yet
+              return false;
             }
-            // Check if at least one game div has content (has child elements or text)
+            // Check if at least one game div has content
             for (const div of gameDivs) {
               if (
                 div.children.length > 0 ||
                 (div.textContent && div.textContent.trim().length > 0)
               ) {
-                return true; // At least one div has content
+                return true; // Content found
               }
             }
-            return false; // Divs exist but no content yet
+            return false;
           },
           {
-            timeout: 10000, // Wait up to 10 seconds for content to render
-            polling: 200, // Check every 200ms
+            timeout: CONTENT_CHECK_TIMEOUT, // Reduced from 10000ms to 3000ms
+            polling: POLLING_INTERVAL, // Faster polling (100ms instead of 200ms)
           }
         );
-        logger.debug(`Fixture content is fully rendered`, { url: this.href });
+        const totalWait = Date.now() - waitStartTime;
+        logger.debug(`Fixture content is fully rendered`, {
+          url: this.href,
+          totalWaitTime: totalWait,
+        });
       } catch (contentError) {
         // Content check failed - might be empty page or slow loading
+        const elapsed = Date.now() - waitStartTime;
         logger.debug(
-          `Content check timeout (might be empty or still loading)`,
+          `[PARALLEL_GAMES] [WAIT] Content check timeout after ${elapsed}ms (might be empty or still loading)`,
           {
             url: this.href,
+            elapsed,
             error: contentError.message,
           }
         );
-        // Add delay to give content more time to load
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Don't wait longer - if content isn't ready after 3s, it's likely empty or broken
+        // Return early to allow extraction to try anyway
       }
 
+      const totalWait = Date.now() - waitStartTime;
       logger.debug(`Page load complete, fixtures should be ready for extraction`, {
         url: this.href,
+        totalWaitTime: totalWait,
       });
     } catch (error) {
-      // Log error but never throw - allow processing to continue
+      const elapsed = Date.now() - waitStartTime;
+      // Better error handling - fail fast for structure issues
+      if (
+        error.message.includes("structure") ||
+        error.message.includes("not found") ||
+        error.message.includes("timeout")
+      ) {
+        logger.warn(
+          `[PARALLEL_GAMES] [WAIT] Page structure issue detected after ${elapsed}ms - failing fast`,
+          {
+            error: error.message,
+            url: this.href,
+            elapsed,
+            action: "Continuing with extraction attempt (may return empty results)",
+          }
+        );
+        // Don't add extra delay - fail fast
+        return;
+      }
+
+      // Other errors - log and continue
       logger.error(
-        `Waiting for page load failed: ${error.message}. This could be due to the page structure changing. Continuing anyway.`,
-        { error: error.message, url: this.href }
+        `[PARALLEL_GAMES] [WAIT] Waiting for page load failed after ${elapsed}ms: ${error.message}`,
+        {
+          error: error.message,
+          url: this.href,
+          elapsed,
+        }
       );
-      // Add a delay even on error to give content time to load
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Minimal delay for unexpected errors
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 }

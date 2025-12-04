@@ -16,14 +16,21 @@ class AssociationCompetitionsFetcher {
         `Checking competitions in fetchCompetitionInAssociation on URL: ${this.url} and this ID ${this.associationID}`
       );
 
-      logger.info(`[AssociationCompetitionsFetcher] Navigating to URL...`);
+      const navStartTime = Date.now();
+      logger.info(`[PARALLEL_COMPETITIONS] [NAV] Navigating to ${this.url}`);
       await this.navigateToUrl();
-      logger.info(`[AssociationCompetitionsFetcher] Navigation complete, waiting for page load...`);
+      const navDuration = Date.now() - navStartTime;
+      logger.info(`[PARALLEL_COMPETITIONS] [NAV] Navigation complete: ${navDuration}ms`);
 
+      const waitStartTime = Date.now();
       await this.waitForPageLoad();
-      logger.info(`[AssociationCompetitionsFetcher] Page loaded, extracting competitions data...`);
+      const waitDuration = Date.now() - waitStartTime;
+      logger.info(`[PARALLEL_COMPETITIONS] [WAIT] Page load complete: ${waitDuration}ms`);
 
+      const extractStartTime = Date.now();
       const competitions = await this.extractCompetitionsData();
+      const extractDuration = Date.now() - extractStartTime;
+      logger.info(`[PARALLEL_COMPETITIONS] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${Date.now() - navStartTime}ms)`);
       logger.info(`[AssociationCompetitionsFetcher] Extracted ${competitions ? competitions.length : 0} competitions`, {
         competitionsCount: competitions ? competitions.length : 0,
         competitions: competitions,
@@ -53,55 +60,87 @@ class AssociationCompetitionsFetcher {
   }
 
   async waitForPageLoad() {
-    try {
-      // Step 1: Wait for the season-org container to exist in DOM first
-      // Don't require visible immediately - element might exist but not be visible yet
-      await this.page.waitForSelector('[data-testid^="season-org-"]', {
-        timeout: 10000, // Increased timeout for slower pages
-        visible: false, // First check if element exists in DOM
-      });
-      logger.debug(`Season-org container found in DOM`, { url: this.url });
+    const waitStartTime = Date.now();
+    const MAX_TOTAL_WAIT_TIME = 8000; // Fail fast after 8 seconds total (accounts for proxy latency)
+    const QUICK_CHECK_TIMEOUT = 4000; // Quick check timeout (accounts for proxy routing + page load)
+    const CONTENT_CHECK_TIMEOUT = 4000; // Content check timeout (accounts for proxy latency)
+    const POLLING_INTERVAL = 100; // Faster polling (reduced from 200ms)
 
-      // Step 1b: Then wait for it to become visible (if needed)
-      // This gives the page more time to render
+    try {
+      // OPTIMIZED: Faster checks with shorter timeouts
+      // Step 1: Wait for the season-org container to exist in DOM first
       try {
         await this.page.waitForSelector('[data-testid^="season-org-"]', {
-          timeout: 5000,
-          visible: true, // Now check if it's visible
+          timeout: QUICK_CHECK_TIMEOUT, // Reduced from 10000ms to 2000ms
+          visible: false, // First check if element exists in DOM
         });
-        logger.debug(`Season-org container is now visible`, { url: this.url });
-      } catch (visibilityError) {
-        // Element exists but not visible yet - that's okay, continue anyway
-        logger.debug(`Season-org container exists but not yet visible, continuing...`, {
+        logger.debug(`Season-org container found in DOM`, {
           url: this.url,
-          error: visibilityError.message,
+          waitTime: Date.now() - waitStartTime,
         });
+      } catch (selectorError) {
+        const elapsed = Date.now() - waitStartTime;
+        if (elapsed > MAX_TOTAL_WAIT_TIME) {
+          logger.warn(
+            `[PARALLEL_COMPETITIONS] [WAIT] Max wait time exceeded, failing fast`,
+            {
+              url: this.url,
+              elapsed,
+            }
+          );
+          throw new Error(
+            `Page structure not found after ${MAX_TOTAL_WAIT_TIME}ms - likely page structure changed`
+          );
+        }
+        // Try visible check as fallback
+        try {
+          await this.page.waitForSelector('[data-testid^="season-org-"]', {
+            timeout: 1000,
+            visible: true,
+          });
+        } catch (visibilityError) {
+          logger.warn(
+            `[PARALLEL_COMPETITIONS] [WAIT] Season-org container not found after ${elapsed}ms - page structure may have changed`,
+            {
+              url: this.url,
+              elapsed,
+            }
+          );
+          return; // Fail fast - empty page or structure changed
+        }
       }
 
+      // OPTIMIZED: Shorter timeout for competition links
       // Step 2: Wait for competition links to be present (actual content)
       try {
         await this.page.waitForSelector(
           '[data-testid^="season-org-"] ul > li > a',
           {
-            timeout: 8000,
+            timeout: QUICK_CHECK_TIMEOUT, // Reduced from 8000ms to 2000ms
             visible: true,
           }
         );
-        logger.debug(`Competition links found`, { url: this.url });
+        logger.debug(`Competition links found`, {
+          url: this.url,
+          waitTime: Date.now() - waitStartTime,
+        });
       } catch (linkError) {
-        // Links might not exist if no competitions, but log it
+        // Links might not exist if no competitions - this is OK
+        const elapsed = Date.now() - waitStartTime;
         logger.debug(
-          `Competition links not found (might be empty page)`,
+          `[PARALLEL_COMPETITIONS] [WAIT] Competition links not found after ${elapsed}ms (might be empty page)`,
           {
             url: this.url,
+            elapsed,
             error: linkError.message,
           }
         );
-        // Don't throw - empty pages are valid
+        // Empty pages are valid - return early
+        return;
       }
 
+      // OPTIMIZED: Faster content check with shorter timeout
       // Step 3: Wait for competition content to be fully rendered
-      // Check that competition links have actual content (not just empty links)
       try {
         await this.page.waitForFunction(
           () => {
@@ -109,64 +148,80 @@ class AssociationCompetitionsFetcher {
               '[data-testid^="season-org-"] ul > li > a'
             );
             if (competitionLinks.length === 0) {
-              return false; // No links yet
+              return false;
             }
-            // Check if at least one link has content (has spans or text)
+            // Check if at least one link has content
             for (const link of competitionLinks) {
               if (
                 link.children.length > 0 ||
                 (link.textContent && link.textContent.trim().length > 0)
               ) {
-                return true; // At least one link has content
+                return true; // Content found
               }
             }
-            return false; // Links exist but no content yet
+            return false;
           },
           {
-            timeout: 10000, // Wait up to 10 seconds for content to render
-            polling: 200, // Check every 200ms
+            timeout: CONTENT_CHECK_TIMEOUT, // Reduced from 10000ms to 3000ms
+            polling: POLLING_INTERVAL, // Faster polling (100ms instead of 200ms)
           }
         );
-        logger.debug(`Competition content is fully rendered`, { url: this.url });
+        const totalWait = Date.now() - waitStartTime;
+        logger.debug(`Competition content is fully rendered`, {
+          url: this.url,
+          totalWaitTime: totalWait,
+        });
       } catch (contentError) {
         // Content check failed - might be empty page or slow loading
+        const elapsed = Date.now() - waitStartTime;
         logger.debug(
-          `Content check timeout (might be empty or still loading)`,
+          `[PARALLEL_COMPETITIONS] [WAIT] Content check timeout after ${elapsed}ms (might be empty or still loading)`,
           {
             url: this.url,
+            elapsed,
             error: contentError.message,
           }
         );
-        // Add delay to give content more time to load
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Don't wait longer - fail fast
       }
 
+      const totalWait = Date.now() - waitStartTime;
       logger.debug(`Page load complete, competitions should be ready for extraction`, {
         url: this.url,
+        totalWaitTime: totalWait,
       });
     } catch (error) {
-      // Log error but never throw - allow processing to continue
-      logger.error(
-        `Waiting for page load failed: ${error.message}. This could be due to the page structure changing. Continuing anyway.`,
-        { error: error.message, url: this.url }
-      );
-      // Add a longer delay even on error to give content more time to load
-      // Try waiting for the selector with a longer timeout as a fallback
-      try {
-        logger.debug(`Attempting fallback wait for season-org container...`);
-        await this.page.waitForSelector('[data-testid^="season-org-"]', {
-          timeout: 15000, // Longer timeout for slow pages
-          visible: false, // Don't require visible, just in DOM
-        });
-        logger.debug(`Fallback wait succeeded - season-org container found`);
-      } catch (fallbackError) {
+      const elapsed = Date.now() - waitStartTime;
+      // Better error handling - fail fast for structure issues
+      if (
+        error.message.includes("structure") ||
+        error.message.includes("not found") ||
+        error.message.includes("timeout")
+      ) {
         logger.warn(
-          `Fallback wait also failed: ${fallbackError.message}. Adding extra delay before extraction.`,
-          { url: this.url }
+          `[PARALLEL_COMPETITIONS] [WAIT] Page structure issue detected after ${elapsed}ms - failing fast`,
+          {
+            error: error.message,
+            url: this.url,
+            elapsed,
+            action: "Continuing with extraction attempt (may return empty results)",
+          }
         );
-        // Add extra delay before extraction
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        // Don't add extra delay - fail fast
+        return;
       }
+
+      // Other errors - log and continue
+      logger.error(
+        `[PARALLEL_COMPETITIONS] [WAIT] Waiting for page load failed after ${elapsed}ms: ${error.message}`,
+        {
+          error: error.message,
+          url: this.url,
+          elapsed,
+        }
+      );
+      // Minimal delay for unexpected errors
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 

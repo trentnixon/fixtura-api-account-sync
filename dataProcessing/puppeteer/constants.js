@@ -54,10 +54,6 @@ const BLOCKED_RESOURCE_TYPES = [
 // PERFORMANCE FIX: PAGE_POOL_SIZE must be >= max concurrency to prevent waiting
 // If pool size < concurrency, tasks wait for pages instead of processing in parallel
 const PARALLEL_CONFIG = {
-  PAGE_POOL_SIZE: parseInt(
-    process.env.PARALLEL_PAGE_POOL_SIZE || "4", // Increased from 2 to 4 to match max concurrency
-    10
-  ), // Default: 4 pages for parallel processing (must be >= max concurrency)
   COMPETITIONS_CONCURRENCY: parseInt(
     process.env.PARALLEL_COMPETITIONS_CONCURRENCY || "2", // Reduced from 3 to 2
     10
@@ -71,6 +67,24 @@ const PARALLEL_CONFIG = {
     10
   ), // Default: 3 concurrent validations (reduced for memory)
 };
+
+// Calculate PAGE_POOL_SIZE dynamically to match max concurrency
+// This ensures pool size is always >= highest concurrency value
+const maxConcurrency = Math.max(
+  PARALLEL_CONFIG.COMPETITIONS_CONCURRENCY,
+  PARALLEL_CONFIG.TEAMS_CONCURRENCY,
+  PARALLEL_CONFIG.VALIDATION_CONCURRENCY
+);
+
+PARALLEL_CONFIG.PAGE_POOL_SIZE = parseInt(
+  process.env.PARALLEL_PAGE_POOL_SIZE || String(maxConcurrency),
+  10
+); // Default: matches max concurrency (ensures no waiting)
+
+// Ensure PAGE_POOL_SIZE is at least max concurrency (even if env var is set lower)
+if (PARALLEL_CONFIG.PAGE_POOL_SIZE < maxConcurrency) {
+  PARALLEL_CONFIG.PAGE_POOL_SIZE = maxConcurrency;
+}
 
 // Environment Detection
 const isDevelopment = () => {

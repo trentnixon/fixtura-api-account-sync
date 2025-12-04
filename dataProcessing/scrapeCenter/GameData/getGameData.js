@@ -46,21 +46,27 @@ class GetTeamsGameData {
     const { results, errors, summary } = await processInParallel(
       teamsBatch,
       async (team, index) => {
+        const taskStartTime = Date.now();
         // Get a page from the pool for this team
         const page = await this.puppeteerManager.getPageFromPool();
+        const pageAcquiredTime = Date.now();
 
         try {
           const { teamName, id, href, grade } = team;
           const url = `${this.domain}${href}`;
 
-          logger.debug(
-            `Processing team ${index + 1}/${
-              teamsBatch.length
-            }: ${teamName} (ID: ${id})`
+          logger.info(
+            `[PARALLEL_GAMES] [TASK-${index + 1}] START team: ${teamName} (ID: ${id}) (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
           );
 
           const gameDataFetcher = new GameDataFetcher(page, url, grade);
           const gameData = await gameDataFetcher.fetchGameData();
+
+          const taskDuration = Date.now() - taskStartTime;
+          const gameCount = gameData?.flat().filter((match) => match !== null).length || 0;
+          logger.info(
+            `[PARALLEL_GAMES] [TASK-${index + 1}] COMPLETE team: ${teamName} (duration: ${taskDuration}ms, games: ${gameCount})`
+          );
 
           // Flatten and filter the data
           return gameData.flat().filter((match) => match !== null);
