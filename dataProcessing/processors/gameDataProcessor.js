@@ -418,6 +418,9 @@ class GameDataProcessor {
     const scrapedFixtureIds = new Set(); // Use Set to avoid duplicates
     const scrapedFixturesMinimal = []; // Store minimal objects { gameID } for comparison
     const allScrapedGameData = []; // Aggregate all scraped data
+    let batchErrors = []; // Initialize batchErrors to handle both processing paths
+    let totalBatches = 0; // Track total batches for logging
+    let batchConcurrency = 0; // Track batch concurrency for logging
 
     try {
       // MEMORY FIX: Extract TEAMS reference before processing to allow GC of dataObj if needed
@@ -519,10 +522,11 @@ class GameDataProcessor {
         logger.info("[GAMES] Using standard processing (all teams together)");
         const batchSize = parseInt(process.env.GAME_DATA_BATCH_SIZE || "5", 10);
         const teamBatches = this.createBatches(teams, batchSize);
+        totalBatches = teamBatches.length; // Track for logging
 
         // PARALLEL FIX: Process batches in parallel (not just items within batches)
         // This dramatically improves performance when you have many batches
-        const batchConcurrency = parseInt(
+        batchConcurrency = parseInt(
           process.env.GAME_DATA_BATCH_CONCURRENCY || "2",
           10
         ); // Process 2 batches in parallel by default
@@ -544,7 +548,7 @@ class GameDataProcessor {
         }
 
         // Process batches in parallel
-        const { results: batchResults, errors: batchErrors } =
+        const { results: batchResults, errors: standardBatchErrors } =
           await processInParallel(
             teamBatches.map((batch, index) => ({
               batch,
@@ -676,10 +680,13 @@ class GameDataProcessor {
             }
           }
         }
+
+        // Update batchErrors with standard processing errors
+        batchErrors = standardBatchErrors;
       }
 
       // Log batch processing errors if any
-      if (batchErrors.length > 0) {
+      if (batchErrors && batchErrors.length > 0) {
         logger.warn(
           `[GAMES] ${batchErrors.length} batches failed during scraping`,
           {
@@ -729,9 +736,16 @@ class GameDataProcessor {
       // Clear scraped data after assignment
       allScrapedGameData.length = 0;
 
-      logger.info(
-        `[GAMES] Scraped ${scrapedFixtureIds.size} unique fixtures total across ${teamBatches.length} batches (processed ${batchConcurrency} batches in parallel)`
-      );
+      // Log summary - handle both processing paths
+      if (totalBatches > 0) {
+        logger.info(
+          `[GAMES] Scraped ${scrapedFixtureIds.size} unique fixtures total across ${totalBatches} batches (processed ${batchConcurrency} batches in parallel)`
+        );
+      } else {
+        logger.info(
+          `[GAMES] Scraped ${scrapedFixtureIds.size} unique fixtures total (category isolation mode)`
+        );
+      }
 
       // MEMORY FIX: Return minimal objects { gameID } instead of full fixture objects
       // This is compatible with FixtureComparisonService which extracts gameID from objects

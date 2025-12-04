@@ -20,15 +20,40 @@ class TeamProcessor {
    */
   async process() {
     try {
+      // MEMORY TRACKING: Log memory before starting
+      const MemoryTracker = require("../utils/memoryTracker");
+      const memoryTracker = MemoryTracker.getInstance();
+      if (memoryTracker) {
+        const beforeStats = memoryTracker.logMemoryStats("[TEAMS] BEFORE START");
+        logger.info(`[TEAMS] Memory before start: RSS=${beforeStats.rss.toFixed(2)} MB, Heap=${beforeStats.heapUsed.toFixed(2)} MB`);
+      }
+
       const grades = this.dataObj.Grades;
-      // Initialize GetTeams with all grades for parallel processing
+      logger.info(`[TEAMS] Processing ${grades.length} grades, Grades array size: ${JSON.stringify(grades).length} bytes`);
+
+      // MEMORY FIX: Only pass minimal dataObj fields needed, not full object
+      // GetTeamsFromLadder only uses: ACCOUNT, Grades, and TEAMS (optional)
       const getTeamsObj = new GetTeamsFromLadder({
-        ...this.dataObj,
-        Grades: grades,
+        ACCOUNT: this.dataObj.ACCOUNT, // Only account info needed
+        Grades: grades, // Grades array
+        TEAMS: this.dataObj.TEAMS, // Optional - only if needed
+        // Don't pass: COMPETITIONS, DETAILS, TYPEOBJ (not needed for teams scraping)
       });
+
+      // MEMORY TRACKING: Log memory after creating GetTeamsFromLadder
+      if (memoryTracker) {
+        const afterCreateStats = memoryTracker.logMemoryStats("[TEAMS] AFTER CREATE");
+        logger.info(`[TEAMS] Memory after creating GetTeamsFromLadder: RSS=${afterCreateStats.rss.toFixed(2)} MB, Heap=${afterCreateStats.heapUsed.toFixed(2)} MB`);
+      }
 
       logger.info(`Processing ${grades.length} grades in parallel...`);
       const scrapedTeams = await getTeamsObj.setup();
+
+      // MEMORY TRACKING: Log memory after scraping
+      if (memoryTracker) {
+        const afterScrapeStats = memoryTracker.logMemoryStats("[TEAMS] AFTER SCRAPE");
+        logger.info(`[TEAMS] Memory after scraping: RSS=${afterScrapeStats.rss.toFixed(2)} MB, Heap=${afterScrapeStats.heapUsed.toFixed(2)} MB, Teams scraped: ${scrapedTeams?.length || 0}`);
+      }
 
       // ========================================
       // [DEBUG] LOG SCRAPED DATA BEFORE SENDING TO CMS
