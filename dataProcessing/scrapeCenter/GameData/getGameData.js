@@ -65,12 +65,21 @@ class GetTeamsGameData {
       return [];
     }
 
-    const concurrency = PARALLEL_CONFIG.TEAMS_CONCURRENCY;
+    // MEMORY OPTIMIZATION: When per-team assignment is enabled, process sequentially
+    // to prevent fixture ID accumulation. Parallel processing accumulates results.
+    const concurrency = this.assignPerTeam
+      ? 1 // Sequential processing prevents accumulation
+      : PARALLEL_CONFIG.TEAMS_CONCURRENCY; // Parallel processing when not assigning per-team
+
     logger.info(
-      `Processing ${
-        teamsBatch.length
-      } teams in parallel (concurrency: ${concurrency})${
-        this.assignPerTeam ? " [PER-TEAM ASSIGNMENT ENABLED]" : ""
+      `Processing ${teamsBatch.length} teams${
+        this.assignPerTeam
+          ? " sequentially"
+          : ` in parallel (concurrency: ${concurrency})`
+      }${
+        this.assignPerTeam
+          ? " [PER-TEAM ASSIGNMENT ENABLED - SEQUENTIAL MODE]"
+          : ""
       }`
     );
 
@@ -78,7 +87,7 @@ class GetTeamsGameData {
     // This ensures all pages are ready and we get true parallel processing
     if (this.puppeteerManager.pagePool.length === 0) {
       logger.info(
-        `Creating page pool of size ${concurrency} before parallel processing`
+        `Creating page pool of size ${concurrency} before processing`
       );
       await this.puppeteerManager.createPagePool(concurrency);
     }
@@ -178,19 +187,26 @@ class GetTeamsGameData {
       });
     }
 
-    // MEMORY OPTIMIZATION: If per-team assignment enabled, results are already IDs only
+    // MEMORY OPTIMIZATION: If per-team assignment enabled, fixtures are already assigned
+    // We don't need to accumulate fixture IDs - just return minimal tracking
     if (this.assignPerTeam) {
-      // Results are arrays of fixture IDs (strings), flatten and return minimal objects
-      const allFixtureIds = results
+      // Results are arrays of fixture IDs (strings), but we don't need to accumulate them
+      // Just count them for tracking and return empty/minimal array
+      const totalFixtureIds = results
         .flat()
-        .filter((id) => id && typeof id === "string");
+        .filter((id) => id && typeof id === "string").length;
+
+      logger.info(
+        `[PER-TEAM ASSIGNMENT] Processed ${totalFixtureIds} fixtures across ${teamsBatch.length} teams (already assigned)`
+      );
 
       // MEMORY FIX: Clear intermediate arrays immediately after use
       results.length = 0;
       errors.length = 0;
 
-      // Return minimal objects { gameID } for tracking
-      return allFixtureIds.map((gameID) => ({ gameID }));
+      // Return empty array - fixtures already assigned, no need to track IDs
+      // This prevents accumulation of thousands of fixture IDs in memory
+      return [];
     }
 
     // OPTIMIZATION: Results are already flat from parallel processing
