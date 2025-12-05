@@ -23,11 +23,11 @@ class ProcessingConfig {
   static DEFAULT_CONFIG = {
     stages: {
       [ProcessingConfig.STAGES.COMPETITIONS]: true,
-      [ProcessingConfig.STAGES.TEAMS]: false,
+      [ProcessingConfig.STAGES.TEAMS]: true,
       [ProcessingConfig.STAGES.GAMES]: true,
-      [ProcessingConfig.STAGES.FIXTURE_VALIDATION]: false,
-      [ProcessingConfig.STAGES.FIXTURE_CLEANUP]: false,
-      [ProcessingConfig.STAGES.TRACKING]: false,
+      [ProcessingConfig.STAGES.FIXTURE_VALIDATION]: true,
+      [ProcessingConfig.STAGES.FIXTURE_CLEANUP]: true,
+      [ProcessingConfig.STAGES.TRACKING]: true,
     },
     refreshDataBetweenStages: true,
     forceBrowserRestart: {

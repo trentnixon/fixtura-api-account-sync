@@ -198,14 +198,79 @@ class GameDataProcessor {
           );
         }
 
-        const batchSize = parseInt(
+        let batchSize = parseInt(
           process.env.GAME_DATA_BATCH_SIZE || defaultBatchSize.toString(),
           10
         );
+
+        // MEMORY OPTIMIZATION: Memory-aware batch sizing for categories
+        if (
+          this.options.memoryTracker &&
+          process.env.GAMES_MEMORY_AWARE_PROCESSING !== "false"
+        ) {
+          const memoryStats = this.options.memoryTracker.getMemoryStats();
+          const memoryHighThresholdMB = parseInt(
+            process.env.GAMES_MEMORY_HIGH_THRESHOLD_MB || "500",
+            10
+          );
+          const memoryLowThresholdMB = parseInt(
+            process.env.GAMES_MEMORY_LOW_THRESHOLD_MB || "300",
+            10
+          );
+
+          // Reduce batch size if memory is high
+          if (memoryStats.rss > memoryHighThresholdMB) {
+            const originalBatchSize = batchSize;
+            batchSize = Math.max(1, Math.floor(batchSize * 0.5)); // Reduce by 50%, minimum 1
+            logger.warn(
+              `[GAMES] [COMPETITION-${
+                categoryIndex + 1
+              }] ⚠️ Memory is high (${memoryStats.rss.toFixed(
+                2
+              )} MB > ${memoryHighThresholdMB} MB) - reducing batch size from ${originalBatchSize} to ${batchSize}`
+            );
+          }
+          // Increase batch size slightly if memory is low (but don't exceed original default)
+          else if (
+            memoryStats.rss < memoryLowThresholdMB &&
+            batchSize < defaultBatchSize
+          ) {
+            const originalBatchSize = batchSize;
+            batchSize = Math.min(defaultBatchSize, Math.floor(batchSize * 1.2)); // Increase by 20%, max to default
+            if (batchSize > originalBatchSize) {
+              logger.info(
+                `[GAMES] [COMPETITION-${
+                  categoryIndex + 1
+                }] ✅ Memory is low (${memoryStats.rss.toFixed(
+                  2
+                )} MB < ${memoryLowThresholdMB} MB) - increasing batch size from ${originalBatchSize} to ${batchSize}`
+              );
+            }
+          }
+        }
+
         teamBatches = this.createBatches(teams, batchSize);
 
         // Always use sequential processing for large categories
-        const defaultConcurrency = isLargeCategory ? 1 : 2;
+        let defaultConcurrency = isLargeCategory ? 1 : 2;
+
+        // MEMORY OPTIMIZATION: Also adjust concurrency based on memory
+        if (
+          this.options.memoryTracker &&
+          process.env.GAMES_MEMORY_AWARE_PROCESSING !== "false"
+        ) {
+          const memoryStats = this.options.memoryTracker.getMemoryStats();
+          const memoryHighThresholdMB = parseInt(
+            process.env.GAMES_MEMORY_HIGH_THRESHOLD_MB || "500",
+            10
+          );
+
+          // Force sequential processing if memory is high
+          if (memoryStats.rss > memoryHighThresholdMB) {
+            defaultConcurrency = 1;
+          }
+        }
+
         batchConcurrency = parseInt(
           process.env.GAME_DATA_BATCH_CONCURRENCY ||
             defaultConcurrency.toString(),
@@ -685,21 +750,86 @@ class GameDataProcessor {
           // For large associations, process one team at a time to prevent accumulation
           defaultBatchSize = 1;
           logger.info(
-            `[GAMES] Large association detected - using batch size 1 (one team at a time)`
+            `[GAMES] Large association detected (${teams.length} teams > ${largeAssociationThreshold} threshold) - using batch size 1 (one team at a time)`
           );
         }
 
-        const batchSize = parseInt(
+        let batchSize = parseInt(
           process.env.GAME_DATA_BATCH_SIZE || defaultBatchSize.toString(),
           10
         );
+
+        // MEMORY OPTIMIZATION: Memory-aware batch sizing
+        // Dynamically adjust batch size based on current memory usage
+        if (
+          this.options.memoryTracker &&
+          process.env.GAMES_MEMORY_AWARE_PROCESSING !== "false"
+        ) {
+          const memoryStats = this.options.memoryTracker.getMemoryStats();
+          const memoryHighThresholdMB = parseInt(
+            process.env.GAMES_MEMORY_HIGH_THRESHOLD_MB || "500",
+            10
+          );
+          const memoryLowThresholdMB = parseInt(
+            process.env.GAMES_MEMORY_LOW_THRESHOLD_MB || "300",
+            10
+          );
+
+          // Reduce batch size if memory is high
+          if (memoryStats.rss > memoryHighThresholdMB) {
+            const originalBatchSize = batchSize;
+            batchSize = Math.max(1, Math.floor(batchSize * 0.5)); // Reduce by 50%, minimum 1
+            logger.warn(
+              `[GAMES] ⚠️ Memory is high (${memoryStats.rss.toFixed(
+                2
+              )} MB > ${memoryHighThresholdMB} MB) - reducing batch size from ${originalBatchSize} to ${batchSize}`
+            );
+          }
+          // Increase batch size slightly if memory is low (but don't exceed original default)
+          else if (
+            memoryStats.rss < memoryLowThresholdMB &&
+            batchSize < defaultBatchSize
+          ) {
+            const originalBatchSize = batchSize;
+            batchSize = Math.min(defaultBatchSize, Math.floor(batchSize * 1.2)); // Increase by 20%, max to default
+            if (batchSize > originalBatchSize) {
+              logger.info(
+                `[GAMES] ✅ Memory is low (${memoryStats.rss.toFixed(
+                  2
+                )} MB < ${memoryLowThresholdMB} MB) - increasing batch size from ${originalBatchSize} to ${batchSize}`
+              );
+            }
+          }
+        }
+
         const teamBatches = this.createBatches(teams, batchSize);
         totalBatches = teamBatches.length; // Track for logging
 
         // MEMORY FIX: Reduce default concurrency to prevent memory spikes
         // Process batches sequentially by default (concurrency: 1) for better memory control
         // For large associations, always use sequential processing
-        const defaultConcurrency = isLargeAssociation ? 1 : 1;
+        let defaultConcurrency = 1;
+
+        // MEMORY OPTIMIZATION: Also adjust concurrency based on memory
+        if (
+          this.options.memoryTracker &&
+          process.env.GAMES_MEMORY_AWARE_PROCESSING !== "false"
+        ) {
+          const memoryStats = this.options.memoryTracker.getMemoryStats();
+          const memoryHighThresholdMB = parseInt(
+            process.env.GAMES_MEMORY_HIGH_THRESHOLD_MB || "500",
+            10
+          );
+
+          // Force sequential processing if memory is high
+          if (memoryStats.rss > memoryHighThresholdMB) {
+            defaultConcurrency = 1;
+            logger.warn(
+              `[GAMES] ⚠️ Memory is high - forcing sequential processing (concurrency: 1)`
+            );
+          }
+        }
+
         batchConcurrency = parseInt(
           process.env.GAME_DATA_BATCH_CONCURRENCY ||
             defaultConcurrency.toString(),
