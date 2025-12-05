@@ -2,7 +2,8 @@ const logger = require("../../src/utils/logger");
 
 /**
  * FixtureComparisonService compares scraped fixtures with existing database fixtures.
- * Identifies fixtures that are missing from scraped data or have invalid URLs.
+ * ONLY flags fixtures for deletion if they have a 404 status.
+ * Missing fixtures are tracked for logging but not flagged for deletion.
  */
 class FixtureComparisonService {
   constructor(dataObj) {
@@ -61,46 +62,41 @@ class FixtureComparisonService {
 
         // Check validation results
         const validationResult = validationMap.get(gameID);
-        const hasInvalidUrl = validationResult && !validationResult.valid;
+        const has404Status = validationResult && validationResult.status === "404";
 
-        // Check if fixture exists in scraped data
+        // Check if fixture exists in scraped data (for logging only, not for deletion)
         const existsInScraped = scrapedGameIDs.has(gameID);
 
-        // Priority: Invalid URL takes precedence over missing from scraped
-        // If URL is invalid (404), delete it regardless of scraped status
-        if (hasInvalidUrl) {
-          // Fixture has invalid URL (404 or other error)
+        // ONLY flag for deletion if status is 404
+        // Do not delete fixtures missing from scraped data or with other error statuses
+        if (has404Status) {
+          // Fixture has 404 status - flag for deletion
           // MEMORY OPTIMIZATION: Don't store full validationResult or dbFixture
           // Only store minimal data needed for deletion
           invalidFixtures.push({
             fixtureId,
             gameID,
-            reason: `Invalid URL: ${validationResult.status}`,
+            reason: `404 status: ${validationResult.status}`,
             status: validationResult.status, // Only store status, not full result
           });
           fixturesToDelete.push({
             fixtureId,
             gameID,
-            reason: "invalid_url",
+            reason: "404_status",
             status: validationResult.status,
           });
         } else if (!existsInScraped && scrapedFixtures.length > 0) {
-          // Only mark as missing if we actually scraped fixtures
-          // If no fixtures were scraped, we can't determine if it's missing
+          // Track missing fixtures for logging, but DO NOT flag for deletion
           // MEMORY OPTIMIZATION: Don't store dbFixture
           missingFixtures.push({
             fixtureId,
             gameID,
             reason: "missing_from_scraped_data",
           });
-          fixturesToDelete.push({
-            fixtureId,
-            gameID,
-            reason: "missing_from_source",
-          });
+          // Do not add to fixturesToDelete - only 404 status triggers deletion
         } else {
           // Fixture exists in scraped data and has valid URL
-          // OR no scraped data available and no invalid URL found
+          // OR no scraped data available and no 404 status found
           // MEMORY OPTIMIZATION: Don't store dbFixture
           fixturesToKeep.push({
             fixtureId,
@@ -145,20 +141,17 @@ class FixtureComparisonService {
 
   /**
    * Filters fixtures to delete based on configuration
-   * @param {Array<Object>} fixturesToDelete - Fixtures marked for deletion
+   * @param {Array<Object>} fixturesToDelete - Fixtures marked for deletion (only 404 status)
    * @param {Object} options - Filtering options
-   * @param {boolean} options.deleteInvalidUrls - Whether to delete fixtures with invalid URLs
-   * @param {boolean} options.deleteMissing - Whether to delete fixtures missing from scraped data
+   * @param {boolean} options.delete404 - Whether to delete fixtures with 404 status (default: true)
    * @returns {Array<Object>} Filtered fixtures to delete
    */
   filterFixturesToDelete(fixturesToDelete, options = {}) {
-    const { deleteInvalidUrls = true, deleteMissing = true } = options;
+    const { delete404 = true } = options;
 
     return fixturesToDelete.filter((fixture) => {
-      if (fixture.reason === "invalid_url" && !deleteInvalidUrls) {
-        return false;
-      }
-      if (fixture.reason === "missing_from_source" && !deleteMissing) {
+      // Only 404 status fixtures are in fixturesToDelete now
+      if (fixture.reason === "404_status" && !delete404) {
         return false;
       }
       return true;

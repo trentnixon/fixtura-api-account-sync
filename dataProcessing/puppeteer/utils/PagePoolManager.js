@@ -265,8 +265,50 @@ class PagePoolManager {
       );
 
       if (page) {
-        // Mark as active BEFORE returning
+        // CRITICAL: Mark as active IMMEDIATELY to prevent race conditions
+        // This must happen BEFORE reset to ensure no other task gets this page
+        if (this.activePages.has(page)) {
+          // Page is already active - this shouldn't happen, but skip it
+          logger.warn(
+            `[PagePoolManager] Page already marked as active! Skipping and waiting for next available page.`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          retries++;
+          continue;
+        }
+
+        // Mark as active BEFORE reset to prevent race conditions
         this.activePages.add(page);
+
+        // CRITICAL FIX: Reset page to blank before reuse to prevent URL conflicts
+        // Pages in the pool may still have the previous URL loaded, causing duplicate scraping
+        try {
+          const currentUrl = page.url();
+          if (
+            currentUrl !== "about:blank" &&
+            currentUrl !== "chrome-error://chromewebdata/"
+          ) {
+            logger.debug(
+              `[PagePoolManager] Resetting page from ${currentUrl} to about:blank before reuse`
+            );
+            await page.goto("about:blank", {
+              waitUntil: "domcontentloaded",
+              timeout: 5000,
+            });
+          }
+        } catch (resetError) {
+          logger.warn(
+            `[PagePoolManager] Failed to reset page before reuse: ${resetError.message}`,
+            {
+              error: resetError.message,
+            }
+          );
+          // If reset fails, remove from active and try next page
+          this.activePages.delete(page);
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          retries++;
+          continue;
+        }
 
         // Record metrics
         const waitTime = Date.now() - waitStart;

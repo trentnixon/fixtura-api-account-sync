@@ -33,17 +33,25 @@ class GameDataFetcher {
       const navStartTime = Date.now();
       await this.navigateToUrl();
       const navDuration = Date.now() - navStartTime;
-      logger.info(`[PARALLEL_GAMES] [NAV] Navigation complete: ${navDuration}ms`);
+      logger.info(
+        `[PARALLEL_GAMES] [NAV] Navigation complete: ${navDuration}ms`
+      );
 
       const waitStartTime = Date.now();
       await this.waitForPageLoad();
       const waitDuration = Date.now() - waitStartTime;
-      logger.info(`[PARALLEL_GAMES] [WAIT] Page load complete: ${waitDuration}ms`);
+      logger.info(
+        `[PARALLEL_GAMES] [WAIT] Page load complete: ${waitDuration}ms`
+      );
 
       const extractStartTime = Date.now();
       const result = await this.getGameDetails();
       const extractDuration = Date.now() - extractStartTime;
-      logger.info(`[PARALLEL_GAMES] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${Date.now() - navStartTime}ms)`);
+      logger.info(
+        `[PARALLEL_GAMES] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${
+          Date.now() - navStartTime
+        }ms)`
+      );
       return result;
     } catch (error) {
       // Improved error logging with additional context
@@ -66,7 +74,11 @@ class GameDataFetcher {
       const matchPromises = matchList.map(async (matchElement) => {
         try {
           const gameDetails = await this.extractMatchDetails(matchElement);
-          return gameDetails && Array.isArray(gameDetails) ? gameDetails : gameDetails ? [gameDetails] : [];
+          return gameDetails && Array.isArray(gameDetails)
+            ? gameDetails
+            : gameDetails
+            ? [gameDetails]
+            : [];
         } catch (elementError) {
           // Log error for this element but continue with next element
           logger.warn(
@@ -115,24 +127,20 @@ class GameDataFetcher {
 
           // OPTIMIZATION: Extract all game details in parallel (was sequential)
           // This reduces extraction time from 300-600ms to 100-150ms per game div
-          const [
-            date,
-            round,
-            typeTimeGround,
-            status,
-            scoreCardInfo,
-            teams,
-          ] = await Promise.all([
-            scrapeDate(gameDiv),
-            scrapeRound(gameDiv),
-            scrapeTypeTimeGround(gameDiv),
-            scrapeStatus(gameDiv),
-            scrapeScoreCardInfo(gameDiv),
-            scrapeTeamsInfo(gameDiv),
-          ]);
+          const [date, round, typeTimeGround, status, scoreCardInfo, teams] =
+            await Promise.all([
+              scrapeDate(gameDiv),
+              scrapeRound(gameDiv),
+              scrapeTypeTimeGround(gameDiv),
+              scrapeStatus(gameDiv),
+              scrapeScoreCardInfo(gameDiv),
+              scrapeTeamsInfo(gameDiv),
+            ]);
 
           // Process date after parallel extraction
-          const dateObj = date ? moment(date, "dddd, DD MMMM YYYY").toDate() : null;
+          const dateObj = date
+            ? moment(date, "dddd, DD MMMM YYYY").toDate()
+            : null;
 
           // Consolidating extracted details
           return {
@@ -188,6 +196,12 @@ class GameDataFetcher {
     const initialDelay = 500; // Start with 500ms
     const backoffMultiplier = 1.5; // Exponential backoff multiplier
 
+    // CRITICAL: Log the URL we're navigating to and the current page URL
+    const currentPageUrl = this.page.url();
+    logger.info(
+      `[PARALLEL_GAMES] [NAV] Navigating to: ${this.href} | Current page URL: ${currentPageUrl}`
+    );
+
     // Non-retryable errors - exit immediately
     const nonRetryableErrors = [
       "net::ERR_ABORTED", // 404, cancelled
@@ -198,11 +212,38 @@ class GameDataFetcher {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Set timeout to 15 seconds for faster failure detection
+        // CRITICAL: Always navigate, even if URL appears the same
+        // Pages from pool may have stale URLs, so force navigation
+        // Use 'networkidle0' or 'load' to ensure full page load
         await this.page.goto(this.href, {
           timeout: 15000,
           waitUntil: "domcontentloaded",
+          // Force navigation even if URL appears the same
         });
+
+        // CRITICAL: Verify we actually navigated to the correct URL
+        const finalPageUrl = this.page.url();
+        if (
+          finalPageUrl !== this.href &&
+          !finalPageUrl.includes(this.href.split("?")[0])
+        ) {
+          logger.error(
+            `[PARALLEL_GAMES] [NAV] URL MISMATCH after navigation! Expected: ${this.href}, Actual: ${finalPageUrl}`
+          );
+          // Try one more time with forced navigation
+          if (attempt < maxRetries) {
+            logger.warn(
+              `[PARALLEL_GAMES] [NAV] Retrying navigation (attempt ${
+                attempt + 1
+              }/${maxRetries})`
+            );
+            continue;
+          }
+        } else {
+          logger.info(
+            `[PARALLEL_GAMES] [NAV] Successfully navigated to: ${this.href}`
+          );
+        }
 
         // Reset rate limit state on successful navigation
         const PuppeteerManager = require("../../puppeteer/PuppeteerManager");
@@ -224,14 +265,11 @@ class GameDataFetcher {
         );
 
         if (isNonRetryable) {
-          this.context.warn(
-            `Non-retryable error, skipping retries`,
-            {
-              error: errorMessage,
-              errorType: "non-retryable",
-              attempt,
-            }
-          );
+          this.context.warn(`Non-retryable error, skipping retries`, {
+            error: errorMessage,
+            errorType: "non-retryable",
+            attempt,
+          });
           return; // Don't retry non-retryable errors
         }
 
@@ -375,7 +413,8 @@ class GameDataFetcher {
 
       // Check remaining time before waiting for game divs
       const elapsedBeforeGameDivs = Date.now() - waitStartTime;
-      const remainingTimeForGameDivs = MAX_TOTAL_WAIT_TIME - elapsedBeforeGameDivs;
+      const remainingTimeForGameDivs =
+        MAX_TOTAL_WAIT_TIME - elapsedBeforeGameDivs;
 
       if (remainingTimeForGameDivs <= 0) {
         logger.warn(
@@ -389,7 +428,10 @@ class GameDataFetcher {
       }
 
       try {
-        const timeoutForGameDivs = Math.min(QUICK_CHECK_TIMEOUT, remainingTimeForGameDivs);
+        const timeoutForGameDivs = Math.min(
+          QUICK_CHECK_TIMEOUT,
+          remainingTimeForGameDivs
+        );
         await this.page.waitForSelector(gameDivSelector, {
           timeout: timeoutForGameDivs,
           visible: true,
@@ -417,7 +459,8 @@ class GameDataFetcher {
       // OPTIMIZED: Faster content check with shorter timeout and better polling
       // Step 3: Wait for fixture content to be fully rendered (but fail fast if not)
       const elapsedBeforeContent = Date.now() - waitStartTime;
-      const remainingTimeForContent = MAX_TOTAL_WAIT_TIME - elapsedBeforeContent;
+      const remainingTimeForContent =
+        MAX_TOTAL_WAIT_TIME - elapsedBeforeContent;
 
       if (remainingTimeForContent <= 0) {
         logger.debug(
@@ -431,7 +474,10 @@ class GameDataFetcher {
       }
 
       try {
-        const timeoutForContent = Math.min(CONTENT_CHECK_TIMEOUT, remainingTimeForContent);
+        const timeoutForContent = Math.min(
+          CONTENT_CHECK_TIMEOUT,
+          remainingTimeForContent
+        );
         await this.page.waitForFunction(
           () => {
             const gameDivs = document.querySelectorAll(
@@ -476,10 +522,13 @@ class GameDataFetcher {
       }
 
       const totalWait = Date.now() - waitStartTime;
-      logger.debug(`Page load complete, fixtures should be ready for extraction`, {
-        url: this.href,
-        totalWaitTime: totalWait,
-      });
+      logger.debug(
+        `Page load complete, fixtures should be ready for extraction`,
+        {
+          url: this.href,
+          totalWaitTime: totalWait,
+        }
+      );
     } catch (error) {
       const elapsed = Date.now() - waitStartTime;
       // Better error handling - fail fast for structure issues
@@ -494,7 +543,8 @@ class GameDataFetcher {
             error: error.message,
             url: this.href,
             elapsed,
-            action: "Continuing with extraction attempt (may return empty results)",
+            action:
+              "Continuing with extraction attempt (may return empty results)",
           }
         );
         // Don't add extra delay - fail fast

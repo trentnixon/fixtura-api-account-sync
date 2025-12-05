@@ -27,6 +27,76 @@ class GetTeamsGameData {
   }
 
   /**
+   * Filter out fixtures that are more than 2 weeks old OR more than 4 weeks in the future
+   * @param {Array} gameData - Array of fixture objects with dayOne property
+   * @returns {Array} Filtered array containing only fixtures within date range (2 weeks past to 4 weeks future)
+   */
+  filterOldFixtures(gameData) {
+    if (!gameData || gameData.length === 0) {
+      return [];
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14); // 2 weeks ago
+
+    const fourWeeksFromNow = new Date(today);
+    fourWeeksFromNow.setDate(fourWeeksFromNow.getDate() + 30); // 30 days (4 weeks) in the future
+    fourWeeksFromNow.setHours(23, 59, 59, 999); // End of day
+
+    let filteredOutPast = 0;
+    let filteredOutFuture = 0;
+    let filteredOutInvalid = 0;
+
+    const filtered = gameData.filter((fixture) => {
+      // Skip if dayOne is missing or invalid
+      if (!fixture.dayOne || !(fixture.dayOne instanceof Date)) {
+        filteredOutInvalid++;
+        return false;
+      }
+
+      // Filter out fixtures older than 2 weeks
+      if (fixture.dayOne < twoWeeksAgo) {
+        filteredOutPast++;
+        return false;
+      }
+
+      // Filter out fixtures more than 4 weeks in the future
+      if (fixture.dayOne > fourWeeksFromNow) {
+        filteredOutFuture++;
+        return false;
+      }
+
+      // Keep fixtures within the date range
+      return true;
+    });
+
+    const totalFiltered =
+      filteredOutPast + filteredOutFuture + filteredOutInvalid;
+    if (totalFiltered > 0) {
+      const parts = [];
+      if (filteredOutPast > 0) {
+        parts.push(`${filteredOutPast} older than 2 weeks`);
+      }
+      if (filteredOutFuture > 0) {
+        parts.push(`${filteredOutFuture} more than 4 weeks in future`);
+      }
+      if (filteredOutInvalid > 0) {
+        parts.push(`${filteredOutInvalid} with invalid/missing date`);
+      }
+      logger.info(
+        `[FIXTURE-FILTER] [GAMES] Filtered out ${totalFiltered} fixture(s): ${parts.join(
+          ", "
+        )} (from ${gameData.length} total)`
+      );
+    }
+
+    return filtered;
+  }
+
+  /**
    * Assign fixtures immediately after scraping (per-team assignment)
    * This prevents fixture accumulation in memory
    */
@@ -35,11 +105,27 @@ class GetTeamsGameData {
       return;
     }
 
+    const totalFixturesFromResponse = gameData.length;
+
+    // Filter out fixtures older than 2 weeks before assignment
+    const filteredGameData = this.filterOldFixtures(gameData);
+
+    logger.info(
+      `[FIXTURE-FILTER] [GAMES] Fixtures summary: ${totalFixturesFromResponse} returned from response, ${filteredGameData.length} remaining to upload to CMS`
+    );
+
+    if (filteredGameData.length === 0) {
+      logger.info(
+        `[FIXTURE-FILTER] [GAMES] No fixtures to assign after filtering (all were filtered out by date range)`
+      );
+      return;
+    }
+
     try {
       let assignGameDataObj = new AssignGameData(
-        gameData,
+        filteredGameData,
         this.dataObj,
-        gameData.length
+        filteredGameData.length
       );
       await assignGameDataObj.setup();
       assignGameDataObj = null;
@@ -65,34 +151,44 @@ class GetTeamsGameData {
       return [];
     }
 
-    // MEMORY OPTIMIZATION: When per-team assignment is enabled, process sequentially
-    // to prevent fixture ID accumulation. Parallel processing accumulates results.
-    const concurrency = this.assignPerTeam
-      ? 1 // Sequential processing prevents accumulation
-      : PARALLEL_CONFIG.TEAMS_CONCURRENCY; // Parallel processing when not assigning per-team
+    // MEMORY OPTIMIZATION: Allow parallel processing even with per-team assignment
+    // Use streaming results to prevent accumulation while maintaining concurrency
+    const concurrency = PARALLEL_CONFIG.TEAMS_CONCURRENCY;
 
+    logger.info(`[PARALLEL_GAMES] ========================================`);
     logger.info(
-      `Processing ${teamsBatch.length} teams${
-        this.assignPerTeam
-          ? " sequentially"
-          : ` in parallel (concurrency: ${concurrency})`
-      }${
-        this.assignPerTeam
-          ? " [PER-TEAM ASSIGNMENT ENABLED - SEQUENTIAL MODE]"
-          : ""
+      `[PARALLEL_GAMES] Processing ${teamsBatch.length} teams in parallel`
+    );
+    logger.info(`[PARALLEL_GAMES] Concurrency: ${concurrency}`);
+    logger.info(
+      `[PARALLEL_GAMES] Per-team assignment: ${
+        this.assignPerTeam ? "ENABLED" : "DISABLED"
       }`
     );
+    logger.info(`[PARALLEL_GAMES] ========================================`);
 
     // CRITICAL: Create page pool BEFORE parallel processing starts
     // This ensures all pages are ready and we get true parallel processing
-    if (this.puppeteerManager.pagePool.length === 0) {
+    const currentPoolSize = this.puppeteerManager.pagePool.length;
+    logger.info(
+      `[PARALLEL_GAMES] Current page pool size: ${currentPoolSize}, required concurrency: ${concurrency}, teams in batch: ${teamsBatch.length}`
+    );
+
+    if (currentPoolSize < concurrency) {
+      const neededPages = concurrency - currentPoolSize;
       logger.info(
-        `Creating page pool of size ${concurrency} before processing`
+        `[PARALLEL_GAMES] Page pool too small (${currentPoolSize} < ${concurrency}), creating ${neededPages} additional pages`
       );
       await this.puppeteerManager.createPagePool(concurrency);
+    } else {
+      logger.info(
+        `[PARALLEL_GAMES] Page pool sufficient (${currentPoolSize} >= ${concurrency}), proceeding with parallel processing`
+      );
     }
 
     // Process teams in parallel
+    // MEMORY OPTIMIZATION: Use streaming results when per-team assignment is enabled
+    // This prevents accumulation of fixture IDs in memory while maintaining concurrency
     const { results, errors, summary } = await processInParallel(
       teamsBatch,
       async (team, index) => {
@@ -105,16 +201,60 @@ class GetTeamsGameData {
           const { teamName, id, href, grade } = team;
           const url = `${this.domain}${href}`;
 
+          // CRITICAL: Log the URL being used to verify each team gets its own URL
           logger.info(
             `[PARALLEL_GAMES] [TASK-${
               index + 1
-            }] START team: ${teamName} (ID: ${id}) (page acquired: ${
+            }] START team: ${teamName} (ID: ${id}) | URL: ${url} | Page URL before: ${page.url()} (page acquired: ${
               pageAcquiredTime - taskStartTime
             }ms)`
           );
 
+          // CRITICAL: Verify page is at about:blank before navigation
+          const pageUrlBeforeNav = page.url();
+          if (
+            pageUrlBeforeNav !== "about:blank" &&
+            pageUrlBeforeNav !== "chrome-error://chromewebdata/"
+          ) {
+            logger.warn(
+              `[PARALLEL_GAMES] [TASK-${
+                index + 1
+              }] Page not reset! Expected about:blank, got: ${pageUrlBeforeNav}`
+            );
+            // Force reset the page
+            try {
+              await page.goto("about:blank", {
+                waitUntil: "domcontentloaded",
+                timeout: 5000,
+              });
+            } catch (resetError) {
+              logger.error(
+                `[PARALLEL_GAMES] [TASK-${index + 1}] Failed to reset page: ${
+                  resetError.message
+                }`
+              );
+            }
+          }
+
           const gameDataFetcher = new GameDataFetcher(page, url, grade);
           const gameData = await gameDataFetcher.fetchGameData();
+
+          // CRITICAL: Verify the page actually navigated to the correct URL
+          const pageUrlAfter = page.url();
+          if (
+            pageUrlAfter !== url &&
+            !pageUrlAfter.includes(url.split("?")[0])
+          ) {
+            logger.error(
+              `[PARALLEL_GAMES] [TASK-${
+                index + 1
+              }] URL MISMATCH! Expected: ${url}, Actual page URL: ${pageUrlAfter}`
+            );
+            // This is a critical error - the wrong page was used
+            throw new Error(
+              `Page URL mismatch: expected ${url} but got ${pageUrlAfter}. This indicates a page reuse race condition.`
+            );
+          }
 
           const taskDuration = Date.now() - taskStartTime;
           const filteredGameData =
@@ -130,9 +270,9 @@ class GetTeamsGameData {
           // MEMORY OPTIMIZATION: Assign fixtures immediately after scraping this team
           if (this.assignPerTeam && filteredGameData.length > 0) {
             logger.info(
-              `[PARALLEL_GAMES] [TASK-${
+              `[FIXTURE-FILTER] [PARALLEL_GAMES] [TASK-${
                 index + 1
-              }] Assigning ${gameCount} fixtures immediately (per-team assignment)`
+              }] Total fixtures returned from response: ${gameCount}`
             );
 
             // Extract fixture IDs before assignment (for tracking)
@@ -140,13 +280,13 @@ class GetTeamsGameData {
               .map((fixture) => fixture?.gameID)
               .filter((id) => id);
 
-            // Assign fixtures immediately
+            // Assign fixtures immediately (this will filter by date range)
             await this.assignFixturesImmediately(filteredGameData);
 
             // Clear gameData immediately after assignment
             filteredGameData.length = 0;
 
-            // Return only IDs for tracking
+            // Return only IDs for tracking (minimal memory footprint)
             return fixtureIds;
           }
 
@@ -164,12 +304,26 @@ class GetTeamsGameData {
           await this.puppeteerManager.releasePageFromPool(page);
         }
       },
-      concurrency,
+      concurrency, // CRITICAL: Pass concurrency to processInParallel
       {
         context: "teams_game_data",
         logProgress: true,
         continueOnError: true,
+        // MEMORY OPTIMIZATION: Stream results when per-team assignment enabled
+        // This prevents accumulation of fixture IDs in the results array
+        streamResults: this.assignPerTeam,
+        onResult: this.assignPerTeam
+          ? async (result, index, item) => {
+              // Results are already processed (assigned) in the processor function
+              // This callback is just for streaming - no additional processing needed
+              // The result is already minimal (fixture IDs only)
+            }
+          : undefined,
       }
+    );
+
+    logger.info(
+      `[PARALLEL_GAMES] Parallel processing complete: ${summary.successful}/${teamsBatch.length} successful, concurrency used: ${concurrency}`
     );
 
     // Log summary
@@ -236,6 +390,11 @@ class GetTeamsGameData {
 
   async setup() {
     try {
+      logger.info(
+        `[PARALLEL_GAMES] [SETUP] Starting setup with ${
+          this.teams?.length || 0
+        } teams`
+      );
       // Process teams in parallel using page pool (no need for single page anymore)
       let fetchedGames = await this.processGamesBatch(this.teams);
 

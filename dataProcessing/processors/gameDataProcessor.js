@@ -178,119 +178,17 @@ class GameDataProcessor {
         teamBatches = [teams]; // Single batch with all teams
         batchConcurrency = 1; // Process sequentially to avoid overwhelming memory
       } else {
-        // NORMAL MODE: Process teams in batches
-        // MEMORY OPTIMIZATION: Use smaller batches for large categories
-        const teamsInCategory = teams.length;
-        const largeCategoryThreshold = parseInt(
-          process.env.GAMES_LARGE_ASSOCIATION_THRESHOLD || "100",
-          10
-        );
-        const isLargeCategory = teamsInCategory > largeCategoryThreshold;
-
-        let defaultBatchSize = 5;
-        if (isLargeCategory) {
-          // For large categories, process one team at a time
-          defaultBatchSize = 1;
-          logger.info(
-            `[GAMES] [COMPETITION-${
-              categoryIndex + 1
-            }] Large category detected (${teamsInCategory} teams) - using batch size 1`
-          );
-        }
-
-        let batchSize = parseInt(
-          process.env.GAME_DATA_BATCH_SIZE || defaultBatchSize.toString(),
-          10
-        );
-
-        // MEMORY OPTIMIZATION: Memory-aware batch sizing for categories
-        if (
-          this.options.memoryTracker &&
-          process.env.GAMES_MEMORY_AWARE_PROCESSING !== "false"
-        ) {
-          const memoryStats = this.options.memoryTracker.getMemoryStats();
-          const memoryHighThresholdMB = parseInt(
-            process.env.GAMES_MEMORY_HIGH_THRESHOLD_MB || "500",
-            10
-          );
-          const memoryLowThresholdMB = parseInt(
-            process.env.GAMES_MEMORY_LOW_THRESHOLD_MB || "300",
-            10
-          );
-
-          // Reduce batch size if memory is high
-          if (memoryStats.rss > memoryHighThresholdMB) {
-            const originalBatchSize = batchSize;
-            batchSize = Math.max(1, Math.floor(batchSize * 0.5)); // Reduce by 50%, minimum 1
-            logger.warn(
-              `[GAMES] [COMPETITION-${
-                categoryIndex + 1
-              }] ⚠️ Memory is high (${memoryStats.rss.toFixed(
-                2
-              )} MB > ${memoryHighThresholdMB} MB) - reducing batch size from ${originalBatchSize} to ${batchSize}`
-            );
-          }
-          // Increase batch size slightly if memory is low (but don't exceed original default)
-          else if (
-            memoryStats.rss < memoryLowThresholdMB &&
-            batchSize < defaultBatchSize
-          ) {
-            const originalBatchSize = batchSize;
-            batchSize = Math.min(defaultBatchSize, Math.floor(batchSize * 1.2)); // Increase by 20%, max to default
-            if (batchSize > originalBatchSize) {
-              logger.info(
-                `[GAMES] [COMPETITION-${
-                  categoryIndex + 1
-                }] ✅ Memory is low (${memoryStats.rss.toFixed(
-                  2
-                )} MB < ${memoryLowThresholdMB} MB) - increasing batch size from ${originalBatchSize} to ${batchSize}`
-              );
-            }
-          }
-        }
-
-        teamBatches = this.createBatches(teams, batchSize);
-
-        // Always use sequential processing for large categories
-        let defaultConcurrency = isLargeCategory ? 1 : 2;
-
-        // MEMORY OPTIMIZATION: Also adjust concurrency based on memory
-        if (
-          this.options.memoryTracker &&
-          process.env.GAMES_MEMORY_AWARE_PROCESSING !== "false"
-        ) {
-          const memoryStats = this.options.memoryTracker.getMemoryStats();
-          const memoryHighThresholdMB = parseInt(
-            process.env.GAMES_MEMORY_HIGH_THRESHOLD_MB || "500",
-            10
-          );
-
-          // Force sequential processing if memory is high
-          if (memoryStats.rss > memoryHighThresholdMB) {
-            defaultConcurrency = 1;
-          }
-        }
-
-        batchConcurrency = parseInt(
-          process.env.GAME_DATA_BATCH_CONCURRENCY ||
-            defaultConcurrency.toString(),
-          10
-        );
-
-        if (isLargeCategory && batchConcurrency > 1) {
-          logger.warn(
-            `[GAMES] [COMPETITION-${
-              categoryIndex + 1
-            }] Large category detected but concurrency > 1 - forcing sequential processing`
-          );
-          batchConcurrency = 1;
-        }
-
+        // NORMAL MODE: Process all teams directly in parallel (no batching)
+        // Date filtering will prevent old/future fixtures from being processed
         logger.info(
-          `[GAMES] [COMPETITION-${categoryIndex + 1}] Processing ${
-            teamBatches.length
-          } batches (batch size: ${batchSize}, concurrency: ${batchConcurrency})`
+          `[GAMES] [COMPETITION-${categoryIndex + 1}] Processing all ${
+            teams.length
+          } teams directly in parallel (no batching)`
         );
+
+        // Process all teams as a single "batch" - they'll be processed in parallel internally
+        teamBatches = [teams];
+        batchConcurrency = 1; // Only 1 "batch" (all teams), but teams process in parallel
       }
 
       // Create page pool if needed
@@ -314,23 +212,21 @@ class GameDataProcessor {
             batchNumber: index + 1,
           })),
           async ({ batch, batchNumber }) => {
-            if (isTestingSingleCategory) {
-              logger.info(
-                `[GAMES] [COMPETITION-${categoryIndex + 1}] Processing ALL ${
-                  batch.length
-                } teams for this competition`
-              );
-            } else {
-              logger.info(
-                `[GAMES] [COMPETITION-${
-                  categoryIndex + 1
-                }] [BATCH-${batchNumber}] Processing ${batch.length} teams`
-              );
-            }
+            logger.info(
+              `[GAMES] [COMPETITION-${categoryIndex + 1}] Processing ${
+                batch.length
+              } teams directly in parallel`
+            );
 
             // MEMORY OPTIMIZATION: Enable per-team assignment
             const assignPerTeam =
               process.env.GAMES_ASSIGN_PER_TEAM === "true" || true; // Default: enabled
+
+            logger.info(
+              `[GAMES] [COMPETITION-${
+                categoryIndex + 1
+              }] Calling getGameData.setup() with ${batch.length} teams`
+            );
 
             let getGameDataObj = new getTeamsGameData(
               {
@@ -679,10 +575,13 @@ class GameDataProcessor {
               categoryResult.scrapedGameData &&
               categoryResult.scrapedGameData.length > 0
             ) {
+              const totalFixturesFromResponse =
+                categoryResult.scrapedGameData.length;
+
               logger.info(
-                `[GAMES] [COMPETITION-${i + 1}] Assigning ${
-                  categoryResult.scrapedGameData.length
-                } fixtures immediately (streaming mode)`
+                `[FIXTURE-FILTER] [GAMES] [COMPETITION-${
+                  i + 1
+                }] Total fixtures returned from response: ${totalFixturesFromResponse}`
               );
 
               // Assign fixtures for this category immediately
@@ -695,8 +594,33 @@ class GameDataProcessor {
                   defaultAssignmentBatchSize.toString(),
                 10
               );
+              // Filter out fixtures older than 2 weeks before creating assignment batches
+              const filteredScrapedGameData = this.filterOldFixtures(
+                categoryResult.scrapedGameData
+              );
+
+              logger.info(
+                `[FIXTURE-FILTER] [GAMES] [COMPETITION-${
+                  i + 1
+                }] Fixtures summary: ${totalFixturesFromResponse} returned from response, ${
+                  filteredScrapedGameData.length
+                } remaining to upload to CMS`
+              );
+
+              if (filteredScrapedGameData.length === 0) {
+                logger.info(
+                  `[FIXTURE-FILTER] [GAMES] [COMPETITION-${
+                    i + 1
+                  }] No fixtures to assign after filtering (all were filtered out by date range)`
+                );
+                // Clear the original data
+                categoryResult.scrapedGameData.length = 0;
+                categoryResult.scrapedGameData = null;
+                continue;
+              }
+
               const categoryAssignmentBatches = this.createBatches(
-                categoryResult.scrapedGameData,
+                filteredScrapedGameData,
                 assignmentBatchSize
               );
 
@@ -743,108 +667,14 @@ class GameDataProcessor {
       // STANDARD PROCESSING: Process all teams together (if category isolation not used or failed)
       if (!this.options.isolateByCategory) {
         logger.info("[GAMES] Using standard processing (all teams together)");
-
-        // MEMORY OPTIMIZATION: Use smaller batch sizes for large associations
-        let defaultBatchSize = 3;
-        if (isLargeAssociation) {
-          // For large associations, process one team at a time to prevent accumulation
-          defaultBatchSize = 1;
-          logger.info(
-            `[GAMES] Large association detected (${teams.length} teams > ${largeAssociationThreshold} threshold) - using batch size 1 (one team at a time)`
-          );
-        }
-
-        let batchSize = parseInt(
-          process.env.GAME_DATA_BATCH_SIZE || defaultBatchSize.toString(),
-          10
-        );
-
-        // MEMORY OPTIMIZATION: Memory-aware batch sizing
-        // Dynamically adjust batch size based on current memory usage
-        if (
-          this.options.memoryTracker &&
-          process.env.GAMES_MEMORY_AWARE_PROCESSING !== "false"
-        ) {
-          const memoryStats = this.options.memoryTracker.getMemoryStats();
-          const memoryHighThresholdMB = parseInt(
-            process.env.GAMES_MEMORY_HIGH_THRESHOLD_MB || "500",
-            10
-          );
-          const memoryLowThresholdMB = parseInt(
-            process.env.GAMES_MEMORY_LOW_THRESHOLD_MB || "300",
-            10
-          );
-
-          // Reduce batch size if memory is high
-          if (memoryStats.rss > memoryHighThresholdMB) {
-            const originalBatchSize = batchSize;
-            batchSize = Math.max(1, Math.floor(batchSize * 0.5)); // Reduce by 50%, minimum 1
-            logger.warn(
-              `[GAMES] ⚠️ Memory is high (${memoryStats.rss.toFixed(
-                2
-              )} MB > ${memoryHighThresholdMB} MB) - reducing batch size from ${originalBatchSize} to ${batchSize}`
-            );
-          }
-          // Increase batch size slightly if memory is low (but don't exceed original default)
-          else if (
-            memoryStats.rss < memoryLowThresholdMB &&
-            batchSize < defaultBatchSize
-          ) {
-            const originalBatchSize = batchSize;
-            batchSize = Math.min(defaultBatchSize, Math.floor(batchSize * 1.2)); // Increase by 20%, max to default
-            if (batchSize > originalBatchSize) {
-              logger.info(
-                `[GAMES] ✅ Memory is low (${memoryStats.rss.toFixed(
-                  2
-                )} MB < ${memoryLowThresholdMB} MB) - increasing batch size from ${originalBatchSize} to ${batchSize}`
-              );
-            }
-          }
-        }
-
-        const teamBatches = this.createBatches(teams, batchSize);
-        totalBatches = teamBatches.length; // Track for logging
-
-        // MEMORY FIX: Reduce default concurrency to prevent memory spikes
-        // Process batches sequentially by default (concurrency: 1) for better memory control
-        // For large associations, always use sequential processing
-        let defaultConcurrency = 1;
-
-        // MEMORY OPTIMIZATION: Also adjust concurrency based on memory
-        if (
-          this.options.memoryTracker &&
-          process.env.GAMES_MEMORY_AWARE_PROCESSING !== "false"
-        ) {
-          const memoryStats = this.options.memoryTracker.getMemoryStats();
-          const memoryHighThresholdMB = parseInt(
-            process.env.GAMES_MEMORY_HIGH_THRESHOLD_MB || "500",
-            10
-          );
-
-          // Force sequential processing if memory is high
-          if (memoryStats.rss > memoryHighThresholdMB) {
-            defaultConcurrency = 1;
-            logger.warn(
-              `[GAMES] ⚠️ Memory is high - forcing sequential processing (concurrency: 1)`
-            );
-          }
-        }
-
-        batchConcurrency = parseInt(
-          process.env.GAME_DATA_BATCH_CONCURRENCY ||
-            defaultConcurrency.toString(),
-          10
-        );
-
-        if (isLargeAssociation && batchConcurrency > 1) {
-          logger.warn(
-            `[GAMES] Large association detected but concurrency > 1 - forcing sequential processing`
-          );
-          batchConcurrency = 1;
-        }
         logger.info(
-          `[GAMES] Processing ${teamBatches.length} batches with concurrency: ${batchConcurrency} (batch size: ${batchSize})`
+          `[GAMES] Processing all ${teams.length} teams directly in parallel (no batching)`
         );
+
+        // Process all teams as a single "batch" - they'll be processed in parallel internally
+        const teamBatches = [teams];
+        totalBatches = 1; // Only 1 "batch" (all teams)
+        batchConcurrency = 1; // Only 1 "batch", but teams process in parallel
 
         // OPTIMIZATION: Create page pool once before parallel batch processing
         // This prevents multiple batches from checking/creating the pool simultaneously
@@ -868,12 +698,7 @@ class GameDataProcessor {
             })),
             async ({ batch, batchNumber }) => {
               logger.info(
-                `[GAMES] [BATCH-${batchNumber}] Processing team batch ${batchNumber}/${teamBatches.length}`,
-                {
-                  batchSize: batch.length,
-                  batchNumber,
-                  totalBatches: teamBatches.length,
-                }
+                `[GAMES] Processing ${batch.length} teams directly in parallel`
               );
 
               // Scrape game data for the current batch
@@ -1035,9 +860,35 @@ class GameDataProcessor {
               batchResult.scrapedGameData &&
               batchResult.scrapedGameData.length > 0
             ) {
+              const totalFixturesFromResponse =
+                batchResult.scrapedGameData.length;
+
+              logger.info(
+                `[FIXTURE-FILTER] [GAMES] [BATCH-${batchIndex}] Total fixtures returned from response: ${totalFixturesFromResponse}`
+              );
+
+              // Filter out fixtures older than 2 weeks before creating assignment batches
+              const filteredBatchGameData = this.filterOldFixtures(
+                batchResult.scrapedGameData
+              );
+
+              logger.info(
+                `[FIXTURE-FILTER] [GAMES] [BATCH-${batchIndex}] Fixtures summary: ${totalFixturesFromResponse} returned from response, ${filteredBatchGameData.length} remaining to upload to CMS`
+              );
+
+              if (filteredBatchGameData.length === 0) {
+                logger.info(
+                  `[FIXTURE-FILTER] [GAMES] [BATCH-${batchIndex}] No fixtures to assign after filtering (all were filtered out by date range)`
+                );
+                // Clear the original data
+                batchResult.scrapedGameData.length = 0;
+                batchResult.scrapedGameData = null;
+                continue;
+              }
+
               // Assign fixtures for this batch immediately
               const batchAssignmentBatches = this.createBatches(
-                batchResult.scrapedGameData,
+                filteredBatchGameData,
                 assignmentBatchSize
               );
 
@@ -1130,6 +981,76 @@ class GameDataProcessor {
       // This allows GC to free TEAMS, Grades, COMPETITIONS arrays
       this.dataObj = null;
     }
+  }
+
+  /**
+   * Filter out fixtures that are more than 2 weeks old OR more than 4 weeks in the future
+   * @param {Array} gameData - Array of fixture objects with dayOne property
+   * @returns {Array} Filtered array containing only fixtures within date range (2 weeks past to 4 weeks future)
+   */
+  filterOldFixtures(gameData) {
+    if (!gameData || gameData.length === 0) {
+      return [];
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14); // 2 weeks ago
+
+    const fourWeeksFromNow = new Date(today);
+    fourWeeksFromNow.setDate(fourWeeksFromNow.getDate() + 30); // 30 days (4 weeks) in the future
+    fourWeeksFromNow.setHours(23, 59, 59, 999); // End of day
+
+    let filteredOutPast = 0;
+    let filteredOutFuture = 0;
+    let filteredOutInvalid = 0;
+
+    const filtered = gameData.filter((fixture) => {
+      // Skip if dayOne is missing or invalid
+      if (!fixture.dayOne || !(fixture.dayOne instanceof Date)) {
+        filteredOutInvalid++;
+        return false;
+      }
+
+      // Filter out fixtures older than 2 weeks
+      if (fixture.dayOne < twoWeeksAgo) {
+        filteredOutPast++;
+        return false;
+      }
+
+      // Filter out fixtures more than 4 weeks in the future
+      if (fixture.dayOne > fourWeeksFromNow) {
+        filteredOutFuture++;
+        return false;
+      }
+
+      // Keep fixtures within the date range
+      return true;
+    });
+
+    const totalFiltered =
+      filteredOutPast + filteredOutFuture + filteredOutInvalid;
+    if (totalFiltered > 0) {
+      const parts = [];
+      if (filteredOutPast > 0) {
+        parts.push(`${filteredOutPast} older than 2 weeks`);
+      }
+      if (filteredOutFuture > 0) {
+        parts.push(`${filteredOutFuture} more than 4 weeks in future`);
+      }
+      if (filteredOutInvalid > 0) {
+        parts.push(`${filteredOutInvalid} with invalid/missing date`);
+      }
+      logger.info(
+        `[FIXTURE-FILTER] [GAMES] Filtered out ${totalFiltered} fixture(s): ${parts.join(
+          ", "
+        )} (from ${gameData.length} total)`
+      );
+    }
+
+    return filtered;
   }
 
   // Helper function to split array into batches
