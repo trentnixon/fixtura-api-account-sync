@@ -227,10 +227,21 @@ class GameDataProcessor {
               );
             }
 
-            let getGameDataObj = new getTeamsGameData({
-              ACCOUNT: this.dataObj.ACCOUNT,
-              TEAMS: batch,
-            });
+            // MEMORY OPTIMIZATION: Enable per-team assignment
+            const assignPerTeam =
+              process.env.GAMES_ASSIGN_PER_TEAM === "true" || true; // Default: enabled
+
+            let getGameDataObj = new getTeamsGameData(
+              {
+                ACCOUNT: this.dataObj.ACCOUNT,
+                TEAMS: batch,
+                // Include full dataObj for assignment if per-team assignment enabled
+                ...(assignPerTeam ? this.dataObj : {}),
+              },
+              {
+                assignPerTeam: assignPerTeam,
+              }
+            );
             let scrapedGameData = await getGameDataObj.setup();
             getGameDataObj = null;
 
@@ -238,16 +249,20 @@ class GameDataProcessor {
               return { batchNumber, scrapedGameData: [], fixtureIds: [] };
             }
 
+            // If per-team assignment was used, scrapedGameData is already minimal objects { gameID }
             const batchFixtureIds = [];
             scrapedGameData.forEach((fixture) => {
-              if (fixture && fixture.gameID) {
-                batchFixtureIds.push(fixture.gameID);
+              const gameID = fixture?.gameID || fixture;
+              if (gameID) {
+                batchFixtureIds.push(gameID);
               }
             });
 
             return {
               batchNumber,
-              scrapedGameData,
+              scrapedGameData: assignPerTeam
+                ? scrapedGameData // Already minimal objects { gameID }
+                : scrapedGameData, // Full fixture objects
               fixtureIds: batchFixtureIds,
             };
           },
@@ -644,12 +659,21 @@ class GameDataProcessor {
               );
 
               // Scrape game data for the current batch
-              // MEMORY FIX: Only pass minimal dataObj fields needed, not full object
-              let getGameDataObj = new getTeamsGameData({
-                ACCOUNT: this.dataObj.ACCOUNT, // Only account info needed
-                TEAMS: batch, // Only current batch of teams
-                // Don't pass: Grades, COMPETITIONS, DETAILS, TYPEOBJ (not needed for game data scraping)
-              });
+              // MEMORY OPTIMIZATION: Enable per-team assignment to prevent accumulation
+              const assignPerTeam =
+                process.env.GAMES_ASSIGN_PER_TEAM === "true" || true; // Default: enabled
+
+              let getGameDataObj = new getTeamsGameData(
+                {
+                  ACCOUNT: this.dataObj.ACCOUNT,
+                  TEAMS: batch,
+                  // Include full dataObj for assignment if per-team assignment enabled
+                  ...(assignPerTeam ? this.dataObj : {}),
+                },
+                {
+                  assignPerTeam: assignPerTeam,
+                }
+              );
               let scrapedGameData = await getGameDataObj.setup();
 
               // MEMORY FIX: Clear processor reference immediately after getting data
@@ -743,65 +767,104 @@ class GameDataProcessor {
             }
           );
 
-        // MEMORY FIX: Assign fixtures immediately after each batch (streaming mode)
-        // This prevents accumulation of thousands of fixtures in memory
-        const assignmentBatchSize = parseInt(
-          process.env.GAME_DATA_ASSIGNMENT_BATCH_SIZE || "10",
-          10
-        );
-
+        // MEMORY OPTIMIZATION: Check if per-team assignment was used
+        const assignPerTeam =
+          process.env.GAMES_ASSIGN_PER_TEAM === "true" || true; // Default: enabled
         let batchIndex = 0;
 
-        // Process batches and assign immediately (streaming mode)
-        for (const batchResult of batchResults) {
-          batchIndex++;
-          if (
-            batchResult &&
-            batchResult.scrapedGameData &&
-            batchResult.scrapedGameData.length > 0
-          ) {
-            // Assign fixtures for this batch immediately
-            const batchAssignmentBatches = this.createBatches(
-              batchResult.scrapedGameData,
-              assignmentBatchSize
-            );
+        if (assignPerTeam) {
+          // Per-team assignment already happened - just track IDs
+          logger.info(
+            "[GAMES] Per-team assignment enabled - fixtures already assigned"
+          );
 
-            for (const assignmentBatch of batchAssignmentBatches) {
-              let assignGameDataObj = new assignGameData(
-                assignmentBatch,
-                this.dataObj
-              );
-              await assignGameDataObj.setup();
-              assignGameDataObj = null;
-
-              // Force GC after every assignment batch
-              if (global.gc) {
-                global.gc();
-              }
-            }
-
-            // CRITICAL: Clear batch scraped data immediately after assignment
-            batchResult.scrapedGameData.length = 0;
-            batchResult.scrapedGameData = null;
-
-            // Track fixture IDs only (minimal memory footprint)
-            if (batchResult.fixtureIds) {
-              batchResult.fixtureIds.forEach((gameID) => {
-                if (!scrapedFixtureIds.has(gameID)) {
+          for (const batchResult of batchResults) {
+            batchIndex++;
+            if (batchResult && batchResult.scrapedGameData) {
+              // scrapedGameData is already minimal objects { gameID } if per-team assignment was used
+              batchResult.scrapedGameData.forEach((fixture) => {
+                const gameID = fixture.gameID || fixture;
+                if (gameID && !scrapedFixtureIds.has(gameID)) {
                   scrapedFixtureIds.add(gameID);
                   scrapedFixturesMinimal.push({ gameID });
                 }
               });
-            }
 
-            // MEMORY FIX: Cleanup page pool and force GC every 5 batches
-            if (batchIndex % 5 === 0) {
-              logger.info(
-                `[GAMES] [BATCH-${batchIndex}] Memory cleanup: Cleaning page pool and forcing GC`
+              // Clear immediately
+              batchResult.scrapedGameData.length = 0;
+              batchResult.scrapedGameData = null;
+
+              // MEMORY FIX: Cleanup page pool and force GC every 5 batches
+              if (batchIndex % 5 === 0) {
+                logger.info(
+                  `[GAMES] [BATCH-${batchIndex}] Memory cleanup: Cleaning page pool and forcing GC`
+                );
+                await puppeteerManager.cleanupOrphanedPages();
+                if (global.gc) {
+                  global.gc();
+                }
+              }
+            }
+          }
+        } else {
+          // MEMORY FIX: Assign fixtures immediately after each batch (streaming mode)
+          // This prevents accumulation of thousands of fixtures in memory
+          const assignmentBatchSize = parseInt(
+            process.env.GAME_DATA_ASSIGNMENT_BATCH_SIZE || "10",
+            10
+          );
+
+          // Process batches and assign immediately (streaming mode)
+          for (const batchResult of batchResults) {
+            batchIndex++;
+            if (
+              batchResult &&
+              batchResult.scrapedGameData &&
+              batchResult.scrapedGameData.length > 0
+            ) {
+              // Assign fixtures for this batch immediately
+              const batchAssignmentBatches = this.createBatches(
+                batchResult.scrapedGameData,
+                assignmentBatchSize
               );
-              await puppeteerManager.cleanupOrphanedPages();
-              if (global.gc) {
-                global.gc();
+
+              for (const assignmentBatch of batchAssignmentBatches) {
+                let assignGameDataObj = new assignGameData(
+                  assignmentBatch,
+                  this.dataObj
+                );
+                await assignGameDataObj.setup();
+                assignGameDataObj = null;
+
+                // Force GC after every assignment batch
+                if (global.gc) {
+                  global.gc();
+                }
+              }
+
+              // CRITICAL: Clear batch scraped data immediately after assignment
+              batchResult.scrapedGameData.length = 0;
+              batchResult.scrapedGameData = null;
+
+              // Track fixture IDs only (minimal memory footprint)
+              if (batchResult.fixtureIds) {
+                batchResult.fixtureIds.forEach((gameID) => {
+                  if (!scrapedFixtureIds.has(gameID)) {
+                    scrapedFixtureIds.add(gameID);
+                    scrapedFixturesMinimal.push({ gameID });
+                  }
+                });
+              }
+
+              // MEMORY FIX: Cleanup page pool and force GC every 5 batches
+              if (batchIndex % 5 === 0) {
+                logger.info(
+                  `[GAMES] [BATCH-${batchIndex}] Memory cleanup: Cleaning page pool and forcing GC`
+                );
+                await puppeteerManager.cleanupOrphanedPages();
+                if (global.gc) {
+                  global.gc();
+                }
               }
             }
           }
