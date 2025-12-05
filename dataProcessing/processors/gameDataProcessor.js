@@ -96,7 +96,9 @@ class GameDataProcessor {
     });
     logger.info(`[GAMES] ===== END CATEGORY LIST =====`);
     logger.info(
-      `[GAMES] To test a specific category, set: TEST_CATEGORY_ID=${Array.from(categoryMap.values())[0]?.compID} (or use TEST_CATEGORY_NAME)`
+      `[GAMES] To test a specific category, set: TEST_CATEGORY_ID=${
+        Array.from(categoryMap.values())[0]?.compID
+      } (or use TEST_CATEGORY_NAME)`
     );
 
     return categoryMap;
@@ -118,72 +120,77 @@ class GameDataProcessor {
   ) {
     const { teams, compID, compName } = categoryData;
     const categoryStartTime = Date.now();
-    const isTestingSingleCategory = process.env.TEST_CATEGORY_ID || process.env.TEST_CATEGORY_NAME;
+    const isTestingSingleCategory =
+      process.env.TEST_CATEGORY_ID || process.env.TEST_CATEGORY_NAME;
 
-    logger.info(
-      `[GAMES] ========================================`
-    );
+    logger.info(`[GAMES] ========================================`);
     logger.info(
       `[GAMES] [COMPETITION-${
         categoryIndex + 1
       }/${totalCategories}] STARTING: ${compName}`
     );
     logger.info(
-      `[GAMES] [COMPETITION-${
-        categoryIndex + 1
-      }] Competition ID: ${compID}`
+      `[GAMES] [COMPETITION-${categoryIndex + 1}] Competition ID: ${compID}`
     );
     logger.info(
-      `[GAMES] [COMPETITION-${
-        categoryIndex + 1
-      }] Teams to process: ${teams.length}`
+      `[GAMES] [COMPETITION-${categoryIndex + 1}] Teams to process: ${
+        teams.length
+      }`
     );
     if (isTestingSingleCategory) {
       logger.info(
-        `[GAMES] [COMPETITION-${categoryIndex + 1}] ⚠️ TESTING MODE: Processing ONLY this competition`
+        `[GAMES] [COMPETITION-${
+          categoryIndex + 1
+        }] ⚠️ TESTING MODE: Processing ONLY this competition`
       );
     }
-    logger.info(
-      `[GAMES] ========================================`
-    );
+    logger.info(`[GAMES] ========================================`);
 
-      // Log memory before category processing
-      if (this.options.memoryTracker) {
-        const beforeStats = this.options.memoryTracker.logMemoryStats(
-          `COMPETITION-${categoryIndex + 1}-START`
+    // Log memory before category processing
+    if (this.options.memoryTracker) {
+      const beforeStats = this.options.memoryTracker.logMemoryStats(
+        `COMPETITION-${categoryIndex + 1}-START`
+      );
+      logger.info(
+        `[GAMES] [COMPETITION-${
+          categoryIndex + 1
+        }] Memory BEFORE: RSS=${beforeStats.rss.toFixed(
+          2
+        )} MB, Heap=${beforeStats.heapUsed.toFixed(2)} MB`
+      );
+    }
+
+    try {
+      // When testing a single competition, process ALL teams at once (no batching)
+      // When processing all competitions, use batching to manage memory
+      let teamBatches;
+      let batchConcurrency;
+
+      if (isTestingSingleCategory) {
+        // TESTING MODE: Process ALL teams for this competition at once
+        logger.info(
+          `[GAMES] [COMPETITION-${
+            categoryIndex + 1
+          }] TESTING MODE: Processing ALL ${
+            teams.length
+          } teams at once (no batching)`
+        );
+        teamBatches = [teams]; // Single batch with all teams
+        batchConcurrency = 1; // Process sequentially to avoid overwhelming memory
+      } else {
+        // NORMAL MODE: Process teams in batches
+        const batchSize = parseInt(process.env.GAME_DATA_BATCH_SIZE || "5", 10);
+        teamBatches = this.createBatches(teams, batchSize);
+        batchConcurrency = parseInt(
+          process.env.GAME_DATA_BATCH_CONCURRENCY || "2",
+          10
         );
         logger.info(
-          `[GAMES] [COMPETITION-${categoryIndex + 1}] Memory BEFORE: RSS=${beforeStats.rss.toFixed(2)} MB, Heap=${beforeStats.heapUsed.toFixed(2)} MB`
+          `[GAMES] [COMPETITION-${categoryIndex + 1}] Processing ${
+            teamBatches.length
+          } batches (batch size: ${batchSize}, concurrency: ${batchConcurrency})`
         );
       }
-
-      try {
-        // When testing a single competition, process ALL teams at once (no batching)
-        // When processing all competitions, use batching to manage memory
-        let teamBatches;
-        let batchConcurrency;
-
-        if (isTestingSingleCategory) {
-          // TESTING MODE: Process ALL teams for this competition at once
-          logger.info(
-            `[GAMES] [COMPETITION-${categoryIndex + 1}] TESTING MODE: Processing ALL ${teams.length} teams at once (no batching)`
-          );
-          teamBatches = [teams]; // Single batch with all teams
-          batchConcurrency = 1; // Process sequentially to avoid overwhelming memory
-        } else {
-          // NORMAL MODE: Process teams in batches
-          const batchSize = parseInt(process.env.GAME_DATA_BATCH_SIZE || "5", 10);
-          teamBatches = this.createBatches(teams, batchSize);
-          batchConcurrency = parseInt(
-            process.env.GAME_DATA_BATCH_CONCURRENCY || "2",
-            10
-          );
-          logger.info(
-            `[GAMES] [COMPETITION-${categoryIndex + 1}] Processing ${
-              teamBatches.length
-            } batches (batch size: ${batchSize}, concurrency: ${batchConcurrency})`
-          );
-        }
 
       // Create page pool if needed
       const { PARALLEL_CONFIG } = require("../puppeteer/constants");
@@ -198,27 +205,27 @@ class GameDataProcessor {
         await puppeteerManager.createPagePool(concurrency);
       }
 
-        // Process batches
-        const { results: batchResults, errors: batchErrors } =
-          await processInParallel(
-            teamBatches.map((batch, index) => ({
-              batch,
-              batchNumber: index + 1,
-            })),
-            async ({ batch, batchNumber }) => {
-              if (isTestingSingleCategory) {
-                logger.info(
-                  `[GAMES] [COMPETITION-${
-                    categoryIndex + 1
-                  }] Processing ALL ${batch.length} teams for this competition`
-                );
-              } else {
-                logger.info(
-                  `[GAMES] [COMPETITION-${
-                    categoryIndex + 1
-                  }] [BATCH-${batchNumber}] Processing ${batch.length} teams`
-                );
-              }
+      // Process batches
+      const { results: batchResults, errors: batchErrors } =
+        await processInParallel(
+          teamBatches.map((batch, index) => ({
+            batch,
+            batchNumber: index + 1,
+          })),
+          async ({ batch, batchNumber }) => {
+            if (isTestingSingleCategory) {
+              logger.info(
+                `[GAMES] [COMPETITION-${categoryIndex + 1}] Processing ALL ${
+                  batch.length
+                } teams for this competition`
+              );
+            } else {
+              logger.info(
+                `[GAMES] [COMPETITION-${
+                  categoryIndex + 1
+                }] [BATCH-${batchNumber}] Processing ${batch.length} teams`
+              );
+            }
 
             let getGameDataObj = new getTeamsGameData({
               ACCOUNT: this.dataObj.ACCOUNT,
@@ -266,72 +273,92 @@ class GameDataProcessor {
         }
       }
 
-        if (batchErrors.length > 0) {
-          logger.warn(
-            `[GAMES] [COMPETITION-${categoryIndex + 1}] ${
-              batchErrors.length
-            } batches failed`,
-            { errors: batchErrors.map((e) => e.message) }
-          );
-        }
+      if (batchErrors.length > 0) {
+        logger.warn(
+          `[GAMES] [COMPETITION-${categoryIndex + 1}] ${
+            batchErrors.length
+          } batches failed`,
+          { errors: batchErrors.map((e) => e.message) }
+        );
+      }
 
-        const categoryDuration = Date.now() - categoryStartTime;
+      const categoryDuration = Date.now() - categoryStartTime;
 
-        // Log memory after category processing
-        let afterStats = null;
-        if (this.options.memoryTracker) {
-          afterStats = this.options.memoryTracker.logMemoryStats(
-            `COMPETITION-${categoryIndex + 1}-COMPLETE`
-          );
-        }
+      // Log memory after category processing
+      let afterStats = null;
+      if (this.options.memoryTracker) {
+        afterStats = this.options.memoryTracker.logMemoryStats(
+          `COMPETITION-${categoryIndex + 1}-COMPLETE`
+        );
+      }
 
+      logger.info(`[GAMES] ========================================`);
+      logger.info(
+        `[GAMES] [COMPETITION-${
+          categoryIndex + 1
+        }/${totalCategories}] COMPLETED: ${compName}`
+      );
+      logger.info(
+        `[GAMES] [COMPETITION-${
+          categoryIndex + 1
+        }] Duration: ${categoryDuration}ms`
+      );
+      logger.info(
+        `[GAMES] [COMPETITION-${categoryIndex + 1}] Fixtures scraped: ${
+          categoryScrapedGameData.length
+        }`
+      );
+      if (afterStats) {
+        const beforeStats = this.options.memoryTracker?.lastMemoryLog?.stats;
+        const memoryIncrease = beforeStats
+          ? (afterStats.rss - beforeStats.rss).toFixed(2)
+          : "N/A";
         logger.info(
-          `[GAMES] ========================================`
+          `[GAMES] [COMPETITION-${
+            categoryIndex + 1
+          }] Memory AFTER: RSS=${afterStats.rss.toFixed(
+            2
+          )} MB, Heap=${afterStats.heapUsed.toFixed(2)} MB`
         );
         logger.info(
           `[GAMES] [COMPETITION-${
             categoryIndex + 1
-          }/${totalCategories}] COMPLETED: ${compName}`
-        );
-        logger.info(
-          `[GAMES] [COMPETITION-${categoryIndex + 1}] Duration: ${categoryDuration}ms`
-        );
-        logger.info(
-          `[GAMES] [COMPETITION-${categoryIndex + 1}] Fixtures scraped: ${categoryScrapedGameData.length}`
-        );
-        if (afterStats) {
-          const beforeStats = this.options.memoryTracker?.lastMemoryLog?.stats;
-          const memoryIncrease = beforeStats
-            ? (afterStats.rss - beforeStats.rss).toFixed(2)
-            : 'N/A';
-          logger.info(
-            `[GAMES] [COMPETITION-${categoryIndex + 1}] Memory AFTER: RSS=${afterStats.rss.toFixed(2)} MB, Heap=${afterStats.heapUsed.toFixed(2)} MB`
-          );
-          logger.info(
-            `[GAMES] [COMPETITION-${categoryIndex + 1}] Memory INCREASE: ${memoryIncrease} MB`
-          );
-
-          // Warn if memory is high
-          if (this.options.memoryTracker.isMemoryHigh()) {
-            logger.warn(
-              `[GAMES] [COMPETITION-${categoryIndex + 1}] ⚠️ MEMORY WARNING: RSS=${afterStats.rss.toFixed(2)} MB exceeds threshold (${this.options.memoryTracker.memoryThresholdMB} MB)`
-            );
-          }
-          if (this.options.memoryTracker.isMemoryCritical()) {
-            logger.critical(
-              `[GAMES] [COMPETITION-${categoryIndex + 1}] 🚨 MEMORY CRITICAL: RSS=${afterStats.rss.toFixed(2)} MB exceeds critical threshold (${this.options.memoryTracker.memoryCriticalMB} MB)`
-            );
-          }
-        }
-        logger.info(
-          `[GAMES] ========================================`
+          }] Memory INCREASE: ${memoryIncrease} MB`
         );
 
-        if (isTestingSingleCategory) {
-          logger.info(
-            `[GAMES] [COMPETITION-${categoryIndex + 1}] ✅ TESTING COMPLETE: Only this competition was processed`
+        // Warn if memory is high
+        if (this.options.memoryTracker.isMemoryHigh()) {
+          logger.warn(
+            `[GAMES] [COMPETITION-${
+              categoryIndex + 1
+            }] ⚠️ MEMORY WARNING: RSS=${afterStats.rss.toFixed(
+              2
+            )} MB exceeds threshold (${
+              this.options.memoryTracker.memoryThresholdMB
+            } MB)`
           );
         }
+        if (this.options.memoryTracker.isMemoryCritical()) {
+          logger.critical(
+            `[GAMES] [COMPETITION-${
+              categoryIndex + 1
+            }] 🚨 MEMORY CRITICAL: RSS=${afterStats.rss.toFixed(
+              2
+            )} MB exceeds critical threshold (${
+              this.options.memoryTracker.memoryCriticalMB
+            } MB)`
+          );
+        }
+      }
+      logger.info(`[GAMES] ========================================`);
+
+      if (isTestingSingleCategory) {
+        logger.info(
+          `[GAMES] [COMPETITION-${
+            categoryIndex + 1
+          }] ✅ TESTING COMPLETE: Only this competition was processed`
+        );
+      }
 
       return {
         categoryKey,
@@ -340,18 +367,18 @@ class GameDataProcessor {
         scrapedGameData: categoryScrapedGameData,
         fixtureIds: Array.from(categoryFixtureIds),
       };
-      } catch (error) {
-        logger.error(
-          `[GAMES] [COMPETITION-${
-            categoryIndex + 1
-          }] Error processing competition: ${compName}`,
-          {
-            error: error.message,
-            stack: error.stack,
-          }
-        );
-        throw error;
-      }
+    } catch (error) {
+      logger.error(
+        `[GAMES] [COMPETITION-${
+          categoryIndex + 1
+        }] Error processing competition: ${compName}`,
+        {
+          error: error.message,
+          stack: error.stack,
+        }
+      );
+      throw error;
+    }
   }
 
   /**
@@ -367,43 +394,43 @@ class GameDataProcessor {
       const puppeteerManager = PuppeteerManager.getInstance();
 
       // Force browser restart if memory is high
-        if (
-          this.options.memoryTracker &&
-          this.options.memoryTracker.isMemoryHigh()
-        ) {
-          logger.warn(
-            `[GAMES] [COMPETITION-${
-              categoryIndex + 1
-            }] Memory is high - forcing browser restart`
-          );
-          await puppeteerManager.forceRestartBrowser();
-        }
-
-        // Cleanup orphaned pages
-        await puppeteerManager.cleanupOrphanedPages();
-
-        // Force GC if available
-        if (global.gc) {
-          global.gc();
-        }
-
-        // Log memory after cleanup
-        if (this.options.memoryTracker) {
-          this.options.memoryTracker.logMemoryStats(
-            `COMPETITION-${categoryIndex + 1}-CLEANUP`
-          );
-        }
-
-        logger.info(
-          `[GAMES] [COMPETITION-${categoryIndex + 1}] Memory cleanup completed`
-        );
-      } catch (error) {
+      if (
+        this.options.memoryTracker &&
+        this.options.memoryTracker.isMemoryHigh()
+      ) {
         logger.warn(
-          `[GAMES] [COMPETITION-${categoryIndex + 1}] Error during cleanup`,
-          {
-            error: error.message,
-          }
+          `[GAMES] [COMPETITION-${
+            categoryIndex + 1
+          }] Memory is high - forcing browser restart`
         );
+        await puppeteerManager.forceRestartBrowser();
+      }
+
+      // Cleanup orphaned pages
+      await puppeteerManager.cleanupOrphanedPages();
+
+      // Force GC if available
+      if (global.gc) {
+        global.gc();
+      }
+
+      // Log memory after cleanup
+      if (this.options.memoryTracker) {
+        this.options.memoryTracker.logMemoryStats(
+          `COMPETITION-${categoryIndex + 1}-CLEANUP`
+        );
+      }
+
+      logger.info(
+        `[GAMES] [COMPETITION-${categoryIndex + 1}] Memory cleanup completed`
+      );
+    } catch (error) {
+      logger.warn(
+        `[GAMES] [COMPETITION-${categoryIndex + 1}] Error during cleanup`,
+        {
+          error: error.message,
+        }
+      );
       // Don't throw - cleanup errors shouldn't stop processing
     }
   }
@@ -415,9 +442,9 @@ class GameDataProcessor {
    */
   async process() {
     // MEMORY FIX: Only store minimal fixture data (gameID), not full objects
+    // We assign fixtures immediately after scraping (streaming mode) - no accumulation
     const scrapedFixtureIds = new Set(); // Use Set to avoid duplicates
     const scrapedFixturesMinimal = []; // Store minimal objects { gameID } for comparison
-    const allScrapedGameData = []; // Aggregate all scraped data
     let batchErrors = []; // Initialize batchErrors to handle both processing paths
     let totalBatches = 0; // Track total batches for logging
     let batchConcurrency = 0; // Track batch concurrency for logging
@@ -449,10 +476,18 @@ class GameDataProcessor {
           if (testCategoryId || testCategoryName) {
             const originalCount = categories.length;
             categories = categories.filter(([categoryKey, categoryData]) => {
-              if (testCategoryId && categoryData.compID.toString() === testCategoryId.toString()) {
+              if (
+                testCategoryId &&
+                categoryData.compID.toString() === testCategoryId.toString()
+              ) {
                 return true;
               }
-              if (testCategoryName && categoryData.compName.toLowerCase().includes(testCategoryName.toLowerCase())) {
+              if (
+                testCategoryName &&
+                categoryData.compName
+                  .toLowerCase()
+                  .includes(testCategoryName.toLowerCase())
+              ) {
                 return true;
               }
               return false;
@@ -473,7 +508,11 @@ class GameDataProcessor {
             }
 
             logger.info(
-              `[GAMES] TEST_CATEGORY filter active: Processing ${categories.length} of ${originalCount} categories (Filter: ID=${testCategoryId || 'none'}, Name=${testCategoryName || 'none'})`
+              `[GAMES] TEST_CATEGORY filter active: Processing ${
+                categories.length
+              } of ${originalCount} categories (Filter: ID=${
+                testCategoryId || "none"
+              }, Name=${testCategoryName || "none"})`
             );
           }
 
@@ -493,10 +532,48 @@ class GameDataProcessor {
               categories.length
             );
 
-            // Aggregate results
-            if (categoryResult.scrapedGameData) {
-              allScrapedGameData.push(...categoryResult.scrapedGameData);
+            // MEMORY FIX: Assign fixtures immediately after scraping each category (streaming mode)
+            // This prevents accumulation of thousands of fixtures in memory
+            if (
+              categoryResult.scrapedGameData &&
+              categoryResult.scrapedGameData.length > 0
+            ) {
+              logger.info(
+                `[GAMES] [COMPETITION-${i + 1}] Assigning ${
+                  categoryResult.scrapedGameData.length
+                } fixtures immediately (streaming mode)`
+              );
+
+              // Assign fixtures for this category immediately
+              const assignmentBatchSize = parseInt(
+                process.env.GAME_DATA_ASSIGNMENT_BATCH_SIZE || "10",
+                10
+              );
+              const categoryAssignmentBatches = this.createBatches(
+                categoryResult.scrapedGameData,
+                assignmentBatchSize
+              );
+
+              for (const assignmentBatch of categoryAssignmentBatches) {
+                let assignGameDataObj = new assignGameData(
+                  assignmentBatch,
+                  this.dataObj
+                );
+                await assignGameDataObj.setup();
+                assignGameDataObj = null;
+
+                // Force GC after every assignment batch
+                if (global.gc) {
+                  global.gc();
+                }
+              }
+
+              // CRITICAL: Clear category scraped data immediately after assignment
+              categoryResult.scrapedGameData.length = 0;
+              categoryResult.scrapedGameData = null;
             }
+
+            // Only track fixture IDs (minimal memory footprint)
             if (categoryResult.fixtureIds) {
               categoryResult.fixtureIds.forEach((gameID) => {
                 if (!scrapedFixtureIds.has(gameID)) {
@@ -512,24 +589,26 @@ class GameDataProcessor {
             }
           }
 
-          // Skip to assignment phase
-          // (allScrapedGameData and scrapedFixturesMinimal already populated)
+          // All fixtures have been assigned during category processing (streaming mode)
+          // No need for separate assignment phase
         }
       }
 
       // STANDARD PROCESSING: Process all teams together (if category isolation not used or failed)
-      if (!this.options.isolateByCategory || allScrapedGameData.length === 0) {
+      if (!this.options.isolateByCategory) {
         logger.info("[GAMES] Using standard processing (all teams together)");
-        const batchSize = parseInt(process.env.GAME_DATA_BATCH_SIZE || "5", 10);
+
+        // MEMORY FIX: Use smaller default batch sizes to reduce memory spikes
+        const batchSize = parseInt(process.env.GAME_DATA_BATCH_SIZE || "3", 10);
         const teamBatches = this.createBatches(teams, batchSize);
         totalBatches = teamBatches.length; // Track for logging
 
-        // PARALLEL FIX: Process batches in parallel (not just items within batches)
-        // This dramatically improves performance when you have many batches
+        // MEMORY FIX: Reduce default concurrency to prevent memory spikes
+        // Process batches sequentially by default (concurrency: 1) for better memory control
         batchConcurrency = parseInt(
-          process.env.GAME_DATA_BATCH_CONCURRENCY || "2",
+          process.env.GAME_DATA_BATCH_CONCURRENCY || "1",
           10
-        ); // Process 2 batches in parallel by default
+        );
         logger.info(
           `[GAMES] Processing ${teamBatches.length} batches with concurrency: ${batchConcurrency} (batch size: ${batchSize})`
         );
@@ -664,12 +743,48 @@ class GameDataProcessor {
             }
           );
 
-        // Aggregate results from all batches (thread-safe aggregation)
-        for (const batchResult of batchResults) {
-          if (batchResult && batchResult.scrapedGameData) {
-            allScrapedGameData.push(...batchResult.scrapedGameData);
+        // MEMORY FIX: Assign fixtures immediately after each batch (streaming mode)
+        // This prevents accumulation of thousands of fixtures in memory
+        const assignmentBatchSize = parseInt(
+          process.env.GAME_DATA_ASSIGNMENT_BATCH_SIZE || "10",
+          10
+        );
 
-            // Aggregate fixture IDs (thread-safe - Set handles duplicates)
+        let batchIndex = 0;
+
+        // Process batches and assign immediately (streaming mode)
+        for (const batchResult of batchResults) {
+          batchIndex++;
+          if (
+            batchResult &&
+            batchResult.scrapedGameData &&
+            batchResult.scrapedGameData.length > 0
+          ) {
+            // Assign fixtures for this batch immediately
+            const batchAssignmentBatches = this.createBatches(
+              batchResult.scrapedGameData,
+              assignmentBatchSize
+            );
+
+            for (const assignmentBatch of batchAssignmentBatches) {
+              let assignGameDataObj = new assignGameData(
+                assignmentBatch,
+                this.dataObj
+              );
+              await assignGameDataObj.setup();
+              assignGameDataObj = null;
+
+              // Force GC after every assignment batch
+              if (global.gc) {
+                global.gc();
+              }
+            }
+
+            // CRITICAL: Clear batch scraped data immediately after assignment
+            batchResult.scrapedGameData.length = 0;
+            batchResult.scrapedGameData = null;
+
+            // Track fixture IDs only (minimal memory footprint)
             if (batchResult.fixtureIds) {
               batchResult.fixtureIds.forEach((gameID) => {
                 if (!scrapedFixtureIds.has(gameID)) {
@@ -677,6 +792,17 @@ class GameDataProcessor {
                   scrapedFixturesMinimal.push({ gameID });
                 }
               });
+            }
+
+            // MEMORY FIX: Cleanup page pool and force GC every 5 batches
+            if (batchIndex % 5 === 0) {
+              logger.info(
+                `[GAMES] [BATCH-${batchIndex}] Memory cleanup: Cleaning page pool and forcing GC`
+              );
+              await puppeteerManager.cleanupOrphanedPages();
+              if (global.gc) {
+                global.gc();
+              }
             }
           }
         }
@@ -695,46 +821,8 @@ class GameDataProcessor {
         );
       }
 
-      // Assign scraped data sequentially to avoid overwhelming the API
-      // Process in batches to manage memory
-      const assignmentBatchSize = parseInt(
-        process.env.GAME_DATA_ASSIGNMENT_BATCH_SIZE || "10",
-        10
-      );
-      const assignmentBatches = this.createBatches(
-        allScrapedGameData,
-        assignmentBatchSize
-      );
-
-      logger.info(
-        `[GAMES] Assigning ${allScrapedGameData.length} fixtures in ${assignmentBatches.length} assignment batches`
-      );
-
-      for (let i = 0; i < assignmentBatches.length; i++) {
-        const assignmentBatch = assignmentBatches[i];
-        logger.info(
-          `[GAMES] Assigning batch ${i + 1}/${assignmentBatches.length} (${
-            assignmentBatch.length
-          } fixtures)`
-        );
-
-        let assignGameDataObj = new assignGameData(
-          assignmentBatch,
-          this.dataObj
-        );
-        await assignGameDataObj.setup();
-
-        // MEMORY FIX: Clear references immediately after processing
-        assignGameDataObj = null;
-
-        // MEMORY FIX: Force GC hint after every 2 assignment batches
-        if ((i + 1) % 2 === 0 && global.gc) {
-          global.gc();
-        }
-      }
-
-      // Clear scraped data after assignment
-      allScrapedGameData.length = 0;
+      // All fixtures have been assigned during batch processing (streaming mode)
+      // No need for separate assignment phase
 
       // Log summary - handle both processing paths
       if (totalBatches > 0) {
