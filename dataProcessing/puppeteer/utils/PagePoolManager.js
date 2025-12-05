@@ -280,20 +280,22 @@ class PagePoolManager {
         // Mark as active BEFORE reset to prevent race conditions
         this.activePages.add(page);
 
-        // CRITICAL FIX: Reset page to blank before reuse to prevent URL conflicts
-        // Pages in the pool may still have the previous URL loaded, causing duplicate scraping
+        // PROXY OPTIMIZATION: Skip reset if page is already blank (reduces proxy overhead)
+        // Only reset if page has a real URL loaded
         try {
           const currentUrl = page.url();
           if (
             currentUrl !== "about:blank" &&
-            currentUrl !== "chrome-error://chromewebdata/"
+            currentUrl !== "chrome-error://chromewebdata/" &&
+            !currentUrl.startsWith("data:")
           ) {
             logger.debug(
               `[PagePoolManager] Resetting page from ${currentUrl} to about:blank before reuse`
             );
+            // PROXY OPTIMIZATION: Use shorter timeout for blank page navigation
             await page.goto("about:blank", {
               waitUntil: "domcontentloaded",
-              timeout: 5000,
+              timeout: 3000, // Reduced from 5000ms - blank page loads quickly even through proxy
             });
           }
         } catch (resetError) {

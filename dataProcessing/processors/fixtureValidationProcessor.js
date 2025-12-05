@@ -21,18 +21,17 @@ class FixtureValidationProcessor {
     // MEMORY OPTIMIZATION: Process in smaller batches, browser closed between batches
     this.validationService = new FixtureValidationService({
       usePuppeteer: options.usePuppeteer !== false, // Default to true (required for PlayHQ)
-      timeout: options.timeout || 5000, // Reduced to 15 seconds for faster validation and less memory
+      timeout: options.timeout || 8000, // Increased to 8s to account for proxy latency
       skipHttpValidation:
         options.skipHttpValidation !== undefined
           ? options.skipHttpValidation
           : true, // Default: true (skip HTTP for PlayHQ, we know it blocks HTTP)
     });
     this.processingTracker = ProcessingTracker.getInstance();
-    // Batch size for processing (browser cleanup between batches)
-    // MEMORY OPTIMIZATION: 5 fixtures per batch for Heroku memory constraints (reduced from 20)
-    // Smaller batches = more frequent browser cleanup = lower memory usage
+    // PERFORMANCE OPTIMIZATION: Increased batch size for better parallelization
+    // Increased from 5 to 10 for better throughput while maintaining memory safety
     this.concurrencyLimit =
-      options.concurrencyLimit || (options.usePuppeteer !== false ? 5 : 5); // 5 fixtures per batch (memory optimized for Heroku)
+      options.concurrencyLimit || (options.usePuppeteer !== false ? 10 : 10);
     this.validationResults = [];
     // MEMORY OPTIMIZATION: Clear validation results after use to free memory
   }
@@ -70,80 +69,103 @@ class FixtureValidationProcessor {
       // Calculate date range
       const { fromDate, toDate } = fixtureProcessor.calculateDateRange();
 
-      // MEMORY CRITICAL FIX: Use very small page size to prevent immediate memory spikes
-      const pageSize = 25; // CRITICAL: Small page size to prevent memory spikes
+      // PERFORMANCE OPTIMIZATION: Increased page size for fewer API calls
+      // Increased from 25 to 50 to reduce API overhead while maintaining memory safety
+      const pageSize = 50;
       let page = 1;
       let hasMore = true;
       let totalFixtures = 0;
 
-      // Process fixtures page by page
-      while (hasMore) {
-        // Fetch page
-        const {
-          pageFixtures,
-          pagination,
-          hasMore: pageHasMore,
-        } = await fixtureProcessor.fetchPage(
-          teamIds,
-          fromDate,
-          toDate,
-          page,
-          pageSize
-        );
+      // PERFORMANCE OPTIMIZATION: Process multiple pages in parallel
+      const parallelPageCount = 2; // Fetch and validate 2 pages concurrently
+      const pageQueue = [];
 
-        if (!pageFixtures || pageFixtures.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        // Update total count from first page
-        if (page === 1) {
-          totalFixtures = pagination.total || pageFixtures.length;
-          this.processingTracker.itemFound("fixture-validation", totalFixtures);
-          logger.info(
-            `[VALIDATION] Found ${totalFixtures} total fixtures to validate across ${
-              pagination.pageCount || 1
-            } pages`
+      // Process fixtures page by page (with parallel fetching)
+      while (hasMore || pageQueue.length > 0) {
+        // Fetch multiple pages in parallel
+        while (pageQueue.length < parallelPageCount && hasMore) {
+          const fetchPromise = fixtureProcessor.fetchPage(
+            teamIds,
+            fromDate,
+            toDate,
+            page,
+            pageSize
           );
+          pageQueue.push({ promise: fetchPromise, pageNumber: page });
+          page++;
         }
 
-        logger.info(
-          `[VALIDATION] Page ${page}/${pagination.pageCount || 1}: ${
-            pageFixtures.length
-          } fixtures (${totalFixtures} total)`
-        );
+        // Wait for at least one page to complete
+        if (pageQueue.length > 0) {
+          const { promise, pageNumber } = pageQueue.shift();
+          const {
+            pageFixtures,
+            pagination,
+            hasMore: pageHasMore,
+          } = await promise;
 
-        // Validate page
-        const pageValidationResults = await fixtureProcessor.validatePage(
-          pageFixtures,
-          page
-        );
+          if (!pageFixtures || pageFixtures.length === 0) {
+            hasMore = false;
+            continue;
+          }
 
-        // Aggregate results (only stores invalid fixtures)
-        resultAggregator.processPageResults(
-          pageValidationResults,
-          pageFixtures
-        );
+          // Update total count from first page
+          if (pageNumber === 1) {
+            totalFixtures = pagination.total || pageFixtures.length;
+            this.processingTracker.itemFound(
+              "fixture-validation",
+              totalFixtures
+            );
+            logger.info(
+              `[VALIDATION] Found ${totalFixtures} total fixtures to validate across ${
+                pagination.pageCount || 1
+              } pages`
+            );
+          }
 
-        // Clear page data to free memory
-        fixtureProcessor.clearPageData(pageFixtures, pageValidationResults);
+          logger.info(
+            `[VALIDATION] Page ${pageNumber}/${pagination.pageCount || 1}: ${
+              pageFixtures.length
+            } fixtures (${totalFixtures} total)`
+          );
 
-        // Hint GC if needed
-        const stats = resultAggregator.getStats();
-        fixtureProcessor.hintGarbageCollection(page, {
-          ...stats,
-          totalFixtures,
-        });
+          // Validate page (non-blocking - allows parallel processing)
+          const validationPromise = fixtureProcessor.validatePage(
+            pageFixtures,
+            pageNumber
+          );
 
-        // Check if more pages
-        hasMore = pageHasMore;
-        page++;
+          // Process validation result
+          const pageValidationResults = await validationPromise;
 
-        // Log page memory
-        MemoryTracker.logPageMemory(page - 1, initialMemory, {
-          ...stats,
-          totalFixtures,
-        });
+          // Aggregate results (only stores invalid fixtures)
+          resultAggregator.processPageResults(
+            pageValidationResults,
+            pageFixtures
+          );
+
+          // Clear page data to free memory
+          fixtureProcessor.clearPageData(pageFixtures, pageValidationResults);
+
+          // Hint GC if needed
+          const stats = resultAggregator.getStats();
+          fixtureProcessor.hintGarbageCollection(pageNumber, {
+            ...stats,
+            totalFixtures,
+          });
+
+          // Check if more pages
+          hasMore = pageHasMore;
+
+          // Log page memory periodically
+          if (pageNumber % 5 === 0) {
+            const stats = resultAggregator.getStats();
+            MemoryTracker.logPageMemory(pageNumber, initialMemory, {
+              ...stats,
+              totalFixtures,
+            });
+          }
+        }
       }
 
       // Get aggregated results

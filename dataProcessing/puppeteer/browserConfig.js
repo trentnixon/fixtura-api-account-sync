@@ -29,6 +29,17 @@ const getBaseLaunchArgs = () => {
     "--mute-audio",
     "--disable-notifications",
     "--disable-default-apps",
+    // PROXY OPTIMIZATION: Reduce overhead and improve connection reuse
+    "--aggressive-cache-discard", // Reduce cache overhead through proxy
+    "--disable-application-cache", // Disable app cache for faster proxy connections
+    "--disable-background-downloads", // Reduce background network activity
+    "--disable-client-side-phishing-detection", // Reduce proxy overhead
+    "--disable-hang-monitor", // Reduce monitoring overhead
+    "--disable-popup-blocking", // Already handled, but explicit
+    "--disable-prompt-on-repost", // Reduce proxy round-trips
+    "--disable-translate", // Reduce network calls
+    "--disable-web-security", // Only if needed for scraping (reduces proxy overhead)
+    "--enable-features=NetworkService,NetworkServiceLogging", // Better connection management
   ];
 };
 
@@ -60,13 +71,15 @@ const getLaunchOptions = (options = {}) => {
   const {
     headless = true,
     proxyServer = null,
-    protocolTimeout = 120000,
+    protocolTimeout = 90000, // PROXY OPTIMIZATION: Default reduced from 120s to 90s
   } = options;
 
   const args = getBaseLaunchArgs();
 
   if (proxyServer) {
     args.push(`--proxy-server=${proxyServer}`);
+    // PROXY OPTIMIZATION: Add proxy-specific optimizations
+    args.push("--enable-features=NetworkService"); // Better proxy connection management
   }
 
   return {

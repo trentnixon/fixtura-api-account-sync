@@ -28,11 +28,17 @@ class StageOrchestrator {
 
     // Load config
     const config = ProcessingConfig.create(configOrPreset);
-    logger.info("[CONFIG] Stages enabled:", {
-      competitions: config.stages.competitions,
-      teams: config.stages.teams,
-      games: config.stages.games,
-    });
+    logger.info("[CONFIG] Stages enabled:");
+    logger.info(`[CONFIG]   competitions: ${config.stages.competitions}`);
+    logger.info(`[CONFIG]   teams: ${config.stages.teams}`);
+    logger.info(`[CONFIG]   games: ${config.stages.games}`);
+    logger.info(
+      `[CONFIG]   fixture-validation: ${config.stages["fixture-validation"]}`
+    );
+    logger.info(
+      `[CONFIG]   fixture-cleanup: ${config.stages["fixture-cleanup"]}`
+    );
+    logger.info(`[CONFIG]   tracking: ${config.stages.tracking}`);
 
     memoryTracker.startTracking();
     const startTime = new Date();
@@ -64,11 +70,13 @@ class StageOrchestrator {
         await BrowserManager.forceBrowserRestartIfNeeded();
       }
 
-      // STOP if competitions-only
+      // STOP if competitions-only (but continue if validation/cleanup are enabled)
       if (
         config.stages.competitions &&
         !config.stages.teams &&
-        !config.stages.games
+        !config.stages.games &&
+        !config.stages["fixture-validation"] &&
+        !config.stages["fixture-cleanup"]
       ) {
         logger.info("[COMPETITIONS] Competitions-only mode - stopping here");
         return { Complete: true };
@@ -126,6 +134,11 @@ class StageOrchestrator {
     }
 
     // VALIDATION
+    logger.info(
+      `[VALIDATION] Config check: fixture-validation=${
+        config.stages["fixture-validation"]
+      } (type: ${typeof config.stages["fixture-validation"]})`
+    );
     if (config.stages["fixture-validation"]) {
       logger.info("[VALIDATION] Starting");
       await processingTracker.setCurrentStage(
@@ -144,6 +157,11 @@ class StageOrchestrator {
     }
 
     // CLEANUP
+    logger.info(
+      `[CLEANUP] Config check: fixture-cleanup=${
+        config.stages["fixture-cleanup"]
+      } (type: ${typeof config.stages["fixture-cleanup"]})`
+    );
     if (config.stages["fixture-cleanup"]) {
       logger.info("[CLEANUP] Starting");
       await processingTracker.setCurrentStage("fixture-cleanup", collectionID);

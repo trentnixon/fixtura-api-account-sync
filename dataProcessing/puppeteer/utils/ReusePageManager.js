@@ -34,12 +34,20 @@ class ReusePageManager {
         // Mark as active BEFORE resetting state
         this.activePages.add(page);
 
-        // Reset page state before reuse
+        // PROXY OPTIMIZATION: Reset page state before reuse (skip if already blank)
         try {
-          await page.goto("about:blank", {
-            waitUntil: "domcontentloaded",
-            timeout: 5000,
-          });
+          const currentUrl = page.url();
+          // Only reset if page has a real URL (skip blank/data URLs to reduce proxy overhead)
+          if (
+            currentUrl !== "about:blank" &&
+            currentUrl !== "chrome-error://chromewebdata/" &&
+            !currentUrl.startsWith("data:")
+          ) {
+            await page.goto("about:blank", {
+              waitUntil: "domcontentloaded",
+              timeout: 3000, // PROXY OPTIMIZATION: Reduced from 5000ms - blank page loads quickly
+            });
+          }
         } catch (error) {
           // If navigation fails, page might be in bad state - remove from pool and create new
           logger.warn(
@@ -91,11 +99,11 @@ class ReusePageManager {
     // Remove from active pages
     this.activePages.delete(page);
 
-    // Navigate to blank page to clear state (cookies, localStorage, etc.)
+    // PROXY OPTIMIZATION: Navigate to blank page to clear state (cookies, localStorage, etc.)
     try {
       await page.goto("about:blank", {
         waitUntil: "domcontentloaded",
-        timeout: 5000,
+        timeout: 3000, // PROXY OPTIMIZATION: Reduced from 5000ms - blank page loads quickly even through proxy
       });
       logger.debug(
         "[ReusePageManager] Page released to reuse pool and state cleared"

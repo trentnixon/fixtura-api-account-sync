@@ -218,9 +218,9 @@ class GameDataProcessor {
               } teams directly in parallel`
             );
 
-            // MEMORY OPTIMIZATION: Enable per-team assignment
-            const assignPerTeam =
-              process.env.GAMES_ASSIGN_PER_TEAM === "true" || true; // Default: enabled
+            // PERFORMANCE FIX: Disable per-team assignment by default (causes massive slowdown)
+            // Per-team assignment makes sequential API calls for each team, blocking parallel processing
+            const assignPerTeam = process.env.GAMES_ASSIGN_PER_TEAM === "true"; // Default: disabled for performance
 
             logger.info(
               `[GAMES] [COMPETITION-${
@@ -702,9 +702,10 @@ class GameDataProcessor {
               );
 
               // Scrape game data for the current batch
-              // MEMORY OPTIMIZATION: Enable per-team assignment to prevent accumulation
+              // PERFORMANCE FIX: Disable per-team assignment by default (causes massive slowdown)
+              // Per-team assignment makes sequential API calls for each team, blocking parallel processing
               const assignPerTeam =
-                process.env.GAMES_ASSIGN_PER_TEAM === "true" || true; // Default: enabled
+                process.env.GAMES_ASSIGN_PER_TEAM === "true"; // Default: disabled for performance
 
               let getGameDataObj = new getTeamsGameData(
                 {
@@ -810,9 +811,8 @@ class GameDataProcessor {
             }
           );
 
-        // MEMORY OPTIMIZATION: Check if per-team assignment was used
-        const assignPerTeam =
-          process.env.GAMES_ASSIGN_PER_TEAM === "true" || true; // Default: enabled
+        // PERFORMANCE FIX: Check if per-team assignment was used (disabled by default)
+        const assignPerTeam = process.env.GAMES_ASSIGN_PER_TEAM === "true"; // Default: disabled for performance
         let batchIndex = 0;
 
         if (assignPerTeam) {

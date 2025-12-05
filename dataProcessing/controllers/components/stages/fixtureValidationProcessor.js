@@ -57,10 +57,7 @@ class FixtureValidationProcessorComponent {
         invalid: validationResult.invalid || 0,
       });
 
-      if (
-        validationResult.results &&
-        validationResult.results.length > 0
-      ) {
+      if (validationResult.results && validationResult.results.length > 0) {
         logger.info(
           `[VALIDATION] ===== ${validationResult.results.length} VALIDATION RESULTS =====`
         );
@@ -188,4 +185,3 @@ class FixtureValidationProcessorComponent {
 }
 
 module.exports = FixtureValidationProcessorComponent;
-

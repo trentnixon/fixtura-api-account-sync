@@ -13,7 +13,9 @@ const { PARALLEL_CONFIG } = require("../../dataProcessing/puppeteer/constants");
 class FixtureValidationService {
   constructor(options = {}) {
     this.domain = "https://www.playhq.com";
-    this.timeout = options.timeout || 1000; // 10 seconds
+    // PERFORMANCE OPTIMIZATION: Increased timeout to account for proxy latency
+    // Proxy adds significant load time, so we need longer timeouts to avoid false failures
+    this.timeout = options.timeout || 8000; // Increased from 1000ms to 8000ms for proxy
     this.skipHttpValidation = options.skipHttpValidation !== false; // Default: true (PlayHQ blocks HTTP)
     this.usePuppeteer = options.usePuppeteer !== false; // Default: true
     this.puppeteerManager = null;
@@ -103,23 +105,23 @@ class FixtureValidationService {
         }
       }
 
-      // Wait for page to render (PlayHQ is a SPA - needs time for content to load)
-      // CRITICAL: Wait for actual content, not just body existence
+      // PERFORMANCE OPTIMIZATION: Reduced waits while accounting for proxy latency
+      // Proxy adds significant load time, so we use longer timeouts but fewer waits
       try {
         // Check if page is still connected
         if (page.isClosed()) {
           throw new Error("Page is closed");
         }
-        // Wait for body to exist first
+
+        // PERFORMANCE OPTIMIZATION: Wait for body with increased timeout for proxy
+        // Increased timeout from 5000ms to 10000ms to account for proxy latency
         await page.waitForSelector("body", {
-          timeout: 5000,
+          timeout: 10000, // Increased for proxy latency
           visible: true,
         });
 
-        // Wait for content to render - check for actual page content, not just body
-        // For validation, we need to check for either:
-        // 1. 404 page content (h1 with "404" text)
-        // 2. Valid game page content (scorecard elements or game data)
+        // PERFORMANCE OPTIMIZATION: Reduced waitForFunction timeout but increased base timeout
+        // Check for content with shorter wait (content check is less critical than initial load)
         try {
           await page.waitForFunction(
             () => {
@@ -148,18 +150,19 @@ class FixtureValidationService {
               return has404 || hasGameContent;
             },
             {
-              timeout: 8000, // Increased timeout for content to load
-              polling: 200, // Check every 200ms
+              timeout: 10000, // Increased from 8000ms to 10000ms for proxy latency
+              polling: 300, // Increased polling interval from 200ms to 300ms (less frequent checks)
             }
           );
           logger.debug(`[VALIDATION] Page content loaded for ${fullUrl}`);
         } catch (waitFuncError) {
-          // If waitForFunction times out, add delay for content to potentially load
+          // PERFORMANCE OPTIMIZATION: If waitForFunction times out, continue anyway
+          // Proxy latency may cause timeouts even for valid pages, so we check content anyway
           logger.debug(
-            `[VALIDATION] Content check timeout for ${fullUrl}, adding delay`,
+            `[VALIDATION] Content check timeout for ${fullUrl}, checking content anyway`,
             { error: waitFuncError.message }
           );
-          // MEMORY FIX: Removed 2-second delay - GC hints and page DOM clearing are sufficient
+          // Continue to content check - don't fail on timeout
         }
       } catch (waitError) {
         // If body doesn't load or page is closed, return error result
@@ -169,11 +172,12 @@ class FixtureValidationService {
         ) {
           throw new Error(`Page closed during wait: ${waitError.message}`);
         }
-        // If timeout, continue to check content anyway but add delay
+        // PERFORMANCE OPTIMIZATION: If timeout, continue to check content anyway
+        // Proxy latency may cause timeouts, so we don't fail immediately
         logger.debug(
-          `[VALIDATION] Wait error for ${fullUrl}: ${waitError.message}`
+          `[VALIDATION] Wait error for ${fullUrl}, checking content anyway: ${waitError.message}`
         );
-        // MEMORY FIX: Removed 2-second delay - GC hints and page DOM clearing are sufficient
+        // Continue to content check
       }
 
       // Check if page is still connected before evaluation
@@ -799,13 +803,14 @@ class FixtureValidationService {
             }
           );
 
-          // MEMORY FIX: Clear batch results immediately after extracting minimal data
+          // PERFORMANCE OPTIMIZATION: Clear batch results immediately
           batchResults.results = null;
           batchResults.errors = null;
 
-          // MEMORY FIX: Clear page DOM after each batch to prevent accumulation
-          // Pages accumulate ~100MB each from DOM content, clearing reduces to ~50MB
-          if (this.puppeteerManager && this.puppeteerManager.pagePool) {
+          // PERFORMANCE OPTIMIZATION: Reduced DOM clearing frequency
+          // Clear DOM only every 5 batches instead of every batch to reduce overhead
+          // Proxy latency makes DOM clearing expensive, so we do it less frequently
+          if (batchIndex > 0 && batchIndex % 5 === 0 && this.puppeteerManager && this.puppeteerManager.pagePool) {
             try {
               const pagesToClear = [...this.puppeteerManager.pagePool];
               const clearPromises = pagesToClear.map(async (page) => {
@@ -837,8 +842,9 @@ class FixtureValidationService {
             }
           }
 
-          // MEMORY FIX: Force GC hint after every 3 batches (more frequent)
-          if (batchIndex > 0 && batchIndex % 3 === 0 && global.gc) {
+          // PERFORMANCE OPTIMIZATION: Reduced GC frequency
+          // GC hint every 5 batches instead of every 3 to reduce overhead
+          if (batchIndex > 0 && batchIndex % 5 === 0 && global.gc) {
             global.gc();
             logger.info(
               `[VALIDATION] GC hint after batch ${batchIndex + 1}/${

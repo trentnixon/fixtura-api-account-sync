@@ -4,8 +4,13 @@
  */
 
 // Browser Launch Configuration
+// PROXY OPTIMIZATION: Reduced protocol timeout for faster failure detection
+// Proxy adds latency, but 90s is still generous for most operations
 const BROWSER_CONFIG = {
-  PROTOCOL_TIMEOUT: 120000, // 2 minutes
+  PROTOCOL_TIMEOUT: parseInt(
+    process.env.PUPPETEER_PROTOCOL_TIMEOUT || "90000", // Reduced from 120s to 90s for proxy
+    10
+  ),
   MAX_LISTENERS: 20, // EventEmitter max listeners
   RESTART_DELAY: 1000, // 1 second delay before restart
 };
@@ -63,9 +68,9 @@ const PARALLEL_CONFIG = {
     10
   ), // Default: 2 concurrent teams (reduced for memory)
   VALIDATION_CONCURRENCY: parseInt(
-    process.env.PARALLEL_VALIDATION_CONCURRENCY || "3", // Reduced from 5 to 3
+    process.env.PARALLEL_VALIDATION_CONCURRENCY || "5", // Increased from 3 to 5 for better throughput
     10
-  ), // Default: 3 concurrent validations (reduced for memory)
+  ), // Default: 5 concurrent validations (optimized for performance)
 };
 
 // Calculate PAGE_POOL_SIZE dynamically to match max concurrency

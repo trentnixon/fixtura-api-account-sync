@@ -16,9 +16,12 @@ class GetTeamsGameData {
     this.puppeteerManager = PuppeteerManager.getInstance();
     this.processingTracker = ProcessingTracker.getInstance();
     this.domain = "https://www.playhq.com";
-    // MEMORY OPTIMIZATION: Enable per-team assignment to prevent accumulation
+    // PERFORMANCE FIX: Disable per-team assignment by default (causes massive slowdown)
+    // Per-team assignment makes sequential API calls for each team, blocking parallel processing
+    // Only enable if explicitly requested via options or environment variable
     this.assignPerTeam =
-      options.assignPerTeam || process.env.GAMES_ASSIGN_PER_TEAM === "true";
+      options.assignPerTeam === true ||
+      process.env.GAMES_ASSIGN_PER_TEAM === "true";
   }
 
   // Initialize Puppeteer and get a reusable page (Strategy 2: Page Reuse)
