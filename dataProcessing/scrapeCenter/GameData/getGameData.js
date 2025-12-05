@@ -36,7 +36,7 @@ class GetTeamsGameData {
     }
 
     try {
-      const assignGameDataObj = new AssignGameData(
+      let assignGameDataObj = new AssignGameData(
         gameData,
         this.dataObj,
         gameData.length
@@ -52,6 +52,7 @@ class GetTeamsGameData {
       logger.error(`Error assigning fixtures immediately: ${error.message}`, {
         error: error.message,
         fixtureCount: gameData.length,
+        stack: error.stack,
       });
       // Don't throw - allow processing to continue
     }
