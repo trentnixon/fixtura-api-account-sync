@@ -7,6 +7,55 @@ class AssociationCompetitionsFetcher {
     this.associationID = associationID;
   }
 
+  /**
+   * Optimize page for competitions scraping by blocking non-essential resources
+   * This significantly speeds up page loading
+   */
+  async optimizePageForCompetitions() {
+    try {
+      await this.page.setRequestInterception(true);
+      this.page.on("request", (request) => {
+        const resourceType = request.resourceType();
+        const url = request.url();
+
+        // Block non-essential resources to speed up loading
+        if (
+          resourceType === "image" ||
+          resourceType === "font" ||
+          resourceType === "media" ||
+          resourceType === "websocket" ||
+          resourceType === "manifest" ||
+          // Block analytics and tracking
+          url.includes("analytics") ||
+          url.includes("tracking") ||
+          url.includes("google-analytics") ||
+          url.includes("googletagmanager") ||
+          url.includes("facebook.net") ||
+          url.includes("doubleclick") ||
+          url.includes("adservice") ||
+          // Block ads
+          url.includes("/ads/") ||
+          url.includes("/advertisement") ||
+          // Block social media widgets
+          url.includes("twitter") ||
+          url.includes("instagram") ||
+          url.includes("linkedin")
+        ) {
+          request.abort();
+        } else {
+          request.continue();
+        }
+      });
+      logger.debug(
+        "[PARALLEL_COMPETITIONS] Page optimized for competitions scraping (blocked images/fonts/media/analytics)"
+      );
+    } catch (error) {
+      logger.debug(
+        "[PARALLEL_COMPETITIONS] Request interception already configured"
+      );
+    }
+  }
+
   async fetchCompetitions() {
     try {
       logger.info(
@@ -16,6 +65,9 @@ class AssociationCompetitionsFetcher {
         `Checking competitions in fetchCompetitionInAssociation on URL: ${this.url} and this ID ${this.associationID}`
       );
 
+      // Optimize page for competitions scraping before navigation
+      await this.optimizePageForCompetitions();
+
       const navStartTime = Date.now();
       logger.info(`[PARALLEL_COMPETITIONS] [NAV] Navigating to ${this.url}`);
       await this.navigateToUrl();
@@ -23,6 +75,16 @@ class AssociationCompetitionsFetcher {
       logger.info(
         `[PARALLEL_COMPETITIONS] [NAV] Navigation complete: ${navDuration}ms`
       );
+
+      // Wait for dynamic content to load (especially important with proxy latency)
+      // PlayHQ uses React/SPA, so content loads after initial page load
+      // Wait for the season-org container to start appearing (indicates React has rendered)
+      await this.page
+        .waitForSelector('[data-testid^="season-org-"]', {
+          timeout: 5000,
+          visible: false, // Just check if element exists in DOM, not necessarily visible yet
+        })
+        .catch(() => {}); // Non-blocking - continue if timeout
 
       const waitStartTime = Date.now();
       await this.waitForPageLoad();
@@ -69,18 +131,50 @@ class AssociationCompetitionsFetcher {
   }
 
   async navigateToUrl() {
-    await this.page.goto(this.url, {
-      timeout: 15000, // 15 seconds - faster failure detection
-      waitUntil: "domcontentloaded", // Fast - same as other scrapers
-    });
+    try {
+      // Try load first (faster) - competitions page structure is simple, doesn't need networkidle2
+      await this.page.goto(this.url, {
+        timeout: 30000, // Reduced to 30 seconds - should be enough with resource blocking
+        waitUntil: "load", // Faster than networkidle2 - page structure loads quickly
+      });
+    } catch (navError) {
+      // If load times out, try domcontentloaded as fallback
+      logger.warn(
+        `[PARALLEL_COMPETITIONS] [NAV] Load timeout, trying domcontentloaded fallback`
+      );
+      try {
+        await this.page.goto(this.url, {
+          timeout: 30000,
+          waitUntil: "domcontentloaded",
+        });
+        // Give extra time for dynamic content to load - wait for season-org container to appear
+        await this.page
+          .waitForSelector('[data-testid^="season-org-"]', {
+            timeout: 5000,
+            visible: false, // Just check if element exists in DOM
+          })
+          .catch(() => {});
+      } catch (domError) {
+        // Last resort: just wait for selector after navigation
+        logger.warn(
+          `[PARALLEL_COMPETITIONS] [NAV] domcontentloaded timeout, waiting for content selector`
+        );
+        await this.page
+          .waitForSelector('[data-testid^="season-org-"]', {
+            timeout: 10000,
+            visible: false,
+          })
+          .catch(() => {});
+      }
+    }
   }
 
   async waitForPageLoad() {
     const waitStartTime = Date.now();
-    const MAX_TOTAL_WAIT_TIME = 8000; // Fail fast after 8 seconds total (accounts for proxy latency)
-    const QUICK_CHECK_TIMEOUT = 4000; // Quick check timeout (accounts for proxy routing + page load)
-    const CONTENT_CHECK_TIMEOUT = 4000; // Content check timeout (accounts for proxy latency)
-    const POLLING_INTERVAL = 100; // Faster polling (reduced from 200ms)
+    const MAX_TOTAL_WAIT_TIME = 30000; // Increased to 30 seconds to account for proxy latency and dynamic content loading
+    const QUICK_CHECK_TIMEOUT = 20000; // Increased to 20 seconds for proxy routing + page load + dynamic content rendering
+    const CONTENT_CHECK_TIMEOUT = 15000; // Increased to 15 seconds for proxy latency and content rendering
+    const POLLING_INTERVAL = 300; // Increased polling interval from 100ms to 300ms (less frequent checks)
 
     try {
       // OPTIMIZED: Faster checks with shorter timeouts
@@ -301,8 +395,15 @@ class AssociationCompetitionsFetcher {
           elapsed,
         }
       );
-      // Minimal delay for unexpected errors
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Minimal delay for unexpected errors - wait for page to be interactive
+      await this.page
+        .waitForFunction(
+          () => {
+            return document.readyState === "complete" && document.body !== null;
+          },
+          { timeout: 500 }
+        )
+        .catch(() => {});
     }
   }
 
@@ -332,7 +433,13 @@ class AssociationCompetitionsFetcher {
         }
 
         if (!seasonOrgsParent && retries > 1) {
-          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+          // Wait for season-org container to appear before retrying
+          await this.page
+            .waitForSelector('[data-testid^="season-org-"]', {
+              timeout: retryDelay,
+              visible: false,
+            })
+            .catch(() => {});
         }
         retries--;
       }

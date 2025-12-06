@@ -172,11 +172,42 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
-  logger.error("[Worker] Unhandled promise rejection", {
-    reason: reason?.message || reason,
-    stack: reason?.stack,
+  const errorMessage = reason?.message || String(reason);
+  const errorStack = reason?.stack || "";
+
+  // Check if it's a Puppeteer cancellation error (should be suppressed)
+  const isCancellationError = [
+    "Target closed",
+    "Protocol error",
+    "Navigation interrupted",
+    "Session closed",
+    "Execution context was destroyed",
+    "Page closed",
+    "Browser has been closed",
+  ].some((err) => errorMessage.includes(err));
+
+  // Log full error details to help debug
+  // Format as string so it appears in console output
+  const errorDetails = {
+    reason: errorMessage,
+    stack: errorStack?.split('\n').slice(0, 5).join('\n') || 'No stack',
     promise: promise.toString(),
-  });
+    isCancellationError,
+    errorType: reason?.name || typeof reason,
+    errorString: String(reason),
+    errorKeys: reason && typeof reason === 'object' ? Object.keys(reason) : [],
+  };
+
+  // If it's not a cancellation error, log full details as string
+  if (!isCancellationError) {
+    logger.error(
+      `[Worker] Unhandled promise rejection - REASON: ${errorMessage} | TYPE: ${errorDetails.errorType} | STRING: ${errorDetails.errorString} | KEYS: ${errorDetails.errorKeys.join(', ')} | STACK: ${errorDetails.stack}`
+    );
+    // Also log as object for structured logging
+    logger.error("[Worker] Unhandled promise rejection - DETAILS", errorDetails);
+  } else {
+    logger.debug("[Worker] Unhandled promise rejection (cancellation)", errorDetails);
+  }
 });
 
 // Handle uncaught exceptions

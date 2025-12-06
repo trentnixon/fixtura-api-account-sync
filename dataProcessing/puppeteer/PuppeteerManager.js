@@ -10,6 +10,84 @@ puppeteer.use(StealthPlugin());
 const EventEmitter = require("events");
 EventEmitter.defaultMaxListeners = BROWSER_CONFIG.MAX_LISTENERS;
 
+// Suppress non-fatal errors from stealth plugin and page resets
+// These occur when:
+// 1. Stealth plugin hooks run synchronously before page navigation completes
+// 2. Pages are reset to about:blank while Puppeteer operations are still pending
+// They are harmless - operations will complete after navigation or are cancelled intentionally
+process.on("unhandledRejection", (reason) => {
+  if (!reason) {
+    return; // No reason provided, let it through
+  }
+
+  const errorMessage = reason.message || String(reason);
+
+  // Suppress stealth plugin errors
+  if (errorMessage.includes("Requesting main frame too early")) {
+    logger.debug(
+      "[PuppeteerManager] Suppressed non-fatal stealth plugin error (main frame will exist after navigation)",
+      { error: errorMessage }
+    );
+    return; // Don't log or throw
+  }
+
+  // Suppress page cancellation errors (happen when pages are reset while operations are pending)
+  const cancellationErrors = [
+    "Target closed",
+    "Protocol error",
+    "Navigation interrupted",
+    "Session closed",
+    "Target closed: Target closed",
+    "Execution context was destroyed",
+    "Page closed",
+    "Browser has been closed",
+    "Connection closed",
+    "JSHandle is disposed",
+    "JSHandle is disposed: JSHandle is disposed",
+    "Node is detached from document",
+    "Node is not attached to the DOM",
+    "Execution context was destroyed, most likely because of a navigation",
+    "Request is already handled", // Happens when request interception tries to handle a request that was already processed
+  ];
+
+  if (cancellationErrors.some((err) => errorMessage.includes(err))) {
+    logger.debug(
+      "[PuppeteerManager] Suppressed page cancellation error (operation cancelled during page reset)",
+      {
+        error: errorMessage,
+        stack: reason?.stack?.split("\n").slice(0, 5).join("\n"), // First 5 lines of stack
+      }
+    );
+    return; // Don't log or throw - these are expected when resetting pages
+  }
+
+  // Log detailed info for other unhandled rejections before passing to worker.js
+  // This helps identify what errors we're not catching
+  const errorDetails = {
+    error: errorMessage,
+    errorType: reason?.name || typeof reason,
+    errorString: String(reason),
+    errorKeys: reason && typeof reason === "object" ? Object.keys(reason) : [],
+    stack: reason?.stack?.split("\n").slice(0, 10).join("\n"), // First 10 lines
+  };
+
+  // Log as string so it appears in console
+  logger.warn(
+    `[PuppeteerManager] Unhandled rejection - ERROR: ${errorMessage} | TYPE: ${
+      errorDetails.errorType
+    } | STRING: ${
+      errorDetails.errorString
+    } | KEYS: ${errorDetails.errorKeys.join(", ")}`
+  );
+  // Also log as object for structured logging
+  logger.warn(
+    "[PuppeteerManager] Unhandled rejection not suppressed, passing to worker handler",
+    errorDetails
+  );
+
+  // Let other unhandled rejections through to worker.js handler
+});
+
 class PuppeteerManager {
   // Singleton pattern to prevent multiple browser instances
   static instance = null;

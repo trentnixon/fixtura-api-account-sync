@@ -48,14 +48,25 @@ class PageAnalyzer {
    */
   async getTableInfo() {
     try {
+      // Check if page is closed before operations
+      if (this.page.isClosed()) {
+        return {
+          tablesInLadder: 0,
+          totalTables: 0,
+          teamLinksInLadder: 0,
+          hasLadderTables: false,
+          hasTeamLinks: false,
+        };
+      }
+
       // Check for tables specifically within the ladder container
-      const tablesInLadder = await this.page.$$('[data-testid="ladder"] table');
-      const totalTables = await this.page.$$("table");
+      const tablesInLadder = await this.page.$$('[data-testid="ladder"] table').catch(() => []);
+      const totalTables = await this.page.$$("table").catch(() => []);
 
       // Check for team links in ladder tables
       const teamLinksInLadder = await this.page.$$(
         '[data-testid="ladder"] table tbody tr td a[href*="/teams/"]'
-      );
+      ).catch(() => []);
 
       return {
         tablesInLadder: tablesInLadder.length,
@@ -65,7 +76,21 @@ class PageAnalyzer {
         hasTeamLinks: teamLinksInLadder.length > 0,
       };
     } catch (error) {
-      logger.warn("Could not get table information:", error.message);
+      // Suppress cancellation errors (happen when page is reset during operation)
+      const errorMessage = error.message || String(error);
+      const isCancellationError = [
+        "Target closed",
+        "Protocol error",
+        "Navigation interrupted",
+        "Session closed",
+        "Execution context was destroyed",
+        "Page closed",
+        "Browser has been closed",
+      ].some((err) => errorMessage.includes(err));
+
+      if (!isCancellationError) {
+        logger.warn("Could not get table information:", error.message);
+      }
       return {
         tablesInLadder: 0,
         totalTables: 0,

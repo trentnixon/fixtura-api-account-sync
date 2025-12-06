@@ -1,6 +1,8 @@
 const puppeteer = require("puppeteer-extra");
-const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-puppeteer.use(StealthPlugin());
+// CRITICAL: Do NOT register StealthPlugin here - it's already registered in PuppeteerManager.js
+// Multiple registrations cause duplicate hooks and unhandled promise rejections
+// const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+// REMOVED: puppeteer.use(StealthPlugin()); - Already registered in PuppeteerManager.js
 const fetcher = require("../api/Utils/fetcher");
 
 // Fix MaxListenersExceededWarning: Increase max listeners for Puppeteer's Commander

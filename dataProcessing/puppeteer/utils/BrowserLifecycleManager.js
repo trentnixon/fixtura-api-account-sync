@@ -4,14 +4,16 @@
  */
 
 const puppeteer = require("puppeteer-extra");
-const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+// CRITICAL: Do NOT register StealthPlugin here - it's already registered in PuppeteerManager.js
+// Multiple registrations cause duplicate hooks and unhandled promise rejections
+// const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const logger = require("../../../src/utils/logger");
 const { getLaunchOptions } = require("../browserConfig");
 const { BROWSER_CONFIG, isDevelopment } = require("../constants");
 const { getMemoryStats } = require("../memoryUtils");
 const { closePagesSafely, getPagesSafely } = require("../pageUtils");
 
-puppeteer.use(StealthPlugin());
+// REMOVED: puppeteer.use(StealthPlugin()); - Already registered in PuppeteerManager.js
 
 class BrowserLifecycleManager {
   constructor(circuitBreaker, proxyConfigManager) {

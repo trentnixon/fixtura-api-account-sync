@@ -15,10 +15,10 @@ const getBaseLaunchArgs = () => {
     "--disable-dev-shm-usage",
     "--no-first-run",
     "--no-default-browser-check",
-    "--disable-background-networking",
-    "--disable-features=IsolateOrigins,site-per-process",
+    // "--disable-background-networking", // REMOVED: May interfere with page loading
+    // "--disable-features=IsolateOrigins,site-per-process", // REMOVED: May cause loading issues
     "--disable-extensions",
-    "--disable-plugins",
+    // "--disable-plugins", // REMOVED: Some sites need plugins for proper rendering
     "--disable-sync",
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
@@ -30,15 +30,15 @@ const getBaseLaunchArgs = () => {
     "--disable-notifications",
     "--disable-default-apps",
     // PROXY OPTIMIZATION: Reduce overhead and improve connection reuse
-    "--aggressive-cache-discard", // Reduce cache overhead through proxy
-    "--disable-application-cache", // Disable app cache for faster proxy connections
+    // "--aggressive-cache-discard", // REMOVED: May slow down page loading
+    // "--disable-application-cache", // REMOVED: Cache helps pages load faster
     "--disable-background-downloads", // Reduce background network activity
     "--disable-client-side-phishing-detection", // Reduce proxy overhead
     "--disable-hang-monitor", // Reduce monitoring overhead
     "--disable-popup-blocking", // Already handled, but explicit
     "--disable-prompt-on-repost", // Reduce proxy round-trips
     "--disable-translate", // Reduce network calls
-    "--disable-web-security", // Only if needed for scraping (reduces proxy overhead)
+    // "--disable-web-security", // REMOVED: Can cause CORS issues and prevent pages from loading
     "--enable-features=NetworkService,NetworkServiceLogging", // Better connection management
   ];
 };

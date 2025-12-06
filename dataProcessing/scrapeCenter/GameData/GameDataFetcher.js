@@ -37,6 +37,16 @@ class GameDataFetcher {
         `[PARALLEL_GAMES] [NAV] Navigation complete: ${navDuration}ms`
       );
 
+      // Wait for dynamic content to load (especially important with proxy latency)
+      // PlayHQ uses React/SPA, so content loads after initial page load
+      // Wait for game list items to start appearing (indicates React has rendered)
+      await this.page
+        .waitForSelector('li[data-testid="games-on-date"]', {
+          timeout: 5000,
+          visible: false, // Just check if element exists in DOM, not necessarily visible yet
+        })
+        .catch(() => {}); // Non-blocking - continue if timeout
+
       const waitStartTime = Date.now();
       await this.waitForPageLoad();
       const waitDuration = Date.now() - waitStartTime;
@@ -80,7 +90,24 @@ class GameDataFetcher {
             ? [gameDetails]
             : [];
         } catch (elementError) {
-          // Log error for this element but continue with next element
+          // Suppress cancellation errors (happen when page is reset during operation)
+          const errorMessage = elementError.message || String(elementError);
+          const isCancellationError = [
+            "Target closed",
+            "Protocol error",
+            "Navigation interrupted",
+            "Session closed",
+            "Execution context was destroyed",
+            "Page closed",
+            "Browser has been closed",
+          ].some((err) => errorMessage.includes(err));
+
+          if (isCancellationError) {
+            // Don't log cancellation errors - they're expected when pages are reset
+            return [];
+          }
+
+          // Log other errors for this element but continue with next element
           logger.warn(
             `Error extracting details for match element, skipping to next`,
             { error: elementError.message, url: this.href }
@@ -90,13 +117,36 @@ class GameDataFetcher {
       });
 
       // Wait for all match elements to be processed in parallel
-      const matchResults = await Promise.all(matchPromises);
+      // Use Promise.allSettled to handle cancellations gracefully
+      const matchResults = await Promise.allSettled(matchPromises);
+
+      // Extract successful results and filter out failures
+      const successfulResults = matchResults
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => result.value);
 
       // Flatten results (each match returns an array of game details)
-      const gameData = matchResults.flat();
+      const gameData = successfulResults.flat();
 
       return gameData;
     } catch (error) {
+      // Suppress cancellation errors (happen when page is reset during operation)
+      const errorMessage = error.message || String(error);
+      const isCancellationError = [
+        "Target closed",
+        "Protocol error",
+        "Navigation interrupted",
+        "Session closed",
+        "Execution context was destroyed",
+        "Page closed",
+        "Browser has been closed",
+      ].some((err) => errorMessage.includes(err));
+
+      if (isCancellationError) {
+        // Don't log cancellation errors - they're expected when pages are reset
+        return [];
+      }
+
       logger.error(
         "Error extracting game details in getGameDetails method, returning empty array",
         {
@@ -163,7 +213,24 @@ class GameDataFetcher {
             teamAway: teams?.[1]?.name,
           };
         } catch (gameDivError) {
-          // Log error for this game div but continue with next div
+          // Suppress cancellation errors (happen when page is reset during operation)
+          const errorMessage = gameDivError.message || String(gameDivError);
+          const isCancellationError = [
+            "Target closed",
+            "Protocol error",
+            "Navigation interrupted",
+            "Session closed",
+            "Execution context was destroyed",
+            "Page closed",
+            "Browser has been closed",
+          ].some((err) => errorMessage.includes(err));
+
+          if (isCancellationError) {
+            // Don't log cancellation errors - they're expected when pages are reset
+            return null;
+          }
+
+          // Log other errors for this game div but continue with next div
           logger.warn(
             `Error extracting details for game div, skipping to next`,
             { error: gameDivError.message, url: this.href }
@@ -173,10 +240,18 @@ class GameDataFetcher {
       });
 
       // Wait for all game divs to be processed in parallel
-      const gameDivResults = await Promise.all(gameDivPromises);
+      // Use Promise.allSettled to handle cancellations gracefully
+      const gameDivResults = await Promise.allSettled(gameDivPromises);
 
-      // Filter out null results (errors) and bye matches
-      gameDetails.push(...gameDivResults.filter((result) => result !== null));
+      // Extract successful results and filter out failures/null values and bye matches
+      const successfulResults = gameDivResults
+        .filter(
+          (result) => result.status === "fulfilled" && result.value !== null
+        )
+        .map((result) => result.value)
+        .filter((result) => !result.status || result.status !== "bye"); // Filter out bye matches
+
+      gameDetails.push(...successfulResults);
 
       return gameDetails;
     } catch (error) {
@@ -214,12 +289,41 @@ class GameDataFetcher {
       try {
         // CRITICAL: Always navigate, even if URL appears the same
         // Pages from pool may have stale URLs, so force navigation
-        // Use 'networkidle0' or 'load' to ensure full page load
-        await this.page.goto(this.href, {
-          timeout: 15000,
-          waitUntil: "domcontentloaded",
-          // Force navigation even if URL appears the same
-        });
+        // Use 'networkidle2' to ensure full page load with dynamic content
+        try {
+          await this.page.goto(this.href, {
+            timeout: 45000, // Increased to 45 seconds for proxy latency and dynamic content
+            waitUntil: "networkidle2", // Wait for network to be mostly idle - ensures dynamic content loads
+            // Force navigation even if URL appears the same
+          });
+        } catch (navError) {
+          // If networkidle2 times out, try with load as fallback
+          this.context.warn(
+            `[PARALLEL_GAMES] [NAV] networkidle2 timeout, trying load fallback`
+          );
+          try {
+            await this.page.goto(this.href, {
+              timeout: 45000,
+              waitUntil: "load",
+            });
+          } catch (loadError) {
+            // Last resort: domcontentloaded
+            this.context.warn(
+              `[PARALLEL_GAMES] [NAV] Load timeout, trying domcontentloaded fallback`
+            );
+            await this.page.goto(this.href, {
+              timeout: 45000,
+              waitUntil: "domcontentloaded",
+            });
+            // Give extra time for dynamic content to load - wait for game list items to appear
+            await this.page
+              .waitForSelector('li[data-testid="games-on-date"]', {
+                timeout: 5000,
+                visible: false, // Just check if element exists in DOM
+              })
+              .catch(() => {});
+          }
+        }
 
         // CRITICAL: Verify we actually navigated to the correct URL
         const finalPageUrl = this.page.url();
@@ -304,17 +408,27 @@ class GameDataFetcher {
           nextAttempt: attempt + 1,
           maxRetries,
         });
-        await new Promise((res) => setTimeout(res, delay));
+        // Wait for page to be interactive before retrying
+        await this.page
+          .waitForFunction(
+            () => {
+              return (
+                document.readyState === "complete" && document.body !== null
+              );
+            },
+            { timeout: delay }
+          )
+          .catch(() => {});
       }
     }
   }
 
   async waitForPageLoad() {
     const waitStartTime = Date.now();
-    const MAX_TOTAL_WAIT_TIME = 8000; // Fail fast after 8 seconds total (accounts for proxy latency)
-    const QUICK_CHECK_TIMEOUT = 4000; // Quick check timeout (accounts for proxy routing + page load)
-    const CONTENT_CHECK_TIMEOUT = 4000; // Content check timeout (accounts for proxy latency)
-    const POLLING_INTERVAL = 100; // Faster polling (reduced from 200ms)
+    const MAX_TOTAL_WAIT_TIME = 30000; // Increased to 30 seconds to account for proxy latency and dynamic content loading
+    const QUICK_CHECK_TIMEOUT = 20000; // Increased to 20 seconds for proxy routing + page load + dynamic content rendering
+    const CONTENT_CHECK_TIMEOUT = 15000; // Increased to 15 seconds for proxy latency and content rendering
+    const POLLING_INTERVAL = 300; // Increased polling interval from 100ms to 300ms (less frequent checks)
 
     try {
       // OPTIMIZED: Check multiple selectors in parallel with shorter timeouts

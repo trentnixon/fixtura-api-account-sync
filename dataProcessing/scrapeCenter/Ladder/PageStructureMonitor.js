@@ -130,10 +130,22 @@ class PageStructureMonitor {
         details,
       };
     } catch (error) {
+      // Suppress cancellation errors (happen when page is reset during operation)
+      const errorMessage = error.message || String(error);
+      const isCancellationError = [
+        "Target closed",
+        "Protocol error",
+        "Navigation interrupted",
+        "Session closed",
+        "Execution context was destroyed",
+        "Page closed",
+        "Browser has been closed",
+      ].some((err) => errorMessage.includes(err));
+
       return {
         exists: false,
         count: 0,
-        error: error.message,
+        error: isCancellationError ? "Page reset during operation" : error.message,
       };
     }
   }
@@ -187,7 +199,19 @@ class PageStructureMonitor {
         };
       });
     } catch (error) {
-      return { error: error.message };
+      // Suppress cancellation errors (happen when page is reset during operation)
+      const errorMessage = error.message || String(error);
+      const isCancellationError = [
+        "Target closed",
+        "Protocol error",
+        "Navigation interrupted",
+        "Session closed",
+        "Execution context was destroyed",
+        "Page closed",
+        "Browser has been closed",
+      ].some((err) => errorMessage.includes(err));
+
+      return { error: isCancellationError ? "Page reset during operation" : error.message };
     }
   }
 

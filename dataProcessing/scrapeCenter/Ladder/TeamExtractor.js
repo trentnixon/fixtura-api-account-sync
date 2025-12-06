@@ -46,9 +46,45 @@ class TeamExtractor {
 
     for (const link of links) {
       try {
-        const href = await link.evaluate((el) => el.getAttribute("href"));
+        // Check if page is closed before evaluating
+        if (this.page.isClosed()) {
+          logger.debug("[PARALLEL_TEAMS] Page closed during team extraction, aborting");
+          break;
+        }
+
+        const href = await link.evaluate((el) => el.getAttribute("href")).catch((err) => {
+          const errorMsg = err.message || String(err);
+          if (
+            errorMsg.includes("Target closed") ||
+            errorMsg.includes("Session closed") ||
+            errorMsg.includes("Page closed") ||
+            errorMsg.includes("Protocol error")
+          ) {
+            throw new Error("Page closed during evaluation"); // Re-throw as cancellation
+          }
+          throw err; // Re-throw other errors
+        });
+
         const teamID = href.split("/").pop();
-        const teamName = await link.evaluate((el) => el.innerText.trim());
+
+        // Check again before second evaluate
+        if (this.page.isClosed()) {
+          logger.debug("[PARALLEL_TEAMS] Page closed during team extraction, aborting");
+          break;
+        }
+
+        const teamName = await link.evaluate((el) => el.innerText.trim()).catch((err) => {
+          const errorMsg = err.message || String(err);
+          if (
+            errorMsg.includes("Target closed") ||
+            errorMsg.includes("Session closed") ||
+            errorMsg.includes("Page closed") ||
+            errorMsg.includes("Protocol error")
+          ) {
+            throw new Error("Page closed during evaluation"); // Re-throw as cancellation
+          }
+          throw err; // Re-throw other errors
+        });
 
         // Skip if no valid href or team name
         if (!href || !teamName || href === "#" || teamName.length < 2) {
@@ -66,6 +102,23 @@ class TeamExtractor {
 
         teams.push(teamObj);
       } catch (error) {
+        // Suppress cancellation errors (happen when page is reset during operation)
+        const errorMessage = error.message || String(error);
+        const isCancellationError = [
+          "Target closed",
+          "Protocol error",
+          "Navigation interrupted",
+          "Session closed",
+          "Execution context was destroyed",
+          "Page closed",
+          "Browser has been closed",
+        ].some((err) => errorMessage.includes(err));
+
+        if (isCancellationError) {
+          // Don't log cancellation errors - they're expected when pages are reset
+          continue;
+        }
+
         logger.warn(`Error processing team link:`, error.message);
         continue;
       }

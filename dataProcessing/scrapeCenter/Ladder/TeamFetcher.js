@@ -26,22 +26,268 @@ class TeamFetcher {
   }
 
   /**
+   * Optimizes page for ladder scraping by blocking non-essential resources
+   * This reduces proxy load and speeds up page loading
+   */
+  async optimizePageForLadder() {
+    try {
+      // Check if request interception is already enabled
+      // If it is, remove existing listeners to avoid "Request is already handled" errors
+      const hasInterception = this.page.listenerCount("request") > 0;
+
+      if (hasInterception) {
+        // Request interception already set up - remove existing listeners to avoid conflicts
+        this.page.removeAllListeners("request");
+      }
+
+      // Block images, stylesheets, fonts, media - we only need HTML structure
+      // This significantly reduces proxy load and speeds up page load
+      await this.page.setRequestInterception(true);
+      this.page.on("request", (request) => {
+        try {
+          const resourceType = request.resourceType();
+          const url = request.url();
+
+          // Block non-essential resources to speed up proxy loading
+          // NOTE: stylesheets are NOT blocked - needed for proper page rendering (especially SPAs)
+          if (
+            resourceType === "image" ||
+            // resourceType === "stylesheet" || // REMOVED: CSS needed for proper rendering
+            resourceType === "font" ||
+            resourceType === "media" ||
+            resourceType === "websocket" ||
+            resourceType === "manifest" ||
+            url.includes("analytics") ||
+            url.includes("tracking") ||
+            url.includes("collect")
+          ) {
+            request.abort().catch(() => {
+              // Suppress "Request is already handled" errors - happens when page is reset during interception
+            });
+          } else {
+            request.continue().catch(() => {
+              // Suppress "Request is already handled" errors - happens when page is reset during interception
+            });
+          }
+        } catch (error) {
+          // Suppress "Request is already handled" errors
+          const errorMsg = error.message || String(error);
+          if (!errorMsg.includes("Request is already handled")) {
+            logger.debug(
+              `[PARALLEL_TEAMS] Request interception error: ${errorMsg}`
+            );
+          }
+        }
+      });
+      logger.debug(
+        "[PARALLEL_TEAMS] Page optimized for ladder scraping (blocked images/stylesheets)"
+      );
+    } catch (error) {
+      const errorMsg = error.message || String(error);
+      if (errorMsg.includes("Request is already handled")) {
+        logger.debug(
+          "[PARALLEL_TEAMS] Request interception conflict (expected during page reuse)"
+        );
+      } else {
+        logger.debug(
+          `[PARALLEL_TEAMS] Request interception setup error: ${errorMsg}`
+        );
+      }
+    }
+  }
+
+  /**
    * Fetches teams by navigating to the ladder page of the team and extracting team information.
    */
   async fetchTeams() {
     const navStartTime = Date.now();
     try {
-      logger.info(`[PARALLEL_TEAMS] [NAV] Navigating to ${this.teamInfo.href}/ladder`);
-      await this.page.goto(`${this.teamInfo.href}/ladder`, {
-        timeout: 15000, // 15 seconds - faster failure detection
-        waitUntil: "domcontentloaded", // Fast - same as other scrapers
-      });
+      // Optimize page for ladder scraping before navigation
+      await this.optimizePageForLadder();
+
+      // CRITICAL: Check page state before navigation
+      if (this.page.isClosed()) {
+        logger.warn("[PARALLEL_TEAMS] Page closed before navigation, aborting");
+        return [];
+      }
+
+      // CRITICAL: Small delay to ensure any page reset operations complete
+      // This prevents race conditions where page reset and navigation happen simultaneously
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Check again after delay
+      if (this.page.isClosed()) {
+        logger.warn("[PARALLEL_TEAMS] Page closed after delay, aborting");
+        return [];
+      }
+
+      logger.info(
+        `[PARALLEL_TEAMS] [NAV] Navigating to ${this.teamInfo.href}/ladder`
+      );
+
+      try {
+        await this.page
+          .goto(`${this.teamInfo.href}/ladder`, {
+            timeout: 45000, // Increased to 45 seconds for proxy latency
+            waitUntil: "networkidle2", // Wait for network to be mostly idle (max 2 connections) - ensures dynamic content loads
+          })
+          .catch((navErr) => {
+            // Handle navigation cancellation errors immediately
+            const errorMsg = navErr.message || String(navErr);
+            if (
+              errorMsg.includes("Target closed") ||
+              errorMsg.includes("Session closed") ||
+              errorMsg.includes("Page closed") ||
+              errorMsg.includes("Protocol error") ||
+              errorMsg.includes("Navigation interrupted")
+            ) {
+              throw new Error("Page closed during navigation"); // Re-throw as cancellation
+            }
+            throw navErr; // Re-throw other errors
+          });
+      } catch (navError) {
+        // Check if it's a cancellation error
+        const errorMsg = navError.message || String(navError);
+        if (
+          errorMsg.includes("Page closed during navigation") ||
+          errorMsg.includes("Target closed") ||
+          errorMsg.includes("Session closed")
+        ) {
+          logger.debug("[PARALLEL_TEAMS] Navigation cancelled (page reset)");
+          return [];
+        }
+
+        // If networkidle2 times out, try with load as fallback
+        logger.warn(
+          `[PARALLEL_TEAMS] [NAV] networkidle2 timeout, trying load fallback`
+        );
+        try {
+          if (this.page.isClosed()) {
+            logger.warn(
+              "[PARALLEL_TEAMS] Page closed before fallback navigation"
+            );
+            return [];
+          }
+
+          await this.page
+            .goto(`${this.teamInfo.href}/ladder`, {
+              timeout: 45000,
+              waitUntil: "load",
+            })
+            .catch((loadErr) => {
+              const errorMsg = loadErr.message || String(loadErr);
+              if (
+                errorMsg.includes("Target closed") ||
+                errorMsg.includes("Session closed") ||
+                errorMsg.includes("Page closed") ||
+                errorMsg.includes("Protocol error") ||
+                errorMsg.includes("Navigation interrupted")
+              ) {
+                throw new Error("Page closed during navigation");
+              }
+              throw loadErr;
+            });
+        } catch (loadError) {
+          const errorMsg = loadError.message || String(loadError);
+          if (
+            errorMsg.includes("Page closed during navigation") ||
+            errorMsg.includes("Target closed") ||
+            errorMsg.includes("Session closed")
+          ) {
+            logger.debug(
+              "[PARALLEL_TEAMS] Fallback navigation cancelled (page reset)"
+            );
+            return [];
+          }
+
+          // Last resort: domcontentloaded
+          logger.warn(
+            `[PARALLEL_TEAMS] [NAV] Load timeout, trying domcontentloaded fallback`
+          );
+          if (this.page.isClosed()) {
+            logger.warn(
+              "[PARALLEL_TEAMS] Page closed before final fallback navigation"
+            );
+            return [];
+          }
+
+          await this.page
+            .goto(`${this.teamInfo.href}/ladder`, {
+              timeout: 45000,
+              waitUntil: "domcontentloaded",
+            })
+            .catch((finalErr) => {
+              const errorMsg = finalErr.message || String(finalErr);
+              if (
+                errorMsg.includes("Target closed") ||
+                errorMsg.includes("Session closed") ||
+                errorMsg.includes("Page closed") ||
+                errorMsg.includes("Protocol error") ||
+                errorMsg.includes("Navigation interrupted")
+              ) {
+                throw new Error("Page closed during navigation");
+              }
+              throw finalErr;
+            });
+        }
+      }
       const navDuration = Date.now() - navStartTime;
-      logger.info(`[PARALLEL_TEAMS] [NAV] Navigation complete: ${navDuration}ms`);
+      logger.info(
+        `[PARALLEL_TEAMS] [NAV] Navigation complete: ${navDuration}ms`
+      );
+
+      // Wait for dynamic content to load (especially important with proxy latency)
+      // PlayHQ uses React/SPA, so content loads after initial page load
+      // Wait for ladder container to start appearing (indicates React has rendered)
+      // Properly handle page closure errors
+      try {
+        if (this.page.isClosed()) {
+          logger.warn("[PARALLEL_TEAMS] Page closed before wait, aborting");
+          return [];
+        }
+        await this.page
+          .waitForSelector('[data-testid="ladder"]', {
+            timeout: 5000,
+            visible: false, // Just check if element exists in DOM, not necessarily visible yet
+          })
+          .catch((err) => {
+            // Check if error is due to page closure
+            const errorMsg = err.message || String(err);
+            if (
+              errorMsg.includes("Target closed") ||
+              errorMsg.includes("Session closed") ||
+              errorMsg.includes("Page closed") ||
+              errorMsg.includes("Protocol error")
+            ) {
+              logger.debug(
+                "[PARALLEL_TEAMS] Page closed during waitForSelector"
+              );
+              return; // Suppress cancellation errors
+            }
+            // Re-throw other errors
+            throw err;
+          });
+      } catch (err) {
+        // Handle any remaining errors
+        const errorMsg = err.message || String(err);
+        if (
+          !errorMsg.includes("Target closed") &&
+          !errorMsg.includes("Session closed") &&
+          !errorMsg.includes("Page closed")
+        ) {
+          logger.debug(`[PARALLEL_TEAMS] Wait error: ${errorMsg}`);
+        }
+      }
+
       const extractStartTime = Date.now();
       const result = await this.getTeamNamesAndUrls();
       const extractDuration = Date.now() - extractStartTime;
-      logger.info(`[PARALLEL_TEAMS] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${Date.now() - navStartTime}ms)`);
+      logger.info(
+        `[PARALLEL_TEAMS] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${
+          Date.now() - navStartTime
+        }ms)`
+      );
+
       return result;
     } catch (error) {
       logger.error(
@@ -86,6 +332,23 @@ class TeamFetcher {
 
       return teamsWithClubs;
     } catch (error) {
+      // Suppress cancellation errors (happen when page is reset during operation)
+      const errorMessage = error.message || String(error);
+      const isCancellationError = [
+        "Target closed",
+        "Protocol error",
+        "Navigation interrupted",
+        "Session closed",
+        "Execution context was destroyed",
+        "Page closed",
+        "Browser has been closed",
+      ].some((err) => errorMessage.includes(err));
+
+      if (isCancellationError) {
+        // Don't log cancellation errors - they're expected when pages are reset
+        return [];
+      }
+
       logger.error(
         `Error in TeamFetcher.getTeamNamesAndUrls: ${error.message}`
       );

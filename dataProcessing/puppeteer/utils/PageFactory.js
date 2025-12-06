@@ -52,7 +52,15 @@ class PageFactory {
 
     // Get browser instance
     const browser = this.browserLifecycleManager.getBrowser();
+
+    // CRITICAL: Create page and navigate immediately to prevent "Requesting main frame too early!" errors
+    // The stealth plugin hooks run synchronously when newPage() is called, but main frame doesn't exist yet
+    // By navigating immediately after creation, we ensure the main frame exists before stealth plugin accesses it
     const page = await browser.newPage();
+
+    // Small delay to let stealth plugin hooks initialize (they run synchronously but need a tick)
+    // This prevents "Requesting main frame too early!" errors
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     // CRITICAL: Navigate to about:blank immediately to ensure main frame exists
     // This prevents "Requesting main frame too early!" errors from stealth plugin
@@ -60,7 +68,7 @@ class PageFactory {
     try {
       await page.goto("about:blank", {
         waitUntil: "domcontentloaded",
-        timeout: 5000,
+        timeout: 3000, // Reduced from 5000ms for faster failure detection
       });
     } catch (error) {
       // If navigation fails, log but continue - page might still be usable

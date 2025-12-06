@@ -42,7 +42,19 @@ class LadderDetector {
           if (noLadderMessage) {
             const messageText = await noLadderMessage.evaluate(
               (el) => el.innerText
-            );
+            ).catch((err) => {
+              const errorMsg = err.message || String(err);
+              if (
+                errorMsg.includes("Target closed") ||
+                errorMsg.includes("Session closed") ||
+                errorMsg.includes("Page closed") ||
+                errorMsg.includes("Protocol error") ||
+                errorMsg.includes("JSHandle is disposed")
+              ) {
+                return ""; // Return empty string on cancellation
+              }
+              throw err;
+            });
             if (
               messageText.toLowerCase().includes("no ladder available") ||
               messageText.toLowerCase().includes("no ladder") ||
@@ -55,12 +67,40 @@ class LadderDetector {
             }
           }
         } catch (selectorError) {
-          // Continue to next selector
+          // Suppress cancellation errors (happen when page is reset during operation)
+          const errorMessage = selectorError.message || String(selectorError);
+          const isCancellationError = [
+            "Target closed",
+            "Protocol error",
+            "Navigation interrupted",
+            "Session closed",
+            "Execution context was destroyed",
+            "Page closed",
+            "Browser has been closed",
+          ].some((err) => errorMessage.includes(err));
+
+          if (isCancellationError) {
+            // Don't log cancellation errors - they're expected when pages are reset
+            return false; // Return false to indicate ladder check couldn't complete
+          }
+          // Continue to next selector for other errors
         }
       }
 
       // Also check page content for no ladder messages
-      const pageText = await this.page.evaluate(() => document.body.innerText);
+      const pageText = await this.page.evaluate(() => document.body.innerText).catch((err) => {
+        const errorMsg = err.message || String(err);
+        if (
+          errorMsg.includes("Target closed") ||
+          errorMsg.includes("Session closed") ||
+          errorMsg.includes("Page closed") ||
+          errorMsg.includes("Protocol error") ||
+          errorMsg.includes("JSHandle is disposed")
+        ) {
+          return ""; // Return empty string on cancellation
+        }
+        throw err;
+      });
       if (
         pageText.toLowerCase().includes("no ladder available") ||
         pageText.toLowerCase().includes("no ladder")
@@ -73,6 +113,23 @@ class LadderDetector {
 
       return false;
     } catch (error) {
+      // Suppress cancellation errors (happen when page is reset during operation)
+      const errorMessage = error.message || String(error);
+      const isCancellationError = [
+        "Target closed",
+        "Protocol error",
+        "Navigation interrupted",
+        "Session closed",
+        "Execution context was destroyed",
+        "Page closed",
+        "Browser has been closed",
+      ].some((err) => errorMessage.includes(err));
+
+      if (isCancellationError) {
+        // Don't log cancellation errors - they're expected when pages are reset
+        return false; // Return false to indicate ladder check couldn't complete
+      }
+
       logger.warn("Could not check for no ladder message:", error.message);
       return false;
     }
@@ -84,8 +141,8 @@ class LadderDetector {
    */
   async waitForLadderTable() {
     const waitStartTime = Date.now();
-    const MAX_TOTAL_WAIT_TIME = 8000; // Fail fast after 8 seconds total (accounts for proxy latency)
-    const CONTAINER_TIMEOUT = 4000; // Accounts for proxy routing + page load (reduced from 10000ms)
+    const MAX_TOTAL_WAIT_TIME = 30000; // Increased to 30 seconds to account for proxy latency and dynamic content loading
+    const CONTAINER_TIMEOUT = 20000; // Increased to 20 seconds for proxy routing + page load + dynamic content rendering
 
     try {
       logger.info("Waiting for ladder table to load using smart backoff...");
@@ -93,17 +150,13 @@ class LadderDetector {
       // OPTIMIZED: Faster container check with shorter timeout
       try {
         await this.page.waitForSelector('[data-testid="ladder"]', {
-          timeout: CONTAINER_TIMEOUT, // Reduced from 10000ms to 2000ms
+          timeout: CONTAINER_TIMEOUT,
         });
         logger.info("✅ Ladder container found - page is loaded");
       } catch (containerError) {
         const elapsed = Date.now() - waitStartTime;
         logger.warn(
-          `[PARALLEL_TEAMS] [WAIT] Ladder container not found after ${elapsed}ms - failing fast`,
-          {
-            error: containerError.message,
-            elapsed,
-          }
+          `[PARALLEL_TEAMS] [WAIT] Ladder container not found after ${elapsed}ms`
         );
         return false;
       }
@@ -128,10 +181,48 @@ class LadderDetector {
           logger.info(
             `Attempt ${attempts}: Quick check (${this.backoffConfig.quickCheckDelay}ms)`
           );
-          await this.page.waitForTimeout(this.backoffConfig.quickCheckDelay);
+          // Wait for ladder container to appear using Puppeteer method
+          // Properly handle page closure errors
+          try {
+            if (this.page.isClosed()) {
+              logger.warn("[PARALLEL_TEAMS] Page closed during wait, aborting");
+              return false;
+            }
+            await this.page
+              .waitForSelector('[data-testid="ladder"]', {
+                timeout: this.backoffConfig.quickCheckDelay,
+                visible: false,
+              })
+              .catch((err) => {
+                // Check if error is due to page closure
+                const errorMsg = err.message || String(err);
+                if (
+                  errorMsg.includes("Target closed") ||
+                  errorMsg.includes("Session closed") ||
+                  errorMsg.includes("Page closed") ||
+                  errorMsg.includes("Protocol error")
+                ) {
+                  logger.debug("[PARALLEL_TEAMS] Page closed during waitForSelector");
+                  return; // Suppress cancellation errors
+                }
+                // Re-throw other errors
+                throw err;
+              });
+          } catch (err) {
+            // Handle any remaining errors
+            const errorMsg = err.message || String(err);
+            if (
+              !errorMsg.includes("Target closed") &&
+              !errorMsg.includes("Session closed") &&
+              !errorMsg.includes("Page closed")
+            ) {
+              logger.debug(`[PARALLEL_TEAMS] Wait error: ${errorMsg}`);
+            }
+          }
         } else {
           // Don't wait longer than remaining time
-          const remainingTime = MAX_TOTAL_WAIT_TIME - (Date.now() - waitStartTime);
+          const remainingTime =
+            MAX_TOTAL_WAIT_TIME - (Date.now() - waitStartTime);
           const delayToUse = Math.min(currentDelay, remainingTime);
           if (delayToUse <= 0) {
             logger.warn(
@@ -140,76 +231,174 @@ class LadderDetector {
             return false;
           }
           logger.info(`Attempt ${attempts}: Waiting ${delayToUse}ms`);
-          await this.page.waitForTimeout(delayToUse);
+          // Wait for ladder container or table to appear using Puppeteer method
+          // Properly handle page closure errors
+          try {
+            if (this.page.isClosed()) {
+              logger.warn("[PARALLEL_TEAMS] Page closed during wait, aborting");
+              return false;
+            }
+            await this.page
+              .waitForSelector('[data-testid="ladder"] table', {
+                timeout: delayToUse,
+                visible: false,
+              })
+              .catch((err) => {
+                // Check if error is due to page closure
+                const errorMsg = err.message || String(err);
+                if (
+                  errorMsg.includes("Target closed") ||
+                  errorMsg.includes("Session closed") ||
+                  errorMsg.includes("Page closed") ||
+                  errorMsg.includes("Protocol error")
+                ) {
+                  logger.debug("[PARALLEL_TEAMS] Page closed during waitForSelector");
+                  return; // Suppress cancellation errors
+                }
+                // Re-throw other errors
+                throw err;
+              });
+          } catch (err) {
+            // Handle any remaining errors
+            const errorMsg = err.message || String(err);
+            if (
+              !errorMsg.includes("Target closed") &&
+              !errorMsg.includes("Session closed") &&
+              !errorMsg.includes("Page closed")
+            ) {
+              logger.debug(`[PARALLEL_TEAMS] Wait error: ${errorMsg}`);
+            }
+          }
         }
 
         // Check if table exists AND has team links
-        const tableExists = await this.checkTableExists();
-        if (tableExists) {
-          // CRITICAL: Also verify team links have actual content (not just empty links)
+        try {
+          const tableExists = await this.checkTableExists();
+          if (tableExists) {
+            // CRITICAL: Also verify team links have actual content (not just empty links)
+            const teamLinks = await this.page.$$(
+              '[data-testid="ladder"] table:first-of-type tbody tr td:nth-child(2) a'
+            );
+
+            if (teamLinks.length > 0) {
+              // Check if at least one team link has content
+              let hasContent = false;
+              for (const link of teamLinks.slice(0, 3)) {
+                // Check first 3 links
+                try {
+                  // Check if page is closed before evaluating
+                  if (this.page.isClosed()) {
+                    break;
+                  }
+
+                  const text = await link.evaluate((el) =>
+                    el.textContent?.trim()
+                  ).catch((err) => {
+                    const errorMsg = err.message || String(err);
+                    if (
+                      errorMsg.includes("Target closed") ||
+                      errorMsg.includes("Session closed") ||
+                      errorMsg.includes("Page closed") ||
+                      errorMsg.includes("Protocol error")
+                    ) {
+                      return null; // Return null to indicate cancellation
+                    }
+                    throw err; // Re-throw other errors
+                  });
+
+                  if (text && text.length > 0) {
+                    hasContent = true;
+                    break;
+                  }
+                } catch (e) {
+                  // Continue checking other links - error already handled in catch above
+                  const errorMsg = e.message || String(e);
+                  if (
+                    !errorMsg.includes("Target closed") &&
+                    !errorMsg.includes("Session closed") &&
+                    !errorMsg.includes("Page closed")
+                  ) {
+                    logger.debug(`[PARALLEL_TEAMS] Error checking link content: ${errorMsg}`);
+                  }
+                }
+              }
+
+              if (hasContent) {
+                logger.info(
+                  `✅ Ladder table found with content on attempt ${attempts}!`
+                );
+
+                // Record successful attempt for performance tracking
+                performanceMetrics.recordAttempt(true, attempts);
+
+                return true;
+              } else {
+                logger.debug(
+                  `Table found but team links have no content yet, continuing wait...`
+                );
+              }
+            }
+          }
+
+          // Alternative check: Look directly for team links with content
           const teamLinks = await this.page.$$(
             '[data-testid="ladder"] table:first-of-type tbody tr td:nth-child(2) a'
           );
-
           if (teamLinks.length > 0) {
-            // Check if at least one team link has content
+            // Verify links have content
             let hasContent = false;
-            for (const link of teamLinks.slice(0, 3)) { // Check first 3 links
+            for (const link of teamLinks.slice(0, 3)) {
               try {
-                const text = await link.evaluate((el) => el.textContent?.trim());
+                // Check if page is closed before evaluating
+                if (this.page.isClosed()) {
+                  break;
+                }
+
+                const text = await link.evaluate((el) =>
+                  el.textContent?.trim()
+                ).catch((err) => {
+                  const errorMsg = err.message || String(err);
+                  if (
+                    errorMsg.includes("Target closed") ||
+                    errorMsg.includes("Session closed") ||
+                    errorMsg.includes("Page closed") ||
+                    errorMsg.includes("Protocol error")
+                  ) {
+                    return null; // Return null to indicate cancellation
+                  }
+                  throw err; // Re-throw other errors
+                });
+
                 if (text && text.length > 0) {
                   hasContent = true;
                   break;
                 }
               } catch (e) {
-                // Continue checking other links
+                // Continue checking - error already handled in catch above
+                const errorMsg = e.message || String(e);
+                if (
+                  !errorMsg.includes("Target closed") &&
+                  !errorMsg.includes("Session closed") &&
+                  !errorMsg.includes("Page closed")
+                ) {
+                  logger.debug(`[PARALLEL_TEAMS] Error checking link content: ${errorMsg}`);
+                }
               }
             }
 
             if (hasContent) {
-              logger.info(`✅ Ladder table found with content on attempt ${attempts}!`);
+              logger.info(
+                `✅ Team links found with content on attempt ${attempts}! (${teamLinks.length} teams)`
+              );
 
               // Record successful attempt for performance tracking
               performanceMetrics.recordAttempt(true, attempts);
 
               return true;
-            } else {
-              logger.debug(
-                `Table found but team links have no content yet, continuing wait...`
-              );
             }
           }
-        }
-
-        // Alternative check: Look directly for team links with content
-        const teamLinks = await this.page.$$(
-          '[data-testid="ladder"] table:first-of-type tbody tr td:nth-child(2) a'
-        );
-        if (teamLinks.length > 0) {
-          // Verify links have content
-          let hasContent = false;
-          for (const link of teamLinks.slice(0, 3)) {
-            try {
-              const text = await link.evaluate((el) => el.textContent?.trim());
-              if (text && text.length > 0) {
-                hasContent = true;
-                break;
-              }
-            } catch (e) {
-              // Continue checking
-            }
-          }
-
-          if (hasContent) {
-            logger.info(
-              `✅ Team links found with content on attempt ${attempts}! (${teamLinks.length} teams)`
-            );
-
-            // Record successful attempt for performance tracking
-            performanceMetrics.recordAttempt(true, attempts);
-
-            return true;
-          }
+        } catch (checkError) {
+          // Continue to next attempt
         }
 
         // If this was the last attempt, break
@@ -238,7 +427,7 @@ class LadderDetector {
       logger.info("Trying fallback method: waitForSelector...");
       try {
         await this.page.waitForSelector('[data-testid="ladder"] table', {
-          timeout: 5000,
+          timeout: 10000, // Increased from 5000ms to account for proxy latency
         });
         logger.info("✅ Fallback method succeeded - table found!");
         return true;
@@ -290,6 +479,23 @@ class LadderDetector {
       logger.warn("Table detection: No tables found in ladder container");
       return false;
     } catch (error) {
+      // Suppress cancellation errors (happen when page is reset during operation)
+      const errorMessage = error.message || String(error);
+      const isCancellationError = [
+        "Target closed",
+        "Protocol error",
+        "Navigation interrupted",
+        "Session closed",
+        "Execution context was destroyed",
+        "Page closed",
+        "Browser has been closed",
+      ].some((err) => errorMessage.includes(err));
+
+      if (isCancellationError) {
+        // Don't log cancellation errors - they're expected when pages are reset
+        return false; // Return false to indicate check couldn't complete
+      }
+
       logger.warn(`Error checking for table: ${error.message}`);
       logger.warn(`Error stack: ${error.stack}`);
       return false;

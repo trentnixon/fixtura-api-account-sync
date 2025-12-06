@@ -292,11 +292,62 @@ class PagePoolManager {
             logger.debug(
               `[PagePoolManager] Resetting page from ${currentUrl} to about:blank before reuse`
             );
-            // PROXY OPTIMIZATION: Use shorter timeout for blank page navigation
-            await page.goto("about:blank", {
-              waitUntil: "domcontentloaded",
-              timeout: 3000, // Reduced from 5000ms - blank page loads quickly even through proxy
-            });
+
+            // CRITICAL: Check if page has pending operations before resetting
+            // This prevents unhandled promise rejections
+            try {
+              // Give a small delay to allow any pending operations to complete
+              await new Promise((resolve) => setTimeout(resolve, 100));
+
+              // Check if page is still valid before resetting
+              if (page.isClosed()) {
+                logger.warn("[PagePoolManager] Page closed before reset, skipping");
+                this.activePages.delete(page);
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                retries++;
+                continue;
+              }
+
+              // PROXY OPTIMIZATION: Use shorter timeout for blank page navigation
+              // CRITICAL: Wrap in try-catch to handle any navigation errors
+              await page.goto("about:blank", {
+                waitUntil: "domcontentloaded",
+                timeout: 3000, // Reduced from 5000ms - blank page loads quickly even through proxy
+              }).catch((gotoErr) => {
+                // Handle navigation errors during reset
+                const errorMsg = gotoErr.message || String(gotoErr);
+                // If page is closed or navigation interrupted, that's expected during reset
+                if (
+                  errorMsg.includes("Target closed") ||
+                  errorMsg.includes("Session closed") ||
+                  errorMsg.includes("Page closed") ||
+                  errorMsg.includes("Protocol error") ||
+                  errorMsg.includes("Navigation interrupted")
+                ) {
+                  // This is expected - page might have been closed or navigation interrupted
+                  return; // Suppress error
+                }
+                // Re-throw unexpected errors
+                throw gotoErr;
+              });
+            } catch (resetNavError) {
+              // Handle navigation errors during reset
+              const errorMsg = resetNavError.message || String(resetNavError);
+              if (
+                errorMsg.includes("Target closed") ||
+                errorMsg.includes("Session closed") ||
+                errorMsg.includes("Page closed")
+              ) {
+                logger.debug(
+                  `[PagePoolManager] Page closed during reset (expected): ${errorMsg}`
+                );
+                this.activePages.delete(page);
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                retries++;
+                continue;
+              }
+              throw resetNavError; // Re-throw other errors
+            }
           }
         } catch (resetError) {
           logger.warn(
@@ -386,8 +437,35 @@ class PagePoolManager {
    * @param {Page} page - The page to release
    */
   async releasePage(page) {
+    const releaseStartTime = Date.now();
+    const pageUrl = page ? page.url() : "unknown";
+
+    logger.debug(
+      `[PagePoolManager] Releasing page (URL: ${pageUrl}, closed: ${page?.isClosed()})`
+    );
+
     if (!page || page.isClosed()) {
       // If page is closed, remove it from pool if it's still there
+      const index = this.pagePool.indexOf(page);
+      if (index > -1) {
+        this.pagePool.splice(index, 1);
+        logger.debug(
+          `[PagePoolManager] Removed closed page from pool (pool size now: ${this.pagePool.length})`
+        );
+      }
+      this.activePages.delete(page);
+      return;
+    }
+
+    // CRITICAL: Wait a moment before releasing to ensure all operations complete
+    // This prevents page reset while waitForSelector promises are still pending
+    await new Promise((resolve) => setTimeout(resolve, 200)); // 200ms delay before release
+
+    // Double-check page is still valid after delay
+    if (page.isClosed()) {
+      logger.debug(
+        `[PagePoolManager] Page closed during release delay, removing from pool`
+      );
       const index = this.pagePool.indexOf(page);
       if (index > -1) {
         this.pagePool.splice(index, 1);
@@ -398,6 +476,11 @@ class PagePoolManager {
 
     // Remove from active pages (makes it available for next allocation)
     this.activePages.delete(page);
+
+    const releaseDuration = Date.now() - releaseStartTime;
+    logger.debug(
+      `[PagePoolManager] Page released (duration: ${releaseDuration}ms, active pages: ${this.activePages.size}/${this.pagePool.length})`
+    );
 
     // Record metrics
     this.poolMetrics.totalReleases++;

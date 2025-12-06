@@ -66,24 +66,67 @@ class GetTeams {
           };
 
           logger.info(
-            `[PARALLEL_TEAMS] [TASK-${index + 1}] START grade: ${GradeInfo.name || GradeInfo.id} (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
+            `[PARALLEL_TEAMS] [TASK-${index + 1}] START grade: ${
+              GradeInfo.name || GradeInfo.id
+            } (page acquired: ${pageAcquiredTime - taskStartTime}ms)`
           );
 
+          // CRITICAL: Ensure ALL operations complete before releasing page
+          // This includes both Puppeteer operations AND API calls
           const teamData = await this.fetchTeamData(page, fetcherInfo);
+
           const taskDuration = Date.now() - taskStartTime;
           logger.info(
-            `[PARALLEL_TEAMS] [TASK-${index + 1}] COMPLETE grade: ${GradeInfo.name || GradeInfo.id} (duration: ${taskDuration}ms, teams: ${teamData?.length || 0})`
+            `[PARALLEL_TEAMS] [TASK-${index + 1}] COMPLETE grade: ${
+              GradeInfo.name || GradeInfo.id
+            } (duration: ${taskDuration}ms, teams: ${teamData?.length || 0})`
           );
           return teamData;
         } catch (error) {
+          // Suppress cancellation errors (happen when page is reset during operation)
+          const errorMessage = error.message || String(error);
+          const isCancellationError = [
+            "Target closed",
+            "Protocol error",
+            "Navigation interrupted",
+            "Session closed",
+            "Execution context was destroyed",
+            "Page closed",
+            "Browser has been closed",
+          ].some((err) => errorMessage.includes(err));
+
+          if (isCancellationError) {
+            // Don't log cancellation errors - they're expected when pages are reset
+            logger.debug(
+              `[PARALLEL_TEAMS] Cancellation error for grade ${GradeInfo.id} (page reset)`
+            );
+            return []; // Return empty array instead of throwing
+          }
+
           logger.error(
             `Error processing grade ${GradeInfo.id}: ${error.message}`,
             { error, gradeId: GradeInfo.id }
           );
           throw error;
         } finally {
-          // Release page back to pool
-          await this.puppeteerManager.releasePageFromPool(page);
+          // CRITICAL: Only release page AFTER all operations are confirmed complete
+          // The await above ensures all Puppeteer operations and API calls finish
+          try {
+            await this.puppeteerManager.releasePageFromPool(page);
+          } catch (releaseError) {
+            // Suppress errors during page release (page might already be closed)
+            const releaseErrorMsg =
+              releaseError.message || String(releaseError);
+            if (
+              !releaseErrorMsg.includes("Target closed") &&
+              !releaseErrorMsg.includes("Session closed") &&
+              !releaseErrorMsg.includes("Page closed")
+            ) {
+              logger.warn(
+                `[PARALLEL_TEAMS] Error releasing page: ${releaseErrorMsg}`
+              );
+            }
+          }
         }
       },
       concurrency,

@@ -145,18 +145,30 @@ async function fetcher(PATH, method = "GET", body = {}, retryCount = null) {
     logger.info(`Data fetched successfully from ${PATH}`);
     return res.data;
   } catch (error) {
+    // Ensure timeout is cleared even if error occurs
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
     // Handle specific error types
-    if (error.name === "AbortError") {
-      logger.error(
-        `[fetcher.js] Request timeout after ${API_CONFIG.timeout}ms for ${PATH}`,
-        {
-          file: "fetcher.js",
-          function: "fetcher",
-          path: PATH,
-          method: method,
-          timeout: API_CONFIG.timeout,
-        }
-      );
+    if (error.name === "AbortError" || error.message?.includes("aborted")) {
+      // Suppress AbortError logging if retries are available (will retry)
+      if (retryCount > 0) {
+        logger.debug(
+          `[fetcher.js] Request timeout after ${API_CONFIG.timeout}ms for ${PATH}, will retry`
+        );
+      } else {
+        logger.error(
+          `[fetcher.js] Request timeout after ${API_CONFIG.timeout}ms for ${PATH}`,
+          {
+            file: "fetcher.js",
+            function: "fetcher",
+            path: PATH,
+            method: method,
+            timeout: API_CONFIG.timeout,
+          }
+        );
+      }
     } else if (error.code === "ECONNREFUSED") {
       logger.error(
         `[fetcher.js] Connection refused to API server. Please ensure the server is running.`,
