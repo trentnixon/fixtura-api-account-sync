@@ -111,10 +111,12 @@ class GetTeamsGameData {
     const totalFixturesFromResponse = gameData.length;
 
     // Filter out fixtures older than 2 weeks before assignment
-    const filteredGameData = this.filterOldFixtures(gameData);
+    // COMMENTED OUT: Date filtering temporarily disabled
+    // const filteredGameData = this.filterOldFixtures(gameData);
+    const filteredGameData = gameData; // Use unfiltered data
 
     logger.info(
-      `[FIXTURE-FILTER] [GAMES] Fixtures summary: ${totalFixturesFromResponse} returned from response, ${filteredGameData.length} remaining to upload to CMS`
+      `[FIXTURE-FILTER] [GAMES] Fixtures summary: ${totalFixturesFromResponse} returned from response, ${filteredGameData.length} remaining to upload to CMS (filtering disabled)`
     );
 
     if (filteredGameData.length === 0) {

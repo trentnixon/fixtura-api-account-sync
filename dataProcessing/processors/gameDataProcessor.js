@@ -595,16 +595,18 @@ class GameDataProcessor {
                 10
               );
               // Filter out fixtures older than 2 weeks before creating assignment batches
-              const filteredScrapedGameData = this.filterOldFixtures(
-                categoryResult.scrapedGameData
-              );
+              // COMMENTED OUT: Date filtering temporarily disabled
+              // const filteredScrapedGameData = this.filterOldFixtures(
+              //   categoryResult.scrapedGameData
+              // );
+              const filteredScrapedGameData = categoryResult.scrapedGameData; // Use unfiltered data
 
               logger.info(
                 `[FIXTURE-FILTER] [GAMES] [COMPETITION-${
                   i + 1
                 }] Fixtures summary: ${totalFixturesFromResponse} returned from response, ${
                   filteredScrapedGameData.length
-                } remaining to upload to CMS`
+                } remaining to upload to CMS (filtering disabled)`
               );
 
               if (filteredScrapedGameData.length === 0) {
@@ -868,12 +870,14 @@ class GameDataProcessor {
               );
 
               // Filter out fixtures older than 2 weeks before creating assignment batches
-              const filteredBatchGameData = this.filterOldFixtures(
-                batchResult.scrapedGameData
-              );
+              // COMMENTED OUT: Date filtering temporarily disabled
+              // const filteredBatchGameData = this.filterOldFixtures(
+              //   batchResult.scrapedGameData
+              // );
+              const filteredBatchGameData = batchResult.scrapedGameData; // Use unfiltered data
 
               logger.info(
-                `[FIXTURE-FILTER] [GAMES] [BATCH-${batchIndex}] Fixtures summary: ${totalFixturesFromResponse} returned from response, ${filteredBatchGameData.length} remaining to upload to CMS`
+                `[FIXTURE-FILTER] [GAMES] [BATCH-${batchIndex}] Fixtures summary: ${totalFixturesFromResponse} returned from response, ${filteredBatchGameData.length} remaining to upload to CMS (filtering disabled)`
               );
 
               if (filteredBatchGameData.length === 0) {

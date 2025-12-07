@@ -51,20 +51,33 @@ async function scrapeTypeTimeGround(matchElement) {
     const gameInfoElements = await matchElement.$$(`${gameInfoXpath}`);
     if (gameInfoElements.length === 0) {
       logger.warn(`Game info element not found using XPath: ${gameInfoXpath}`);
-      return { type: null, time: null, ground: null, dateRangeObj: null };
+      return {
+        type: null,
+        time: null,
+        ground: null,
+        dateRangeObj: null,
+        finalDaysPlay: null,
+      };
     }
 
     // Extract spans within the matched gameInfoElement
     const spans = await gameInfoElements[0].$$("span");
     if (spans.length === 0) {
       logger.warn("No spans found for type, time, and ground extraction.");
-      return { type: null, time: null, ground: null, dateRangeObj: null };
+      return {
+        type: null,
+        time: null,
+        ground: null,
+        dateRangeObj: null,
+        finalDaysPlay: null,
+      };
     }
 
     let type = null;
     let time = null;
     let ground = null;
     let dateRangeObj = [];
+    let finalDaysPlay = null;
 
     // OPTIMIZATION: Extract all span texts in parallel (was sequential)
     // This reduces span processing time from 100ms to 30-50ms
@@ -86,9 +99,10 @@ async function scrapeTypeTimeGround(matchElement) {
         time = match ? match[0] : null;
       }
 
-      // Extract dates in "Day, dd Mon yy" format, handling one or two dates
+      // Extract dates in "Day, dd Mon yyyy" format, handling one or two dates
+      // Matches format like "Saturday, 11 Oct 2025" from span text like "11:00 AM, Saturday, 11 Oct 2025"
       const dateMatches = spanText.match(
-        /\b[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{2}\b/g
+        /\b[A-Za-z]+, \d{1,2} [A-Za-z]{3} \d{4}\b/g
       );
       if (dateMatches) {
         // Only add dates if they're not already in dateRangeObj to avoid duplicates
@@ -109,8 +123,8 @@ async function scrapeTypeTimeGround(matchElement) {
       const lastDateStr = dateRangeObj[dateRangeObj.length - 1];
 
       finalDaysPlay = moment
-        .tz(lastDateStr, "ddd, DD MMM YY", "Australia/Sydney")
-        .format("YYYY-MM-DDTHH:mm:ssZ"); // Format as ISO string with timezone offset
+        .tz(lastDateStr, "dddd, DD MMM YYYY", "Australia/Sydney")
+        .format("YYYY-MM-DDTHH:mm:ssZ"); // Format as ISO string with timezone offset for Strapi
     }
     // Check for an href link for the ground location within gameInfoElement
     const links = await gameInfoElements[0].$$("a");
@@ -120,7 +134,13 @@ async function scrapeTypeTimeGround(matchElement) {
     return { type, time, ground, dateRangeObj, finalDaysPlay };
   } catch (error) {
     logger.error(`Error in scrapeTypeTimeGround: ${error.message}`);
-    return { type: null, time: null, ground: null, dateRangeObj: null };
+    return {
+      type: null,
+      time: null,
+      ground: null,
+      dateRangeObj: null,
+      finalDaysPlay: null,
+    };
   }
 }
 
