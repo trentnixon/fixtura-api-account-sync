@@ -50,7 +50,9 @@ async function scrapeTypeTimeGround(matchElement) {
 
     const gameInfoElements = await matchElement.$$(`${gameInfoXpath}`);
     if (gameInfoElements.length === 0) {
-      logger.warn(`Game info element not found using XPath: ${gameInfoXpath}`);
+      logger.warn(
+        `[SCRAPE-DATES] Game info element not found using XPath: ${gameInfoXpath}`
+      );
       return {
         type: null,
         time: null,
@@ -59,6 +61,9 @@ async function scrapeTypeTimeGround(matchElement) {
         finalDaysPlay: null,
       };
     }
+    logger.debug(
+      `[SCRAPE-DATES] Found ${gameInfoElements.length} gameInfoElement(s) using XPath: ${gameInfoXpath}`
+    );
 
     // Extract spans within the matched gameInfoElement
     const spans = await gameInfoElements[0].$$("span");
@@ -86,6 +91,13 @@ async function scrapeTypeTimeGround(matchElement) {
     );
     const spanTexts = await Promise.all(spanTextPromises);
 
+    // Log all span texts for debugging
+    logger.debug(
+      `[SCRAPE-DATES] Found ${
+        spanTexts.length
+      } spans. Span texts: ${JSON.stringify(spanTexts)}`
+    );
+
     // Process span texts sequentially (needed for building dateRangeObj)
     for (const spanText of spanTexts) {
       // Check if the text matches any type in typeDefinitions
@@ -99,18 +111,31 @@ async function scrapeTypeTimeGround(matchElement) {
         time = match ? match[0] : null;
       }
 
-      // Extract dates in "Day, dd Mon yyyy" format, handling one or two dates
-      // Matches format like "Saturday, 11 Oct 2025" from span text like "11:00 AM, Saturday, 11 Oct 2025"
-      const dateMatches = spanText.match(
-        /\b[A-Za-z]+, \d{1,2} [A-Za-z]{3} \d{4}\b/g
-      );
+      // Extract dates in "Day, dd Mon yy" format, handling one or two dates
+      // Matches format like "Sat, 06 Sep 25" from span text like "10:00 AM, Sat, 06 Sep 25"
+      // Also handles full day names like "Saturday, 11 Oct 2025" from "11:00 AM, Saturday, 11 Oct 2025"
+      // Pattern matches: day name (3+ letters), comma, space, day number, space, month (3 letters), space, year (2-4 digits)
+      const datePattern = /[A-Za-z]{3,}, \d{1,2} [A-Za-z]{3} \d{2,4}/g;
+      const dateMatches = spanText.match(datePattern);
       if (dateMatches) {
+        logger.debug(
+          `[SCRAPE-DATES] Found date matches in spanText "${spanText}": ${JSON.stringify(
+            dateMatches
+          )}`
+        );
         // Only add dates if they're not already in dateRangeObj to avoid duplicates
         dateMatches.forEach((date) => {
           if (!dateRangeObj.includes(date)) {
             dateRangeObj.push(date);
           }
         });
+      } else {
+        // Log when we expect to find dates but don't (for debugging)
+        if (spanText.includes("AM") || spanText.includes("PM")) {
+          logger.debug(
+            `[SCRAPE-DATES] No date matches found in spanText "${spanText}" (contains time but no date match)`
+          );
+        }
       }
     }
 
@@ -122,15 +147,46 @@ async function scrapeTypeTimeGround(matchElement) {
     if (dateRangeObj.length > 0) {
       const lastDateStr = dateRangeObj[dateRangeObj.length - 1];
 
-      finalDaysPlay = moment
-        .tz(lastDateStr, "dddd, DD MMM YYYY", "Australia/Sydney")
-        .format("YYYY-MM-DDTHH:mm:ssZ"); // Format as ISO string with timezone offset for Strapi
+      // Try parsing with different formats to handle both "Sat, 06 Sep 25" and "Saturday, 11 Oct 2025"
+      let parsedDate = null;
+      // Try 3-letter day abbreviation with 2-digit year first (most common)
+      parsedDate = moment.tz(lastDateStr, "ddd, DD MMM YY", "Australia/Sydney");
+      if (!parsedDate.isValid()) {
+        // Try full day name with 4-digit year
+        parsedDate = moment.tz(
+          lastDateStr,
+          "dddd, DD MMM YYYY",
+          "Australia/Sydney"
+        );
+      }
+      if (!parsedDate.isValid()) {
+        // Try 3-letter day abbreviation with 4-digit year
+        parsedDate = moment.tz(
+          lastDateStr,
+          "ddd, DD MMM YYYY",
+          "Australia/Sydney"
+        );
+      }
+
+      if (parsedDate.isValid()) {
+        finalDaysPlay = parsedDate.format("YYYY-MM-DDTHH:mm:ssZ"); // Format as ISO string with timezone offset for Strapi
+      } else {
+        logger.warn(`[SCRAPE-DATES] Failed to parse date: "${lastDateStr}"`);
+      }
     }
     // Check for an href link for the ground location within gameInfoElement
     const links = await gameInfoElements[0].$$("a");
     if (links.length > 0) {
       ground = await links[0].evaluate((el) => el.textContent.trim());
     }
+
+    // Log scraped date values for debugging
+    logger.info(
+      `[SCRAPE-DATES] dateRangeObj: ${JSON.stringify(
+        dateRangeObj
+      )}, finalDaysPlay: ${finalDaysPlay}`
+    );
+
     return { type, time, ground, dateRangeObj, finalDaysPlay };
   } catch (error) {
     logger.error(`Error in scrapeTypeTimeGround: ${error.message}`);
