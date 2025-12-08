@@ -115,7 +115,10 @@ async function scrapeTypeTimeGround(matchElement) {
       // Matches format like "Sat, 06 Sep 25" from span text like "10:00 AM, Sat, 06 Sep 25"
       // Also handles full day names like "Saturday, 11 Oct 2025" from "11:00 AM, Saturday, 11 Oct 2025"
       // Pattern matches: day name (3+ letters), comma, space, day number, space, month (3 letters), space, year (2-4 digits)
-      const datePattern = /[A-Za-z]{3,}, \d{1,2} [A-Za-z]{3} \d{2,4}/g;
+      // Updated regex to be more precise: year must be followed by space, comma, or end of string (not digits)
+      // This prevents matching "Sat, 11 Oct 2512" from concatenated strings like "Sat, 11 Oct 2512:00 PM"
+      const datePattern =
+        /[A-Za-z]{3,}, \d{1,2} [A-Za-z]{3} \d{2,4}(?=\s|,|$)/g;
       const dateMatches = spanText.match(datePattern);
       if (dateMatches) {
         logger.debug(
@@ -124,9 +127,27 @@ async function scrapeTypeTimeGround(matchElement) {
           )}`
         );
         // Only add dates if they're not already in dateRangeObj to avoid duplicates
+        // Also validate that dates can be parsed (filters out invalid matches like "Sat, 11 Oct 2512")
         dateMatches.forEach((date) => {
           if (!dateRangeObj.includes(date)) {
-            dateRangeObj.push(date);
+            // Quick validation: try to parse the date to ensure it's valid
+            let isValid = false;
+            let parsed = moment.tz(date, "ddd, DD MMM YY", "Australia/Sydney");
+            if (!parsed.isValid()) {
+              parsed = moment.tz(date, "dddd, DD MMM YYYY", "Australia/Sydney");
+            }
+            if (!parsed.isValid()) {
+              parsed = moment.tz(date, "ddd, DD MMM YYYY", "Australia/Sydney");
+            }
+            isValid = parsed.isValid();
+
+            if (isValid) {
+              dateRangeObj.push(date);
+            } else {
+              logger.debug(
+                `[SCRAPE-DATES] Skipping invalid date match: "${date}" (could not be parsed)`
+              );
+            }
           }
         });
       } else {
@@ -139,11 +160,38 @@ async function scrapeTypeTimeGround(matchElement) {
       }
     }
 
-    // Sort dateRangeObj to ensure dates are in the correct order
+    // Sort dateRangeObj chronologically to ensure dates are in the correct order
+    // For two-day games, we need to sort by actual date value, not just swap positions
     if (dateRangeObj.length > 1) {
-      dateRangeObj = [dateRangeObj[1], dateRangeObj[0]]; // Preserve order of first and second dates only
+      // Parse and sort dates chronologically
+      const parsedDates = dateRangeObj.map((dateStr) => {
+        // Try parsing with different formats
+        let parsed = moment.tz(dateStr, "ddd, DD MMM YY", "Australia/Sydney");
+        if (!parsed.isValid()) {
+          parsed = moment.tz(dateStr, "dddd, DD MMM YYYY", "Australia/Sydney");
+        }
+        if (!parsed.isValid()) {
+          parsed = moment.tz(dateStr, "ddd, DD MMM YYYY", "Australia/Sydney");
+        }
+        return { dateStr, parsed };
+      });
+
+      // Filter out invalid dates and sort by date value
+      const validDates = parsedDates.filter((d) => d.parsed.isValid());
+      validDates.sort((a, b) => a.parsed.valueOf() - b.parsed.valueOf());
+
+      // Update dateRangeObj with sorted dates (chronological order)
+      dateRangeObj = validDates.map((d) => d.dateStr);
+
+      logger.debug(
+        `[SCRAPE-DATES] Sorted ${
+          dateRangeObj.length
+        } dates chronologically: ${JSON.stringify(dateRangeObj)}`
+      );
     }
+
     // Convert the latest date in dateRangeObj to a Date object for finalDaysPlay
+    // For two-day games, this will be the final day of play (the last date chronologically)
     if (dateRangeObj.length > 0) {
       const lastDateStr = dateRangeObj[dateRangeObj.length - 1];
 
@@ -170,6 +218,9 @@ async function scrapeTypeTimeGround(matchElement) {
 
       if (parsedDate.isValid()) {
         finalDaysPlay = parsedDate.format("YYYY-MM-DDTHH:mm:ssZ"); // Format as ISO string with timezone offset for Strapi
+        logger.debug(
+          `[SCRAPE-DATES] finalDaysPlay set to: ${finalDaysPlay} (from date: ${lastDateStr})`
+        );
       } else {
         logger.warn(`[SCRAPE-DATES] Failed to parse date: "${lastDateStr}"`);
       }
