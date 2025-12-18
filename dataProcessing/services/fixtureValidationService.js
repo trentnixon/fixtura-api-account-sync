@@ -63,45 +63,65 @@ class FixtureValidationService {
         throw new Error("Page instance is required for Puppeteer validation");
       }
 
-      // OPTIMIZED: Use domcontentloaded (like other scrapers) - MUCH faster than networkidle0
-      // Reduced timeout for faster failure detection
+      // FIX: Use 'load' instead of 'domcontentloaded' to wait for JavaScript rendering
+      // The 404 message "Oops, not another 404!" is rendered by JavaScript after DOM loads
+      // 'load' waits for the load event which fires after JavaScript executes
       let response;
       try {
+        // Try 'load' first (waits for load event - ensures JavaScript has executed)
         response = await page.goto(fullUrl, {
-          waitUntil: "domcontentloaded", // Fast - same as other scrapers
-          timeout: this.timeout, // 8 seconds (optimized)
+          waitUntil: "load", // Wait for load event - ensures JavaScript has rendered
+          timeout: this.timeout, // 8 seconds
         });
-      } catch (navError) {
-        // Navigation errors usually mean 404
-        if (navError.message && navError.message.includes("net::ERR_")) {
-          logger.debug(`[VALIDATION] Navigation failed for: ${fullUrl}`, {
-            error: navError.message,
+      } catch (loadError) {
+        // If 'load' times out, try 'domcontentloaded' as fallback
+        logger.debug(
+          `[VALIDATION] Load timeout for: ${fullUrl}, trying domcontentloaded fallback`,
+          {
+            error: loadError.message,
             fixtureId,
             gameID,
+          }
+        );
+        try {
+          response = await page.goto(fullUrl, {
+            waitUntil: "domcontentloaded", // Fallback - DOM ready but JS might not be done
+            timeout: this.timeout,
           });
-          return {
-            valid: false,
-            status: "404",
-            fixtureId,
-            gameID,
-            url: fullUrl,
-            httpStatus: "navigation_failed",
-            method: "puppeteer",
-          };
-        }
-        // For timeout, page might still be loading - check content anyway
-        if (navError.message.includes("timeout")) {
-          logger.debug(
-            `[VALIDATION] Navigation timeout for: ${fullUrl}, checking content anyway`,
-            {
+          // Give extra time for JavaScript to render 404 message
+          await page.waitForTimeout(2000).catch(() => {}); // Wait 2 seconds for JS to render
+        } catch (navError) {
+          // Navigation errors usually mean 404
+          if (navError.message && navError.message.includes("net::ERR_")) {
+            logger.debug(`[VALIDATION] Navigation failed for: ${fullUrl}`, {
               error: navError.message,
               fixtureId,
               gameID,
-            }
-          );
-          // Continue to check content
-        } else {
-          throw navError;
+            });
+            return {
+              valid: false,
+              status: "404",
+              fixtureId,
+              gameID,
+              url: fullUrl,
+              httpStatus: "navigation_failed",
+              method: "puppeteer",
+            };
+          }
+          // For timeout, page might still be loading - check content anyway
+          if (navError.message.includes("timeout")) {
+            logger.debug(
+              `[VALIDATION] Navigation timeout for: ${fullUrl}, checking content anyway`,
+              {
+                error: navError.message,
+                fixtureId,
+                gameID,
+              }
+            );
+            // Continue to check content
+          } else {
+            throw navError;
+          }
         }
       }
 
@@ -130,12 +150,17 @@ class FixtureValidationService {
               const bodyText = document.body.innerText || "";
               const bodyHtml = document.body.innerHTML || "";
 
-              // Check for 404 indicators
+              // Check for explicit PlayHQ 404 indicators (the actual message "Oops, not another 404!")
               const h1Elements = Array.from(document.querySelectorAll("h1"));
-              const has404 = h1Elements.some(
+              const hasPlayHQ404 = h1Elements.some(
                 (h1) =>
-                  h1.innerText && h1.innerText.toLowerCase().includes("404")
+                  h1.innerText &&
+                  h1.innerText.toLowerCase().includes("oops, not another 404")
               );
+              const has404Text =
+                bodyText.includes("oops, not another 404") ||
+                bodyText.includes("sorry you have arrived here");
+              const has404 = hasPlayHQ404 || has404Text;
 
               // Check for valid game content indicators
               const hasGameContent =
@@ -150,18 +175,20 @@ class FixtureValidationService {
               return has404 || hasGameContent;
             },
             {
-              timeout: 10000, // Increased from 8000ms to 10000ms for proxy latency
-              polling: 300, // Increased polling interval from 200ms to 300ms (less frequent checks)
+              timeout: 15000, // Increased to 15 seconds to wait for JavaScript rendering of 404 message
+              polling: 500, // Check every 500ms for 404 message to appear
             }
           );
           logger.debug(`[VALIDATION] Page content loaded for ${fullUrl}`);
         } catch (waitFuncError) {
-          // PERFORMANCE OPTIMIZATION: If waitForFunction times out, continue anyway
-          // Proxy latency may cause timeouts even for valid pages, so we check content anyway
+          // If waitForFunction times out, continue anyway and check content
+          // This ensures we still check even if the wait times out
           logger.debug(
             `[VALIDATION] Content check timeout for ${fullUrl}, checking content anyway`,
             { error: waitFuncError.message }
           );
+          // Give a small delay to let JavaScript finish rendering the 404 message
+          await page.waitForTimeout(2000).catch(() => {}); // Wait 2 seconds for JS to render
           // Continue to content check - don't fail on timeout
         }
       } catch (waitError) {
@@ -327,6 +354,18 @@ class FixtureValidationService {
         };
       }
 
+      // FIX: Add detailed logging to debug 404 detection issues
+      logger.debug(`[VALIDATION] Page info for ${fullUrl}:`, {
+        hasExplicit404: pageInfo.hasExplicit404,
+        hasPlayHQ404H1: pageInfo.hasPlayHQ404H1,
+        hasPlayHQ404Text: pageInfo.hasPlayHQ404Text,
+        hasGameContent: pageInfo.hasGameContent,
+        bodyLength: pageInfo.bodyLength,
+        httpStatus,
+        fixtureId,
+        gameID,
+      });
+
       // PRIORITY 1: Check for EXPLICIT PlayHQ 404 indicators ONLY
       // Only mark as 404 if we see the specific PlayHQ 404 page structure
       if (pageInfo.hasExplicit404 || httpStatus === 404) {
@@ -334,6 +373,8 @@ class FixtureValidationService {
           hasPlayHQ404H1: pageInfo.hasPlayHQ404H1,
           hasPlayHQ404Text: pageInfo.hasPlayHQ404Text,
           httpStatus,
+          fixtureId,
+          gameID,
         });
         return {
           valid: false,
@@ -344,6 +385,114 @@ class FixtureValidationService {
           httpStatus,
           method: "puppeteer",
         };
+      }
+
+      // FIX: If HTTP 200 but we haven't detected 404 yet, do a final check
+      // Sometimes the 404 message appears after initial page load
+      // Wait a bit longer and check again specifically for the 404 message
+      if (httpStatus === 200 && !pageInfo.hasExplicit404) {
+        logger.debug(
+          `[VALIDATION] HTTP 200 but no explicit 404 detected, doing final 404 check for ${fullUrl}`
+        );
+        try {
+          // Try to wait for h1 element to appear (404 page has h1 with "Oops, not another 404!")
+          try {
+            await page.waitForSelector("h1", {
+              timeout: 3000, // Wait up to 3 seconds for h1
+              visible: true,
+            });
+            // Check if it's the 404 h1
+            const h1Text = await page.evaluate(() => {
+              const h1 = document.querySelector("h1");
+              return h1 ? h1.innerText.toLowerCase() : "";
+            });
+            if (h1Text.includes("oops, not another 404")) {
+              logger.info(
+                `[VALIDATION] 404 detected via h1 wait: ${fullUrl}`,
+                {
+                  h1Text: h1Text.substring(0, 100),
+                  httpStatus,
+                  fixtureId,
+                  gameID,
+                }
+              );
+              return {
+                valid: false,
+                status: "404",
+                fixtureId,
+                gameID,
+                url: fullUrl,
+                httpStatus,
+                method: "puppeteer",
+              };
+            }
+          } catch (h1WaitError) {
+            // h1 might not exist or might not be 404 - continue to final check
+            logger.debug(
+              `[VALIDATION] h1 wait completed for ${fullUrl}, proceeding to final check`
+            );
+          }
+
+          // Wait a bit more for JavaScript to fully render
+          await page.waitForTimeout(2000).catch(() => {});
+
+          // Check one more time specifically for the 404 message
+          const finalCheck = await page.evaluate(() => {
+            const bodyText = document.body
+              ? document.body.innerText.toLowerCase()
+              : "";
+            const h1Elements = Array.from(document.querySelectorAll("h1"));
+            const hasPlayHQ404H1 = h1Elements.some(
+              (h1) =>
+                h1.innerText &&
+                h1.innerText.toLowerCase().includes("oops, not another 404")
+            );
+            const has404Text =
+              bodyText.includes("oops, not another 404") ||
+              bodyText.includes("sorry you have arrived here");
+
+            return {
+              hasPlayHQ404H1,
+              has404Text,
+              hasExplicit404: hasPlayHQ404H1 || has404Text,
+              bodyText: bodyText.substring(0, 200), // First 200 chars for debugging
+            };
+          });
+
+          logger.debug(`[VALIDATION] Final 404 check for ${fullUrl}:`, {
+            hasExplicit404: finalCheck.hasExplicit404,
+            hasPlayHQ404H1: finalCheck.hasPlayHQ404H1,
+            has404Text: finalCheck.has404Text,
+            bodyTextPreview: finalCheck.bodyText,
+          });
+
+          if (finalCheck.hasExplicit404) {
+            logger.info(
+              `[VALIDATION] 404 detected in final check: ${fullUrl}`,
+              {
+                hasPlayHQ404H1: finalCheck.hasPlayHQ404H1,
+                has404Text: finalCheck.has404Text,
+                httpStatus,
+                fixtureId,
+                gameID,
+              }
+            );
+            return {
+              valid: false,
+              status: "404",
+              fixtureId,
+              gameID,
+              url: fullUrl,
+              httpStatus,
+              method: "puppeteer",
+            };
+          }
+        } catch (finalCheckError) {
+          logger.debug(
+            `[VALIDATION] Final 404 check error for ${fullUrl}: ${finalCheckError.message}`
+          );
+          // Continue with normal validation flow
+        }
       }
 
       // PRIORITY 2: For game center URLs, check if page has minimal content
