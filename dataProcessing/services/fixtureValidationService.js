@@ -89,7 +89,7 @@ class FixtureValidationService {
             timeout: this.timeout,
           });
           // Give extra time for JavaScript to render 404 message
-          await page.waitForTimeout(2000).catch(() => {}); // Wait 2 seconds for JS to render
+          await new Promise((resolve) => setTimeout(resolve, 2000)).catch(() => {}); // Wait 2 seconds for JS to render
         } catch (navError) {
           // Navigation errors usually mean 404
           if (navError.message && navError.message.includes("net::ERR_")) {
@@ -188,7 +188,7 @@ class FixtureValidationService {
             { error: waitFuncError.message }
           );
           // Give a small delay to let JavaScript finish rendering the 404 message
-          await page.waitForTimeout(2000).catch(() => {}); // Wait 2 seconds for JS to render
+          await new Promise((resolve) => setTimeout(resolve, 2000)).catch(() => {}); // Wait 2 seconds for JS to render
           // Continue to content check - don't fail on timeout
         }
       } catch (waitError) {
@@ -434,7 +434,7 @@ class FixtureValidationService {
           }
 
           // Wait a bit more for JavaScript to fully render
-          await page.waitForTimeout(2000).catch(() => {});
+          await new Promise((resolve) => setTimeout(resolve, 2000)).catch(() => {});
 
           // Check one more time specifically for the 404 message
           const finalCheck = await page.evaluate(() => {
