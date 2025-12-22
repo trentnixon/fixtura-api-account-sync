@@ -163,6 +163,11 @@ class GameDataFetcher {
   // Find a better way to grab this data!
   async extractMatchDetails(matchElement) {
     try {
+      // SAFE FIX: Extract round ONCE from matchElement (handles rare case of 2+ games per round)
+      // Fallback: If matchElement extraction fails, try per-gameDiv (maintains backward compatibility)
+      // This ensures all games in the same matchElement get the same round value
+      const roundFromMatchElement = await scrapeRound(matchElement);
+
       // Extract game divs from match element
       const gameDivs = await matchElement.$$("div.sc-1pr338c-0.cNVAcP");
       const gameDetails = [];
@@ -177,15 +182,26 @@ class GameDataFetcher {
 
           // OPTIMIZATION: Extract all game details in parallel (was sequential)
           // This reduces extraction time from 300-600ms to 100-150ms per game div
-          const [date, round, typeTimeGround, status, scoreCardInfo, teams] =
-            await Promise.all([
-              scrapeDate(gameDiv),
-              scrapeRound(gameDiv),
-              scrapeTypeTimeGround(gameDiv),
-              scrapeStatus(gameDiv),
-              scrapeScoreCardInfo(gameDiv),
-              scrapeTeamsInfo(gameDiv),
-            ]);
+          const [
+            date,
+            roundFromGameDiv,
+            typeTimeGround,
+            status,
+            scoreCardInfo,
+            teams,
+          ] = await Promise.all([
+            scrapeDate(gameDiv),
+            scrapeRound(gameDiv), // Keep for backward compatibility fallback
+            scrapeTypeTimeGround(gameDiv),
+            scrapeStatus(gameDiv),
+            scrapeScoreCardInfo(gameDiv),
+            scrapeTeamsInfo(gameDiv),
+          ]);
+
+          // SAFE FIX: Use round from matchElement if available, otherwise fallback to gameDiv result
+          // This ensures all games in the same matchElement get the same round (handles rare 2+ games case)
+          // But maintains backward compatibility if matchElement extraction fails
+          const round = roundFromMatchElement || roundFromGameDiv;
 
           // Process date after parallel extraction
           const dateObj = date

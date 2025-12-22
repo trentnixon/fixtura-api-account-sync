@@ -9,6 +9,7 @@
 - [x] Error handling with detailed context logging
 - [x] Support for different game types and formats
 - [x] Game data validation and processing
+- [x] Round extraction bug fix for multiple games per round (see ROUND_EXTRACTION_BUG_FIX.md)
 
 ## ⏳ To Do (easy → hard)
 
