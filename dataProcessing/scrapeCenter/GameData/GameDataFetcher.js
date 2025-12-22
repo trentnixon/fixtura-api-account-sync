@@ -168,15 +168,46 @@ class GameDataFetcher {
       // This ensures all games in the same matchElement get the same round value
       const roundFromMatchElement = await scrapeRound(matchElement);
 
+      // LOGGING: Track round extraction from matchElement
+      logger.info(
+        `[ROUND-EXTRACTION] Round from matchElement: ${
+          roundFromMatchElement || "null"
+        }`,
+        {
+          method: "extractMatchDetails",
+          roundFromMatchElement: roundFromMatchElement,
+          hasRound: !!roundFromMatchElement,
+          url: this.href,
+        }
+      );
+
       // Extract game divs from match element
       const gameDivs = await matchElement.$$("div.sc-1pr338c-0.cNVAcP");
       const gameDetails = [];
 
+      // LOGGING: Track number of game divs found
+      logger.info(
+        `[ROUND-EXTRACTION] Found ${gameDivs.length} game div(s) in matchElement`,
+        {
+          method: "extractMatchDetails",
+          gameDivCount: gameDivs.length,
+          roundFromMatchElement: roundFromMatchElement,
+          url: this.href,
+        }
+      );
+
       // OPTIMIZATION: Process game divs in parallel for faster extraction
-      const gameDivPromises = gameDivs.map(async (gameDiv) => {
+      const gameDivPromises = gameDivs.map(async (gameDiv, gameDivIndex) => {
         try {
           // Check bye match first (quick check before parallel extraction)
           if (await isByeMatch(gameDiv)) {
+            logger.debug(
+              `[ROUND-EXTRACTION] Game div ${gameDivIndex + 1} is a bye match`,
+              {
+                method: "extractMatchDetails",
+                gameDivIndex: gameDivIndex + 1,
+              }
+            );
             return { status: "bye" };
           }
 
@@ -198,10 +229,54 @@ class GameDataFetcher {
             scrapeTeamsInfo(gameDiv),
           ]);
 
+          // LOGGING: Track round extraction from gameDiv
+          logger.info(
+            `[ROUND-EXTRACTION] Game div ${
+              gameDivIndex + 1
+            } - Round from gameDiv: ${roundFromGameDiv || "null"}`,
+            {
+              method: "extractMatchDetails",
+              gameDivIndex: gameDivIndex + 1,
+              roundFromGameDiv: roundFromGameDiv,
+              hasRoundFromGameDiv: !!roundFromGameDiv,
+              date: date,
+              gameID: scoreCardInfo?.gameID,
+              url: this.href,
+            }
+          );
+
           // SAFE FIX: Use round from matchElement if available, otherwise fallback to gameDiv result
           // This ensures all games in the same matchElement get the same round (handles rare 2+ games case)
           // But maintains backward compatibility if matchElement extraction fails
           const round = roundFromMatchElement || roundFromGameDiv;
+
+          // LOGGING: Track final round value decision
+          logger.info(
+            `[ROUND-EXTRACTION] Game div ${gameDivIndex + 1} - Final round: ${
+              round || "null"
+            } (source: ${
+              roundFromMatchElement
+                ? "matchElement"
+                : roundFromGameDiv
+                ? "gameDiv"
+                : "none"
+            })`,
+            {
+              method: "extractMatchDetails",
+              gameDivIndex: gameDivIndex + 1,
+              finalRound: round,
+              roundSource: roundFromMatchElement
+                ? "matchElement"
+                : roundFromGameDiv
+                ? "gameDiv"
+                : "none",
+              roundFromMatchElement: roundFromMatchElement,
+              roundFromGameDiv: roundFromGameDiv,
+              gameID: scoreCardInfo?.gameID,
+              date: date,
+              url: this.href,
+            }
+          );
 
           // Process date after parallel extraction
           const dateObj = date
@@ -268,6 +343,44 @@ class GameDataFetcher {
         .filter((result) => !result.status || result.status !== "bye"); // Filter out bye matches
 
       gameDetails.push(...successfulResults);
+
+      // LOGGING: Track final results summary
+      logger.info(
+        `[ROUND-EXTRACTION] Summary - Extracted ${successfulResults.length} game(s) from matchElement`,
+        {
+          method: "extractMatchDetails",
+          totalGameDivs: gameDivs.length,
+          successfulGames: successfulResults.length,
+          roundFromMatchElement: roundFromMatchElement,
+          gamesWithRounds: successfulResults.filter((g) => g.round).length,
+          gamesWithoutRounds: successfulResults.filter((g) => !g.round).length,
+          roundValues: [
+            ...new Set(successfulResults.map((g) => g.round).filter(Boolean)),
+          ],
+          gameIDs: successfulResults.map((g) => g.gameID).filter(Boolean),
+          url: this.href,
+        }
+      );
+
+      // LOGGING: Log each game's round value for debugging
+      successfulResults.forEach((game, index) => {
+        logger.info(
+          `[ROUND-EXTRACTION] Game ${index + 1}/${
+            successfulResults.length
+          } - gameID: ${game.gameID}, round: ${game.round || "null"}, date: ${
+            game.date
+          }`,
+          {
+            method: "extractMatchDetails",
+            gameIndex: index + 1,
+            gameID: game.gameID,
+            round: game.round,
+            date: game.date,
+            teamHome: game.teamHome,
+            teamAway: game.teamAway,
+          }
+        );
+      });
 
       return gameDetails;
     } catch (error) {
