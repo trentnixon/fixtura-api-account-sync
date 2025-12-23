@@ -265,8 +265,9 @@ class AssociationCompetitionsFetcher {
           QUICK_CHECK_TIMEOUT,
           remainingTimeForLinks
         );
+        // FIX: Updated selector - structure is div > a, NOT ul > li > a
         await this.page.waitForSelector(
-          '[data-testid^="season-org-"] ul > li > a',
+          '[data-testid^="season-org-"] a[data-testid^="season-"]',
           {
             timeout: timeoutForLinks,
             visible: true,
@@ -315,8 +316,9 @@ class AssociationCompetitionsFetcher {
         );
         await this.page.waitForFunction(
           () => {
+            // FIX: Updated selector - structure is div > a, NOT ul > li > a
             const competitionLinks = document.querySelectorAll(
-              '[data-testid^="season-org-"] ul > li > a'
+              '[data-testid^="season-org-"] a[data-testid^="season-"]'
             );
             if (competitionLinks.length === 0) {
               return false;
@@ -475,24 +477,41 @@ class AssociationCompetitionsFetcher {
             ? competitionNameElement.textContent.trim()
             : `Unknown Competition Name ${index}`;
 
-          // Extract competition details within the same seasonOrg
-          const competitions = seasonOrg.querySelectorAll("ul > li > a");
+          // FIX: Updated selector - structure is div > a, NOT ul > li > a
+          // The actual HTML structure is: <div><h2>...</h2><div><a data-testid="season-...-item">...</a></div></div>
+          const competitions = seasonOrg.querySelectorAll(
+            "a[data-testid^='season-']"
+          );
+
           if (!competitions.length) {
             return; // Skip if no competitions found
           }
 
           // Iterate over each competition inside the current seasonOrg
           competitions.forEach((comp, compIndex) => {
-            const season = comp.querySelector("span:nth-child(1)")
-              ? comp.querySelector("span:nth-child(1)").textContent.trim()
+            // FIX: Updated selectors to match actual HTML structure
+            // Structure: <a><span>Season</span><span>Date range</span><div><span>Status</span></div></a>
+            const seasonSpan = comp.querySelector("span:first-child");
+            const season = seasonSpan
+              ? seasonSpan.textContent.trim()
               : `Unknown Season ${compIndex}`;
+
+            // Date span is the second span (contains "01 Sep 2025 — 05 Apr 2026")
             const dateSpan = comp.querySelector("span:nth-child(2)");
             const [startDate, endDate] = dateSpan
               ? dateSpan.textContent.split(" — ").map((date) => date.trim())
               : ["Unknown Start Date", "Unknown End Date"];
-            const status = comp.querySelector("div > span")
-              ? comp.querySelector("div > span").textContent.trim()
-              : "Unknown Status";
+
+            // Status is in div > span (the div with class "sc-v0uy34-6 hsHvhb")
+            const statusDiv = comp.querySelector(
+              "div.sc-v0uy34-6, div[class*='hsHvhb']"
+            );
+            const status =
+              statusDiv && statusDiv.querySelector("span")
+                ? statusDiv.querySelector("span").textContent.trim()
+                : comp.querySelector("div > span")
+                ? comp.querySelector("div > span").textContent.trim()
+                : "Unknown Status";
             const url = comp.href;
             // Extract competition ID correctly - handle URLs ending with /teams
             const urlParts = url.split("/");

@@ -160,33 +160,33 @@ class GetTeamsGameData {
     // Use streaming results to prevent accumulation while maintaining concurrency
     const concurrency = PARALLEL_CONFIG.TEAMS_CONCURRENCY;
 
-    logger.info(`[PARALLEL_GAMES] ========================================`);
-    logger.info(
+    logger.debug(`[PARALLEL_GAMES] ========================================`);
+    logger.debug(
       `[PARALLEL_GAMES] Processing ${teamsBatch.length} teams in parallel`
     );
-    logger.info(`[PARALLEL_GAMES] Concurrency: ${concurrency}`);
-    logger.info(
+    logger.debug(`[PARALLEL_GAMES] Concurrency: ${concurrency}`);
+    logger.debug(
       `[PARALLEL_GAMES] Per-team assignment: ${
         this.assignPerTeam ? "ENABLED" : "DISABLED"
       }`
     );
-    logger.info(`[PARALLEL_GAMES] ========================================`);
+    logger.debug(`[PARALLEL_GAMES] ========================================`);
 
     // CRITICAL: Create page pool BEFORE parallel processing starts
     // This ensures all pages are ready and we get true parallel processing
     const currentPoolSize = this.puppeteerManager.pagePool.length;
-    logger.info(
+    logger.debug(
       `[PARALLEL_GAMES] Current page pool size: ${currentPoolSize}, required concurrency: ${concurrency}, teams in batch: ${teamsBatch.length}`
     );
 
     if (currentPoolSize < concurrency) {
       const neededPages = concurrency - currentPoolSize;
-      logger.info(
+      logger.debug(
         `[PARALLEL_GAMES] Page pool too small (${currentPoolSize} < ${concurrency}), creating ${neededPages} additional pages`
       );
       await this.puppeteerManager.createPagePool(concurrency);
     } else {
-      logger.info(
+      logger.debug(
         `[PARALLEL_GAMES] Page pool sufficient (${currentPoolSize} >= ${concurrency}), proceeding with parallel processing`
       );
     }
@@ -207,7 +207,7 @@ class GetTeamsGameData {
           const url = `${this.domain}${href}`;
 
           // CRITICAL: Log the URL being used to verify each team gets its own URL
-          logger.info(
+          logger.debug(
             `[PARALLEL_GAMES] [TASK-${
               index + 1
             }] START team: ${teamName} (ID: ${id}) | URL: ${url} | Page URL before: ${page.url()} (page acquired: ${
@@ -266,11 +266,44 @@ class GetTeamsGameData {
             gameData?.filter((match) => match !== null) || [];
           const gameCount = filteredGameData.length;
 
-          logger.info(
+          logger.debug(
             `[PARALLEL_GAMES] [TASK-${
               index + 1
             }] COMPLETE team: ${teamName} (duration: ${taskDuration}ms, games: ${gameCount})`
           );
+
+          // TRACE: Log game details for this team
+          if (gameCount > 0) {
+            logger.debug(
+              `[GAMES-TRACE] Team ${teamName} returned ${gameCount} games`,
+              {
+                teamName: teamName,
+                teamIndex: index + 1,
+                gameCount: gameCount,
+                gamesWithGameID: filteredGameData.filter((g) => g?.gameID)
+                  .length,
+                gamesWithoutGameID: filteredGameData.filter((g) => !g?.gameID)
+                  .length,
+                gameIDs: filteredGameData
+                  .map((g) => g?.gameID || "null")
+                  .join(", "),
+                sampleGames: filteredGameData.slice(0, 3).map((g) => ({
+                  gameID: g?.gameID || "null",
+                  date: g?.date,
+                  round: g?.round,
+                  teams: `${g?.teamHome || "?"} vs ${g?.teamAway || "?"}`,
+                })),
+              }
+            );
+          } else {
+            logger.warn(`[GAMES-TRACE] Team ${teamName} returned 0 games`, {
+              teamName: teamName,
+              teamIndex: index + 1,
+              rawGameDataLength: gameData?.length || 0,
+              filteredNull:
+                gameData?.filter((match) => match === null).length || 0,
+            });
+          }
 
           // MEMORY OPTIMIZATION: Assign fixtures immediately after scraping this team
           if (this.assignPerTeam && filteredGameData.length > 0) {
@@ -327,7 +360,7 @@ class GetTeamsGameData {
       }
     );
 
-    logger.info(
+    logger.debug(
       `[PARALLEL_GAMES] Parallel processing complete: ${summary.successful}/${teamsBatch.length} successful, concurrency used: ${concurrency}`
     );
 
@@ -351,12 +384,25 @@ class GetTeamsGameData {
     if (this.assignPerTeam) {
       // Results are arrays of fixture IDs (strings), but we don't need to accumulate them
       // Just count them for tracking and return empty/minimal array
-      const totalFixtureIds = results
-        .flat()
-        .filter((id) => id && typeof id === "string").length;
+      const allResults = results.flat();
+      const totalFixtureIds = allResults.filter(
+        (id) => id && typeof id === "string"
+      ).length;
 
       logger.info(
         `[PER-TEAM ASSIGNMENT] Processed ${totalFixtureIds} fixtures across ${teamsBatch.length} teams (already assigned)`
+      );
+
+      logger.debug(
+        `[FLOW-TRACE] processGamesBatch with assignPerTeam=true: returning empty array (games already assigned)`,
+        {
+          totalFixtureIds: totalFixtureIds,
+          allResultsLength: allResults.length,
+          resultsTypes: allResults
+            .slice(0, 10)
+            .map((r) => typeof r)
+            .join(", "),
+        }
       );
 
       // MEMORY FIX: Clear intermediate arrays immediately after use
@@ -371,6 +417,21 @@ class GetTeamsGameData {
     // OPTIMIZATION: Results are already flat from parallel processing
     // No need to flatten again - just filter and return
     const allResults = results.flat(); // Flatten once (results is array of arrays from parallel processing)
+
+    logger.debug(
+      `[FLOW-TRACE] processGamesBatch with assignPerTeam=false: returning ${allResults.length} games`,
+      {
+        totalResults: results.length,
+        flattenedGames: allResults.length,
+        gamesWithGameID: allResults.filter((g) => g?.gameID).length,
+        gamesWithoutGameID: allResults.filter((g) => !g?.gameID).length,
+        sampleGames: allResults.slice(0, 5).map((g) => ({
+          gameID: g?.gameID || "null",
+          date: g?.date,
+          round: g?.round,
+        })),
+      }
+    );
 
     // MEMORY FIX: Clear intermediate arrays immediately after use
     results.length = 0; // Clear results array
@@ -403,7 +464,48 @@ class GetTeamsGameData {
       // Process teams in parallel using page pool (no need for single page anymore)
       let fetchedGames = await this.processGamesBatch(this.teams);
 
+      logger.debug(
+        `[DEDUPLICATION-TRACE] Before removeDuplicateGames: ${
+          fetchedGames?.length || 0
+        } games`,
+        {
+          totalGames: fetchedGames?.length || 0,
+          gamesWithGameID: fetchedGames?.filter((g) => g?.gameID).length || 0,
+          gamesWithoutGameID:
+            fetchedGames?.filter((g) => !g?.gameID).length || 0,
+          sampleGameIDs:
+            fetchedGames
+              ?.slice(0, 10)
+              .map((g) => g?.gameID || "null")
+              .join(", ") || "none",
+          allGameIDs:
+            fetchedGames
+              ?.map((g) => g?.gameID || "null")
+              .filter((id, index, arr) => arr.indexOf(id) === index)
+              .slice(0, 20) || [],
+        }
+      );
+
       fetchedGames = this.removeDuplicateGames(fetchedGames);
+
+      logger.debug(
+        `[DEDUPLICATION-TRACE] After removeDuplicateGames: ${
+          fetchedGames?.length || 0
+        } games`,
+        {
+          totalGames: fetchedGames?.length || 0,
+          gamesWithGameID: fetchedGames?.filter((g) => g?.gameID).length || 0,
+          gamesWithoutGameID:
+            fetchedGames?.filter((g) => !g?.gameID).length || 0,
+          removed: (fetchedGames?.length || 0) - (fetchedGames?.length || 0),
+          sampleGameIDs:
+            fetchedGames
+              ?.slice(0, 10)
+              .map((g) => g?.gameID || "null")
+              .join(", ") || "none",
+        }
+      );
+
       if (fetchedGames.length === 0) {
         logger.warn("No game data found for team batch", {
           teamsCount: this.teams?.length || 0,
@@ -423,7 +525,73 @@ class GetTeamsGameData {
   }
 
   removeDuplicateGames(games) {
-    return [...new Map(games.map((game) => [game.gameID, game])).values()];
+    if (!games || games.length === 0) {
+      logger.debug(
+        `[DEDUPLICATION-TRACE] removeDuplicateGames called with empty/null array`
+      );
+      return [];
+    }
+
+    const beforeCount = games.length;
+    const gamesWithNullID = games.filter((g) => !g?.gameID);
+    const gamesWithID = games.filter((g) => g?.gameID);
+
+    logger.debug(
+      `[DEDUPLICATION-TRACE] removeDuplicateGames input: ${beforeCount} games`,
+      {
+        total: beforeCount,
+        withGameID: gamesWithID.length,
+        withoutGameID: gamesWithNullID.length,
+        nullGameIDSample: gamesWithNullID.slice(0, 5).map((g, i) => ({
+          index: i,
+          date: g?.date,
+          teamHome: g?.teamHome,
+          teamAway: g?.teamAway,
+          round: g?.round,
+        })),
+      }
+    );
+
+    // Create map using gameID as key
+    const gameMap = new Map();
+    const duplicateKeys = [];
+
+    games.forEach((game, index) => {
+      const key = game?.gameID;
+      if (gameMap.has(key)) {
+        duplicateKeys.push({
+          key,
+          index,
+          existingIndex: Array.from(gameMap.keys()).indexOf(key),
+        });
+      } else {
+        gameMap.set(key, game);
+      }
+    });
+
+    const afterCount = gameMap.size;
+    const removed = beforeCount - afterCount;
+
+    logger.debug(
+      `[DEDUPLICATION-TRACE] removeDuplicateGames output: ${afterCount} unique games (removed ${removed} duplicates)`,
+      {
+        before: beforeCount,
+        after: afterCount,
+        removed: removed,
+        duplicateKeysFound: duplicateKeys.length,
+        duplicateDetails: duplicateKeys.slice(0, 10).map((d) => ({
+          key: d.key,
+          duplicateIndex: d.index,
+          existingIndex: d.existingIndex,
+        })),
+        nullKeyCount: gameMap.has(null) || gameMap.has(undefined) ? 1 : 0,
+        uniqueGameIDs: Array.from(gameMap.keys())
+          .filter((k) => k != null)
+          .slice(0, 20),
+      }
+    );
+
+    return [...gameMap.values()];
   }
 }
 

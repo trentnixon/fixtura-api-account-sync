@@ -3,7 +3,8 @@ const logger = require("../../../../src/utils/logger");
 const moment = require("moment-timezone");
 
 // Scrapes the round information from the match element
-async function scrapeRound(matchElement) {
+// isFallback: if true, suppress warnings (used when called on gameDiv as fallback)
+async function scrapeRound(matchElement, isFallback = false) {
   try {
     const roundXPath = ".//div[@data-testid='fixture-list']/div/h3";
     const elements = await matchElement.$$(`xpath/${roundXPath}`);
@@ -11,7 +12,15 @@ async function scrapeRound(matchElement) {
     if (elements.length > 0) {
       return await elements[0].evaluate((el) => el.textContent.trim());
     } else {
-      logger.warn(`Round element not found using XPath: ${roundXPath}`);
+      // Only warn if this is not a fallback call (i.e., called on matchElement)
+      // When called on gameDiv as fallback, it's expected to fail
+      if (!isFallback) {
+        logger.warn(`Round element not found using XPath: ${roundXPath}`);
+      } else {
+        logger.debug(
+          `Round element not found using XPath (fallback call, expected): ${roundXPath}`
+        );
+      }
       return null;
     }
   } catch (error) {
@@ -21,15 +30,44 @@ async function scrapeRound(matchElement) {
 }
 
 // Scrapes the date information from the match element
-async function scrapeDate(matchElement) {
+async function scrapeDate(gameDiv) {
   try {
-    const dateXPath = ".//li[@data-testid='games-on-date']/div/span";
-    const elements = await matchElement.$$(`xpath/${dateXPath}`);
+    // UPDATED: gameDiv IS the games-on-date div, so XPath should be relative to it
+    // Structure: div[data-testid="games-on-date"] > div[1] (first child) > span (date)
+    const dateXPath = ".//div[1]/span";
+    const elements = await gameDiv.$$(`xpath/${dateXPath}`);
 
     if (elements.length > 0) {
       return await elements[0].evaluate((el) => el.textContent.trim());
     } else {
-      logger.warn(`Date element not found using XPath: ${dateXPath}`);
+      // DIAGNOSTIC: Log structure to help debug
+      const structure = await gameDiv.evaluate((el) => {
+        return {
+          tagName: el.tagName,
+          dataTestId: el.getAttribute("data-testid"),
+          childCount: el.children.length,
+          firstChild: el.children[0]
+            ? {
+                tagName: el.children[0].tagName,
+                className: el.children[0].className,
+                hasSpan: !!el.children[0].querySelector("span"),
+                spanText:
+                  el.children[0].querySelector("span")?.textContent?.trim() ||
+                  null,
+              }
+            : null,
+          allSpans: Array.from(el.querySelectorAll("span"))
+            .slice(0, 5)
+            .map((s) => s.textContent?.trim()),
+        };
+      });
+
+      logger.warn(`Date element not found using XPath: ${dateXPath}`, {
+        xpath: dateXPath,
+        structure: structure,
+        possibleCause:
+          "Date span may be in different location - check structure",
+      });
       return null;
     }
   } catch (error) {
@@ -217,7 +255,8 @@ async function scrapeTypeTimeGround(matchElement) {
       }
 
       if (parsedDate.isValid()) {
-        finalDaysPlay = parsedDate.format("YYYY-MM-DDTHH:mm:ssZ"); // Format as ISO string with timezone offset for Strapi
+        // Strapi expects YYYY-MM-DD format only (deprecated ISO format with time/timezone)
+        finalDaysPlay = parsedDate.format("YYYY-MM-DD");
         logger.debug(
           `[SCRAPE-DATES] finalDaysPlay set to: ${finalDaysPlay} (from date: ${lastDateStr})`
         );
@@ -232,7 +271,7 @@ async function scrapeTypeTimeGround(matchElement) {
     }
 
     // Log scraped date values for debugging
-    logger.info(
+    logger.debug(
       `[SCRAPE-DATES] dateRangeObj: ${JSON.stringify(
         dateRangeObj
       )}, finalDaysPlay: ${finalDaysPlay}`
@@ -254,11 +293,12 @@ async function scrapeTypeTimeGround(matchElement) {
 // END
 
 // Scrapes the status from the match element
-async function scrapeStatus(matchElement) {
+async function scrapeStatus(gameDiv) {
   try {
-    const statusXPath =
-      ".//li[@data-testid='games-on-date']/div[2]/div[1]/div[1]/div[2]/span";
-    const statusElement = await matchElement.$$(`xpath/${statusXPath}`);
+    // UPDATED: gameDiv IS the games-on-date div, so XPath should be relative to it
+    // Structure: div[data-testid="games-on-date"] > div[2] (listitem) > div[1] > div[1] > div[2] > span (status)
+    const statusXPath = ".//div[2]/div[1]/div[1]/div[2]/span";
+    const statusElement = await gameDiv.$$(`xpath/${statusXPath}`);
 
     if (statusElement.length > 0) {
       return await statusElement[0].evaluate((el) => el.textContent.trim());
@@ -297,10 +337,10 @@ async function scrapeScoreCardInfo(gameDiv) {
 // Scrapes team information from the game div
 async function scrapeTeamsInfo(gameDiv) {
   try {
-    const team1XPath =
-      ".//li[@data-testid='games-on-date']/div[2]/div[1]/div/div[1]";
-    const team2XPath =
-      ".//li[@data-testid='games-on-date']/div[2]/div[1]/div/div[3]";
+    // UPDATED: gameDiv IS the games-on-date div, so XPath should be relative to it
+    // Structure: div[data-testid="games-on-date"] > div[role="listitem"] > div[2]/div[1]/div/div[1] (team1)
+    const team1XPath = ".//div[2]/div[1]/div/div[1]";
+    const team2XPath = ".//div[2]/div[1]/div/div[3]";
 
     async function extractTeamInfo(teamElement) {
       const name = await teamElement.$eval("a", (el) => el.textContent.trim());
@@ -337,17 +377,30 @@ async function scrapeTeamsInfo(gameDiv) {
 }
 
 // Checks if the match is a bye match
-async function isByeMatch(matchElement) {
+// UPDATED: gameDiv is already div[data-testid="games-on-date"], so XPath should be relative to it
+async function isByeMatch(gameDiv) {
   try {
-    const team1XPath =
-      ".//li[@data-testid='games-on-date']/div[2]/div[1]/div/div[1]";
-    const team2XPath =
-      ".//li[@data-testid='games-on-date']/div[2]/div[1]/div/div[3]";
+    // UPDATED: gameDiv IS the games-on-date div, so we don't need to search for it again
+    // Structure: div[data-testid="games-on-date"] > div[role="listitem"] > div[2]/div[1]/div/div[1] (team1)
+    const team1XPath = ".//div[2]/div[1]/div/div[1]";
+    const team2XPath = ".//div[2]/div[1]/div/div[3]";
 
-    const team1Elements = await matchElement.$$(`xpath/${team1XPath}`);
-    const team2Elements = await matchElement.$$(`xpath/${team2XPath}`);
+    const team1Elements = await gameDiv.$$(`xpath/${team1XPath}`);
+    const team2Elements = await gameDiv.$$(`xpath/${team2XPath}`);
 
-    return team1Elements.length === 0 || team2Elements.length === 0;
+    const isBye = team1Elements.length === 0 || team2Elements.length === 0;
+
+    if (isBye) {
+      logger.debug(
+        `[BYE-MATCH] Detected bye match - team1: ${team1Elements.length}, team2: ${team2Elements.length}`,
+        {
+          team1Found: team1Elements.length > 0,
+          team2Found: team2Elements.length > 0,
+        }
+      );
+    }
+
+    return isBye;
   } catch (error) {
     logger.error(`Error in isByeMatch: ${error.message}`);
     return false;

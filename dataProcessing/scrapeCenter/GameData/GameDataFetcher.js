@@ -17,9 +17,13 @@ class GameDataFetcher {
     this.page = page;
     this.href = href;
     this.gradeID = gradeID;
-    // XPath to locate game data on the web page
+    // UPDATED: Structure changed - games are now in div elements, not li
+    // New structure: div[data-testid^="grade-"] > div.sc-1pr338c-0.sc-1pr338c-5.kBhuTP.cNVAcP (match elements)
+    // Each match element contains: div[data-testid="fixture-list"] > div[data-testid="games-on-date"]
+    this.matchElementSelector = "div.sc-1pr338c-0.sc-1pr338c-5.kBhuTP.cNVAcP";
+    // Fallback XPath for compatibility
     this.xpath =
-      "/html/body/div/section/main/div/div/div[1]/section/section/div/ul/li";
+      "//div[@data-testid='fixture-list']/ancestor::div[contains(@class, 'cNVAcP')]";
     // Create operation context for better error tracking
     this.context = new OperationContext("fetchGameData", "games", {
       href,
@@ -33,7 +37,7 @@ class GameDataFetcher {
       const navStartTime = Date.now();
       await this.navigateToUrl();
       const navDuration = Date.now() - navStartTime;
-      logger.info(
+      logger.debug(
         `[PARALLEL_GAMES] [NAV] Navigation complete: ${navDuration}ms`
       );
 
@@ -50,14 +54,14 @@ class GameDataFetcher {
       const waitStartTime = Date.now();
       await this.waitForPageLoad();
       const waitDuration = Date.now() - waitStartTime;
-      logger.info(
+      logger.debug(
         `[PARALLEL_GAMES] [WAIT] Page load complete: ${waitDuration}ms`
       );
 
       const extractStartTime = Date.now();
       const result = await this.getGameDetails();
       const extractDuration = Date.now() - extractStartTime;
-      logger.info(
+      logger.debug(
         `[PARALLEL_GAMES] [EXTRACT] Extraction complete: ${extractDuration}ms (total: ${
           Date.now() - navStartTime
         }ms)`
@@ -77,7 +81,183 @@ class GameDataFetcher {
   async getGameDetails() {
     try {
       logger.debug(`Fetching game details from URL: ${this.href}`);
-      const matchList = await this.page.$$(`xpath/${this.xpath}`); // Fetch match elements using XPath
+
+      // DIAGNOSTIC: Try multiple selectors to see what's actually on the page
+      const diagnosticInfo = await this.page.evaluate(() => {
+        const info = {
+          xpathMatches: 0,
+          gamesOnDateMatches: 0,
+          gamesMatches: 0,
+          ulMatches: 0,
+          liMatches: 0,
+          sampleHTML: "",
+          pageStructure: {},
+        };
+
+        // Try the XPath structure
+        try {
+          const xpathResult = document.evaluate(
+            "/html/body/div/section/main/div/div/div[1]/section/section/div/ul/li",
+            document,
+            null,
+            XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+            null
+          );
+          info.xpathMatches = xpathResult.snapshotLength;
+        } catch (e) {
+          info.xpathError = e.message;
+        }
+
+        // Try CSS selectors
+        info.gamesOnDateMatches = document.querySelectorAll(
+          'div[data-testid="games-on-date"]'
+        ).length;
+        info.gamesMatches = document.querySelectorAll(
+          'li[data-testid*="games"]'
+        ).length;
+        info.ulMatches = document.querySelectorAll("ul").length;
+        info.liMatches = document.querySelectorAll("li").length;
+
+        // Get sample HTML structure
+        const mainSection =
+          document.querySelector("section main") ||
+          document.querySelector("main");
+        if (mainSection) {
+          info.sampleHTML = mainSection.innerHTML.substring(0, 1000);
+        }
+
+        // Check for common game container patterns
+        info.hasGamesOnDate = !!document.querySelector(
+          'div[data-testid="games-on-date"]'
+        );
+        info.hasGamesPattern = !!document.querySelector(
+          'li[data-testid*="games"]'
+        );
+
+        return info;
+      });
+
+      logger.debug(
+        `[SCRAPE-DIAGNOSTIC] Page structure analysis - XPath: ${diagnosticInfo.xpathMatches}, games-on-date: ${diagnosticInfo.gamesOnDateMatches}, games*: ${diagnosticInfo.gamesMatches}, ULs: ${diagnosticInfo.ulMatches}, LIs: ${diagnosticInfo.liMatches}`,
+        {
+          url: this.href,
+          gradeID: this.gradeID,
+          xpathMatches: diagnosticInfo.xpathMatches,
+          gamesOnDateMatches: diagnosticInfo.gamesOnDateMatches,
+          gamesMatches: diagnosticInfo.gamesMatches,
+          ulMatches: diagnosticInfo.ulMatches,
+          liMatches: diagnosticInfo.liMatches,
+          hasGamesOnDate: diagnosticInfo.hasGamesOnDate,
+          hasGamesPattern: diagnosticInfo.hasGamesPattern,
+          xpathError: diagnosticInfo.xpathError || null,
+          sampleHTML: diagnosticInfo.sampleHTML?.substring(0, 500) || "none",
+        }
+      );
+
+      // UPDATED: Use CSS selector for new structure (div-based, not li-based)
+      let matchList = await this.page.$$(this.matchElementSelector);
+
+      // Fallback: If CSS selector finds nothing, try XPath
+      if (matchList.length === 0) {
+        logger.warn(
+          `[STRUCTURE-WARNING] CSS selector found 0 match elements, trying XPath fallback`,
+          {
+            cssSelector: this.matchElementSelector,
+            xpath: this.xpath,
+            url: this.href,
+            gradeID: this.gradeID,
+            possibleCause:
+              "Page structure may have changed - match element selector not matching",
+          }
+        );
+        matchList = await this.page.$$(`xpath/${this.xpath}`);
+
+        if (matchList.length === 0) {
+          logger.warn(
+            `[STRUCTURE-WARNING] Both CSS selector and XPath found 0 match elements - structure likely changed`,
+            {
+              cssSelector: this.matchElementSelector,
+              xpath: this.xpath,
+              url: this.href,
+              gradeID: this.gradeID,
+              diagnosticInfo: {
+                xpathMatches: diagnosticInfo.xpathMatches,
+                gamesOnDateMatches: diagnosticInfo.gamesOnDateMatches,
+                gamesMatches: diagnosticInfo.gamesMatches,
+                ulMatches: diagnosticInfo.ulMatches,
+                liMatches: diagnosticInfo.liMatches,
+              },
+              action:
+                "Check if page structure has changed - may need to update selectors",
+            }
+          );
+        }
+      }
+
+      logger.debug(
+        `[SCRAPE-TRACE] Found ${matchList.length} match elements on page`,
+        {
+          url: this.href,
+          gradeID: this.gradeID,
+          matchElementsCount: matchList.length,
+          diagnosticInfo: {
+            xpathMatches: diagnosticInfo.xpathMatches,
+            gamesOnDateMatches: diagnosticInfo.gamesOnDateMatches,
+            gamesMatches: diagnosticInfo.gamesMatches,
+          },
+        }
+      );
+
+      // WARNING: If diagnostic shows structure mismatch
+      if (
+        diagnosticInfo.gamesOnDateMatches === 0 &&
+        diagnosticInfo.gamesMatches === 0
+      ) {
+        logger.warn(
+          `[STRUCTURE-WARNING] Diagnostic shows 0 games-on-date elements - page may have no games or structure changed`,
+          {
+            url: this.href,
+            gradeID: this.gradeID,
+            gamesOnDateMatches: diagnosticInfo.gamesOnDateMatches,
+            gamesMatches: diagnosticInfo.gamesMatches,
+            ulMatches: diagnosticInfo.ulMatches,
+            liMatches: diagnosticInfo.liMatches,
+            allDataTestIds: diagnosticInfo.allDataTestIds || [],
+            possibleCauses: [
+              "Page has no games scheduled",
+              "Games use different data-testid attribute",
+              "Page structure completely changed",
+            ],
+            action:
+              "Check page manually to verify if games exist and what structure they use",
+          }
+        );
+      }
+
+      // If XPath found nothing but CSS selectors found games, try alternative approach
+      if (matchList.length === 0 && diagnosticInfo.gamesOnDateMatches > 0) {
+        logger.warn(
+          `[SCRAPE-DIAGNOSTIC] XPath found 0 elements but CSS selector found ${diagnosticInfo.gamesOnDateMatches} games-on-date elements. Trying CSS selector approach.`,
+          {
+            url: this.href,
+            xpath: this.xpath,
+            gamesOnDateCount: diagnosticInfo.gamesOnDateMatches,
+          }
+        );
+
+        // Try using CSS selector instead
+        const cssMatchList = await this.page.$$(
+          'div[data-testid="games-on-date"]'
+        );
+        logger.info(
+          `[SCRAPE-DIAGNOSTIC] CSS selector found ${cssMatchList.length} elements`,
+          {
+            url: this.href,
+            cssSelector: 'div[data-testid="games-on-date"]',
+            elementCount: cssMatchList.length,
+          }
+        );
+      }
 
       // OPTIMIZATION: Process match elements in parallel (was sequential)
       // This reduces processing time from 2-5s to 1-2s per team page
@@ -128,6 +308,77 @@ class GameDataFetcher {
       // Flatten results (each match returns an array of game details)
       const gameData = successfulResults.flat();
 
+      logger.debug(
+        `[SCRAPE-TRACE] getGameDetails returning ${gameData.length} games`,
+        {
+          url: this.href,
+          gradeID: this.gradeID,
+          matchElementsProcessed: matchList.length,
+          successfulMatchElements: matchResults.filter(
+            (r) => r.status === "fulfilled"
+          ).length,
+          failedMatchElements: matchResults.filter(
+            (r) => r.status === "rejected"
+          ).length,
+          totalGamesExtracted: gameData.length,
+          gamesWithGameID: gameData.filter((g) => g?.gameID).length,
+          gamesWithoutGameID: gameData.filter((g) => !g?.gameID).length,
+          sampleGameIDs: gameData
+            .slice(0, 5)
+            .map((g) => g?.gameID || "null")
+            .join(", "),
+        }
+      );
+
+      // WARNING: If match elements found but no games extracted, structure may have changed
+      if (matchList.length > 0 && gameData.length === 0) {
+        logger.warn(
+          `[STRUCTURE-WARNING] Match elements found (${matchList.length}) but 0 games extracted - structure may have changed`,
+          {
+            url: this.href,
+            gradeID: this.gradeID,
+            matchElementsFound: matchList.length,
+            gamesExtracted: gameData.length,
+            successfulMatchElements: matchResults.filter(
+              (r) => r.status === "fulfilled"
+            ).length,
+            failedMatchElements: matchResults.filter(
+              (r) => r.status === "rejected"
+            ).length,
+            possibleCauses: [
+              "Game div selector changed - games may be in different location",
+              "Extraction logic may need update for new structure",
+              "Games may be empty/not loaded yet",
+            ],
+            action:
+              "Check if game div selector and extraction logic need updates",
+          }
+        );
+      }
+
+      // WARNING: If diagnostic shows games exist but we found none, structure mismatch
+      if (
+        diagnosticInfo.gamesOnDateMatches > 0 &&
+        matchList.length === 0 &&
+        gameData.length === 0
+      ) {
+        logger.warn(
+          `[STRUCTURE-WARNING] Diagnostic shows ${diagnosticInfo.gamesOnDateMatches} games-on-date elements but match selector found 0 - structure mismatch`,
+          {
+            url: this.href,
+            gradeID: this.gradeID,
+            diagnosticGamesOnDate: diagnosticInfo.gamesOnDateMatches,
+            matchElementsFound: matchList.length,
+            gamesExtracted: gameData.length,
+            matchElementSelector: this.matchElementSelector,
+            possibleCause:
+              "Match element selector may be incorrect - games exist but selector doesn't match",
+            action:
+              "Verify match element selector matches actual page structure",
+          }
+        );
+      }
+
       return gameData;
     } catch (error) {
       // Suppress cancellation errors (happen when page is reset during operation)
@@ -169,7 +420,7 @@ class GameDataFetcher {
       const roundFromMatchElement = await scrapeRound(matchElement);
 
       // LOGGING: Track round extraction from matchElement
-      logger.info(
+      logger.debug(
         `[ROUND-EXTRACTION] Round from matchElement: ${
           roundFromMatchElement || "null"
         }`,
@@ -181,12 +432,15 @@ class GameDataFetcher {
         }
       );
 
-      // Extract game divs from match element
-      const gameDivs = await matchElement.$$("div.sc-1pr338c-0.cNVAcP");
+      // UPDATED: Extract game divs from match element
+      // New structure: games are in div[data-testid="games-on-date"] inside the match element
+      const gameDivs = await matchElement.$$(
+        'div[data-testid="games-on-date"]'
+      );
       const gameDetails = [];
 
       // LOGGING: Track number of game divs found
-      logger.info(
+      logger.debug(
         `[ROUND-EXTRACTION] Found ${gameDivs.length} game div(s) in matchElement`,
         {
           method: "extractMatchDetails",
@@ -195,6 +449,27 @@ class GameDataFetcher {
           url: this.href,
         }
       );
+
+      // WARNING: If no game divs found, structure may have changed
+      if (gameDivs.length === 0) {
+        logger.warn(
+          `[STRUCTURE-WARNING] No game divs found in matchElement - structure may have changed`,
+          {
+            method: "extractMatchDetails",
+            matchElementSelector: 'div[data-testid="games-on-date"]',
+            url: this.href,
+            gradeID: this.gradeID,
+            roundFromMatchElement: roundFromMatchElement,
+            possibleCauses: [
+              "Game selector changed - games may be in different structure",
+              "Match element may not contain games (empty round)",
+              "Page structure updated - selector needs update",
+            ],
+            action:
+              "Check matchElement structure and verify game selector is correct",
+          }
+        );
+      }
 
       // OPTIMIZATION: Process game divs in parallel for faster extraction
       const gameDivPromises = gameDivs.map(async (gameDiv, gameDivIndex) => {
@@ -222,7 +497,7 @@ class GameDataFetcher {
             teams,
           ] = await Promise.all([
             scrapeDate(gameDiv),
-            scrapeRound(gameDiv), // Keep for backward compatibility fallback
+            scrapeRound(gameDiv, true), // Keep for backward compatibility fallback (isFallback=true to suppress expected warnings)
             scrapeTypeTimeGround(gameDiv),
             scrapeStatus(gameDiv),
             scrapeScoreCardInfo(gameDiv),
@@ -230,7 +505,7 @@ class GameDataFetcher {
           ]);
 
           // LOGGING: Track round extraction from gameDiv
-          logger.info(
+          logger.debug(
             `[ROUND-EXTRACTION] Game div ${
               gameDivIndex + 1
             } - Round from gameDiv: ${roundFromGameDiv || "null"}`,
@@ -251,7 +526,7 @@ class GameDataFetcher {
           const round = roundFromMatchElement || roundFromGameDiv;
 
           // LOGGING: Track final round value decision
-          logger.info(
+          logger.debug(
             `[ROUND-EXTRACTION] Game div ${gameDivIndex + 1} - Final round: ${
               round || "null"
             } (source: ${
@@ -345,7 +620,7 @@ class GameDataFetcher {
       gameDetails.push(...successfulResults);
 
       // LOGGING: Track final results summary
-      logger.info(
+      logger.debug(
         `[ROUND-EXTRACTION] Summary - Extracted ${successfulResults.length} game(s) from matchElement`,
         {
           method: "extractMatchDetails",
@@ -364,7 +639,7 @@ class GameDataFetcher {
 
       // LOGGING: Log each game's round value for debugging
       successfulResults.forEach((game, index) => {
-        logger.info(
+        logger.debug(
           `[ROUND-EXTRACTION] Game ${index + 1}/${
             successfulResults.length
           } - gameID: ${game.gameID}, round: ${game.round || "null"}, date: ${
@@ -402,7 +677,7 @@ class GameDataFetcher {
 
     // CRITICAL: Log the URL we're navigating to and the current page URL
     const currentPageUrl = this.page.url();
-    logger.info(
+    logger.debug(
       `[PARALLEL_GAMES] [NAV] Navigating to: ${this.href} | Current page URL: ${currentPageUrl}`
     );
 
@@ -446,7 +721,7 @@ class GameDataFetcher {
             });
             // Give extra time for dynamic content to load - wait for game list items to appear
             await this.page
-              .waitForSelector('li[data-testid="games-on-date"]', {
+              .waitForSelector('div[data-testid="games-on-date"]', {
                 timeout: 5000,
                 visible: false, // Just check if element exists in DOM
               })
@@ -473,7 +748,7 @@ class GameDataFetcher {
             continue;
           }
         } else {
-          logger.info(
+          logger.debug(
             `[PARALLEL_GAMES] [NAV] Successfully navigated to: ${this.href}`
           );
         }
@@ -563,9 +838,9 @@ class GameDataFetcher {
       // OPTIMIZED: Check multiple selectors in parallel with shorter timeouts
       // This reduces wait time from 8s+ to ~2s for most pages
       const fixtureListSelectors = [
-        'li[data-testid="games-on-date"]',
-        'li[data-testid*="games"]',
-        "ul li[data-testid]",
+        'div[data-testid="games-on-date"]',
+        'div[data-testid*="games"]',
+        'div[data-testid="fixture-list"]',
       ];
 
       let fixtureListFound = false;
@@ -651,7 +926,8 @@ class GameDataFetcher {
 
       // OPTIMIZED: Check for game divs with shorter timeout and early exit
       // Step 2: Wait for the actual game divs to be present (the content we extract)
-      const gameDivSelector = "div.sc-1pr338c-0.cNVAcP";
+      // UPDATED: Game divs are now div[data-testid="games-on-date"], not div.sc-1pr338c-0.cNVAcP
+      const gameDivSelector = 'div[data-testid="games-on-date"]';
       let gameDivsFound = false;
 
       // Check remaining time before waiting for game divs
@@ -724,7 +1000,7 @@ class GameDataFetcher {
         await this.page.waitForFunction(
           () => {
             const gameDivs = document.querySelectorAll(
-              "div.sc-1pr338c-0.cNVAcP"
+              'div[data-testid="games-on-date"]'
             );
             if (gameDivs.length === 0) {
               return false;
